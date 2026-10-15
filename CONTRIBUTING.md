@@ -1,37 +1,43 @@
 # Contributing to Slop/MNU
 
-## AI requirement
+Contributors may use any development tools, including generative AI,
+code-completion systems, web-based AI services, and manually written code.
 
-New implementation code must be substantially produced with generative
-AI assistance.
+You are not required to disclose:
 
-Human-written changes are allowed for:
+- whether AI was used;
+- which AI service was used;
+- prompts or conversation logs;
+- the proportion of AI-generated code;
+- private development notes.
 
-- reviewing generated code;
-- fixing build errors;
-- debugging;
-- testing;
-- security corrections;
-- documentation;
-- integration;
-- removal or replacement of defective output.
+## Developer Certificate of Origin
 
-## Required disclosure
+Every commit must include a `Signed-off-by` line certifying compliance
+with Developer Certificate of Origin 1.1.
 
-Every pull request must state:
+Use:
 
-1. Which AI tool or model was used.
-2. What task was given to the AI.
-3. Which parts were manually modified.
-4. Whether external code or documentation was included in the AI input.
-5. Which build and runtime tests were performed.
-6. Any known license or provenance uncertainty.
+    git commit -s
 
-## Contributor declaration
+By signing off a contribution, you certify that you have the right to
+submit it under the license indicated in the repository.
 
-By submitting a contribution, you certify that:
+Do not submit:
 
-- you have reviewed the submitted material;
-- you have the right to submit it;
-- you are not knowingly submitting code copied from an incompatible source;
-- any rights you hold in the contribution are licensed under Apache-2.0.
+- proprietary code without permission;
+- code copied from an incompatibly licensed project;
+- confidential source code;
+- generated output that you know reproduces unauthorized third-party code;
+- material whose provenance you know is disputed.
+
+## Contributor responsibility
+
+The contributor is responsible for confirming that they have the right
+to submit their contribution.
+
+If you discover a copyright, patent, confidentiality, or provenance
+problem after submission, notify the maintainers immediately.
+
+The maintainers may reject, revert, quarantine, or remove any contribution
+whose provenance or licensing is unclear.
