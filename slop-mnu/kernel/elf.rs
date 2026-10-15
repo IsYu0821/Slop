@@ -21,7 +21,7 @@ pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
     let h=Header{kind:u16at(image,16)?,machine:u16at(image,18)?,entry:u64at(image,24)?,phoff:u64at(image,32)?,phentsize:u16at(image,54)?,phnum:u16at(image,56)?};
     if h.machine!=EM_X86_64{return Err("wrong machine")}
     if h.kind!=ET_EXEC && h.kind!=ET_DYN{return Err("unsupported ELF type")}
-    if h.phentsize as usize<56{return Err("program header too small")}
+    if (h.phentsize as usize)<56{return Err("program header too small")}
     let table_size=(h.phentsize as u64).checked_mul(h.phnum as u64).ok_or("program table overflow")?;
     let table_end=h.phoff.checked_add(table_size).ok_or("program table overflow")?;
     if table_end>image.len() as u64{return Err("program table truncated")}

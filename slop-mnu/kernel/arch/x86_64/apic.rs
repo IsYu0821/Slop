@@ -73,7 +73,7 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
         }
         // Periodic bootstrap tick. Frequency is intentionally uncalibrated until HPET/PIT calibration is added.
         write(0x3e0, 0x3);
-        write(0x320, TIMER_VECTOR as u32 | (1 << 17));
+        write(0x320,TIMER_VECTOR as u32|(1<<17));
         write(0x380, 100_000);
         let _ = read(0x390);
     }
@@ -126,9 +126,9 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
 pub extern "sysv64" fn apic_timer_rust() {
     TICKS.fetch_add(1, Ordering::Relaxed);
     crate::task::on_timer_tick();
-    unsafe { write(0xb0, 0) }
+    unsafe { write(0xb0,0) }
 }
 
 pub fn eoi() {
-    unsafe { write(0xb0, 0) }
+    unsafe { write(0xb0,0) }
 }
