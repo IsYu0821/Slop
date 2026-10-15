@@ -1,0 +1,41 @@
+//! Single-CPU round-robin scheduler foundation.
+use core::sync::atomic::{AtomicBool,AtomicU32,Ordering};
+use crate::sync::IrqSpinLock;
+const MAX_TASKS:usize=8;const STACK_SIZE:usize=32768;
+#[repr(align(16))]struct Stack([u8;STACK_SIZE]);
+#[derive(Clone,Copy,PartialEq)]pub enum State{Unused,Running,Runnable,Sleeping,Zombie}
+#[derive(Clone,Copy)]pub struct Task{pub pid:u32,pub ppid:u32,pub state:State,pub rsp:u64,pub kernel_stack_top:u64,pub cr3:u64,pub fs_base:u64,pub wake_tick:u64,pub exit_code:i32}
+const EMPTY:Task=Task{pid:0,ppid:0,state:State::Unused,rsp:0,kernel_stack_top:0,cr3:0,fs_base:0,wake_tick:0,exit_code:0};
+struct Scheduler{tasks:[Task;MAX_TASKS],current:usize,next_pid:u32}
+static SCHED:IrqSpinLock<Scheduler>=IrqSpinLock::new(Scheduler{tasks:[EMPTY;MAX_TASKS],current:0,next_pid:2});
+static mut STACKS:[Stack;MAX_TASKS]=[const{Stack([0;STACK_SIZE])};MAX_TASKS];
+static NEED_RESCHED:AtomicBool=AtomicBool::new(false);static PID:AtomicU32=AtomicU32::new(1);
+unsafe extern "sysv64"{fn switch_context(old:*mut u64,new:u64);}
+pub fn init(bootstrap_stack_top:u64){let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,ppid:0,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,exit_code:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
+pub fn current_pid()->u32{PID.load(Ordering::Relaxed)}
+pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
+pub fn current_kernel_stack_top()->u64{let s=SCHED.lock();s.tasks[s.current].kernel_stack_top}
+pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Unused).ok_or(crate::errno::EAGAIN)?;let pid=s.next_pid;s.next_pid=s.next_pid.wrapping_add(1).max(2);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let mut sp=(top&!15)-8;unsafe{sp-=8;*(sp as*mut u64)=kernel_thread_trampoline as usize as u64;for _ in 0..6{sp-=8;*(sp as*mut u64)=0;}}KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let ppid=s.tasks[s.current].pid;s.tasks[slot]=Task{pid,ppid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,exit_code:0};Ok(pid)}
+static KERNEL_ENTRIES:IrqSpinLock<[Option<fn()>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
+static USER_STARTS:IrqSpinLock<[Option<crate::exec_runtime::Loaded>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
+pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let mut s=SCHED.lock();let slot=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Unused).ok_or(crate::errno::EAGAIN)?;let pid=s.next_pid;s.next_pid=s.next_pid.wrapping_add(1).max(2);let ppid=s.tasks[s.current].pid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let mut sp=(top&!15)-8;unsafe{sp-=8;*(sp as*mut u64)=user_thread_trampoline as usize as u64;for _ in 0..6{sp-=8;*(sp as*mut u64)=0;}}USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{pid,ppid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,exit_code:0};Ok(pid)}
+extern "sysv64" fn user_thread_trampoline()->!{let slot=SCHED.lock().current;let loaded=USER_STARTS.lock()[slot].take().unwrap();crate::process_runtime::install(loaded.bootstrap_cr3,loaded.cr3,loaded.image_slot,loaded.stack_slot);crate::println!("task: entering user pid={} rip={:#x} rsp={:#x}",current_pid(),loaded.entry,loaded.rsp);unsafe{crate::arch::x86_64::user::enter(loaded.entry,loaded.rsp)}}
+extern "sysv64" fn kernel_thread_trampoline()->!{let slot=SCHED.lock().current;let entry=KERNEL_ENTRIES.lock()[slot].take().unwrap();unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags));}entry();finish_current(0)}
+pub fn yield_now(){schedule(false)}
+pub fn on_timer_tick(){NEED_RESCHED.store(true,Ordering::Release);wake_sleepers(crate::arch::x86_64::apic::ticks());}
+pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
+pub fn sleep_until(tick:u64){let mut s=SCHED.lock();let current=s.current;s.tasks[current].wake_tick=tick;s.tasks[current].state=State::Sleeping;drop(s);schedule(true)}
+fn wake_sleepers(now:u64){let mut s=SCHED.lock();for t in &mut s.tasks{if t.state==State::Sleeping&&t.wake_tick<=now{t.state=State::Runnable;}}}
+pub fn finish_current(code:i32)->!{{let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;}loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
+fn schedule(blocked:bool){let(old_ptr,next)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{s.tasks[old].state=State::Running;return}s.tasks[next].state=State::Running;s.current=next;(&mut s.tasks[old].rsp as*mut u64,s.tasks[next])};PID.store(next.pid,Ordering::Relaxed);unsafe{apply_arch_state(next);switch_context(old_ptr,next.rsp)}}
+
+pub fn set_current_fs_base(value:u64){let mut s=SCHED.lock();let current=s.current;s.tasks[current].fs_base=value;drop(s);unsafe{crate::arch::x86_64::msr::wrmsr(crate::arch::x86_64::msr::IA32_FS_BASE,value)}}
+pub fn bind_current_address_space(cr3:u64,kernel_stack_top:u64){let mut s=SCHED.lock();let current=s.current;s.tasks[current].cr3=cr3;s.tasks[current].kernel_stack_top=kernel_stack_top;drop(s);unsafe{crate::arch::x86_64::descriptors::set_rsp0(kernel_stack_top);crate::arch::x86_64::syscall::set_kernel_stack(kernel_stack_top)}}
+unsafe fn apply_arch_state(task:Task){unsafe{let current=crate::arch::x86_64::paging::PageTableRoot::current().pml4;if current!=task.cr3{crate::arch::x86_64::paging::PageTableRoot{pml4:task.cr3}.activate();}crate::arch::x86_64::msr::wrmsr(crate::arch::x86_64::msr::IA32_FS_BASE,task.fs_base);crate::arch::x86_64::descriptors::set_rsp0(task.kernel_stack_top);crate::arch::x86_64::syscall::set_kernel_stack(task.kernel_stack_top);}}
+pub fn block_current(){let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Sleeping;drop(s);schedule(true)}
+pub fn wake_pid(pid:u32)->bool{let mut s=SCHED.lock();if let Some(t)=s.tasks.iter_mut().find(|t|t.pid==pid&&t.state==State::Sleeping){t.state=State::Runnable;true}else{false}}
+pub fn reap_zombie(child_pid:u32)->Option<i32>{let parent=current_pid();let mut s=SCHED.lock();let slot=s.tasks.iter().position(|t|t.state==State::Zombie&&t.ppid==parent&&(child_pid==0||t.pid==child_pid))?;let code=s.tasks[slot].exit_code;s.tasks[slot]=EMPTY;KERNEL_ENTRIES.lock()[slot]=None;USER_STARTS.lock()[slot]=None;Some(code)}
+pub fn wait_child(child_pid:u32)->Result<i32,i64>{for _ in 0..MAX_TASKS{if let Some(code)=reap_zombie(child_pid){return Ok(code)}yield_now()}Err(crate::errno::EAGAIN)}
+pub fn scheduler_self_test()->Result<(),&'static str>{static A:AtomicU32=AtomicU32::new(0);static B:AtomicU32=AtomicU32::new(0);static TLS_OK:AtomicU32=AtomicU32::new(0);fn a(){set_current_fs_base(0x1000);A.fetch_add(1,Ordering::Relaxed);yield_now();if unsafe{crate::arch::x86_64::msr::rdmsr(crate::arch::x86_64::msr::IA32_FS_BASE)}==0x1000{TLS_OK.fetch_add(1,Ordering::Relaxed);}A.fetch_add(1,Ordering::Relaxed)}fn b(){set_current_fs_base(0x2000);B.fetch_add(1,Ordering::Relaxed);yield_now();if unsafe{crate::arch::x86_64::msr::rdmsr(crate::arch::x86_64::msr::IA32_FS_BASE)}==0x2000{TLS_OK.fetch_add(1,Ordering::Relaxed);}B.fetch_add(1,Ordering::Relaxed)}spawn_kernel(a).map_err(|_|"spawn A failed")?;spawn_kernel(b).map_err(|_|"spawn B failed")?;for _ in 0..8{yield_now();if A.load(Ordering::Relaxed)==2&&B.load(Ordering::Relaxed)==2&&TLS_OK.load(Ordering::Relaxed)==2{let ca=wait_child(2).map_err(|_|"reap A failed")?;let cb=wait_child(3).map_err(|_|"reap B failed")?;if ca!=0||cb!=0{return Err("unexpected child status")}crate::println!("scheduler: context, FS base and zombie reap self-test passed");return Ok(())}}Err("scheduler self-test stalled")}
+pub fn exit(code:i32)->!{crate::println!("task {} exited {}",current_pid(),code);crate::process_runtime::terminate_exit(code)}
+pub fn run()->!{loop{yield_now();unsafe{core::arch::asm!("sti","hlt",options(nomem,nostack));}}}

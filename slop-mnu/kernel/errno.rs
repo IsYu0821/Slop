@@ -1,0 +1,2 @@
+pub const EPERM:i64=1; pub const ENOENT:i64=2; pub const ESRCH:i64=3; pub const ENOEXEC:i64=8; pub const EBADF:i64=9; pub const E2BIG:i64=7; pub const EAGAIN:i64=11; pub const ENOMEM:i64=12; pub const EFAULT:i64=14; pub const EEXIST:i64=17; pub const ENODEV:i64=19; pub const EINVAL:i64=22; pub const ESPIPE:i64=29; pub const ENOSYS:i64=38; pub const ENAMETOOLONG:i64=36;
+#[inline] pub const fn neg(e:i64)->i64{-e}

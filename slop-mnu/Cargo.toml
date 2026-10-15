@@ -1,0 +1,15 @@
+[package]
+name = "slop-mnu-kernel"
+version = "0.25.2"
+edition = "2024"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["staticlib"]
+path = "kernel/lib.rs"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "s"
