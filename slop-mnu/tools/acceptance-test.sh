@@ -21,7 +21,7 @@ for text in \
   'scheduler: context, FS base and zombie reap self-test passed' \
   'vfs: path lookup and file read self-test passed' \
   'execve: committed /bin/hello' \
-  'argv, envp, VFS, VM and EFAULT passed' \
+  'argv, envp, VFS, VM, time, random and EFAULT passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
