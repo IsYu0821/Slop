@@ -4,11 +4,11 @@ The first executable target is a statically linked x86-64 Linux program using a 
 
 ## Implemented bootstrap surface
 
-`read`, `write`, `close`, `fstat`, `brk`, `sched_yield`, identity calls, PID/TID calls, `uname`, `arch_prctl` FS-base state, `set_tid_address`, `set_robust_list`, `prlimit64`, `exit`, and `exit_group`.
+`read`, `write`, `close`, `fstat`, `openat`, `newfstatat`, `lseek`, `mmap`, `mprotect`, `munmap`, `brk`, `sched_yield`, `clock_gettime`, `nanosleep`, `getrandom`, identity calls, PID/TID calls, `uname`, `arch_prctl` FS-base state, `set_tid_address`, `set_robust_list`, `prlimit64`, `execve`, `exit`, and `exit_group`.
 
 ## Deliberately not claimed yet
 
-`mmap`, `mprotect`, `munmap`, signals, futex waiting/waking, clocks, random data, path lookup, dynamic linking, fork/clone and sockets. Returning `ENOSYS` is preferable to silently violating Linux semantics.
+signals, futex waiting/waking, path lookup completeness, dynamic linking, fork/clone and sockets. Returning `ENOSYS` is preferable to silently violating Linux semantics.
 
 ## Acceptance gate
 
