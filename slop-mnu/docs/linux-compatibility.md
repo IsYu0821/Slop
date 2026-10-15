@@ -8,7 +8,7 @@ The first executable target is a statically linked x86-64 Linux program using a 
 
 ## Deliberately not claimed yet
 
-`mmap`, `mprotect`, `munmap`, signals, futex waiting/waking, clocks, random data, path lookup, dynamic linking, fork/clone and sockets. Returning `ENOSYS` is preferable to silently violating Linux semantics.
+signals, futex waiting/waking, path lookup completeness, dynamic linking, fork/clone and sockets. Returning `ENOSYS` is preferable to silently violating Linux semantics.
 
 ## Acceptance gate
 

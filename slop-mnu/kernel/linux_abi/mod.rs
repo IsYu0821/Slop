@@ -15,6 +15,8 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETUID|nr::GETGID|nr::GETEUID|nr::GETEGID=>0, nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
     nr::SET_TID_ADDRESS=>{crate::process::set_clear_child_tid(a[0]);crate::task::current_pid() as i64},
     nr::SET_ROBUST_LIST=>if a[1]==24 {0}else{errno::neg(errno::EINVAL)}, nr::PRLIMIT64=>sys_prlimit(a),
+    nr::CLOCK_GETTIME=>sys_clock_gettime(a[0],a[1]), nr::NANOSLEEP=>sys_nanosleep(a[0],a[1]),
+    nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
 fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
