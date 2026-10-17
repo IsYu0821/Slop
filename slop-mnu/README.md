@@ -88,3 +88,7 @@ Anonymous private `mmap` and upward `brk` growth now allocate zeroed physical fr
 ## Static C runtime (v0.26)
 
 `/bin/hello-c` is the first C program built without any host libc. The in-tree `libc/` provides freestanding startup, a Linux syscall shim, string functions, a `printf` subset, a first-fit `malloc` family over anonymous mappings, `getenv` and `openat`/`read`/`close` wrappers. `/bin/hello` now hands the process to `/bin/hello-c` with `execve`, so the acceptance chain covers two address-space replacements and a C `main` returning 0. Build it standalone with `./tools/build-libc-test.sh`.
+
+## Processes, pipes and wait4 (v0.27)
+
+`/bin/hello-c` now execs `/bin/hello-posix`: a C program that creates a pipe, forks, has the child `dup2` the pipe write end onto stdout and exit with status 7, then reads the pipe to EOF, matches the message and reaps the child with `wait4`. Kernel-side this adds a per-process address-space and descriptor owner, deep-copy `fork` of the private PML4 slots, reference-counted open-file descriptions, blocking pipes with EOF/`EPIPE`, `clone`, `wait4`, `dup2`/`dup3`, `pipe`/`pipe2` and a minimal `fcntl`. The libc runtime now carries `errno` and `fork`/`pipe`/`dup2`/`waitpid` wrappers. Threads (`CLONE_VM`), copy-on-write and signals remain future work.

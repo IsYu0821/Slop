@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.0 - 2026-10-17
+- Added a per-process address-space and descriptor owner (`kernel/process.rs`) with deep-copy `fork` of the private PML4 slots and child resume at the saved syscall return with `rax=0`.
+- Added blocking pipes (`kernel/pipe.rs`) with 4 KiB ring buffers, EOF on last writer close and `EPIPE` on last reader close.
+- Reworked `kernel/fd.rs` into reference-counted open-file descriptions with per-process descriptor tables shared correctly across `fork`, `dup2`/`dup3`, `pipe`/`pipe2` and a minimal `fcntl`.
+- Added `clone` (fork subset), `wait4` with wait-status encoding, `WNOHANG`/`WUNTRACED`, process-group selectors and `ECHILD`.
+- Added `ECHILD`, `EMFILE` and `EPIPE`; `sched_yield` now really yields; `execve` keeps descriptors open and the user stack grew to 8 pages.
+- Added `libc/` `errno` support (`__errno_location`) and `fork`, `pipe`, `dup2`, `waitpid` wrappers; `/bin/hello-posix` exercises fork, pipe, dup2 and wait4 end to end.
+
 ## 0.26.0 - 2026-10-17
 - Added a clean-room static C runtime under `libc/`: freestanding startup, Linux syscall shim, string functions, printf subset, first-fit malloc family, getenv and file I/O wrappers.
 - Added `/bin/hello-c`, a C acceptance program compiled with Clang/LLD only and chained after `/bin/hello` through Linux `execve`.

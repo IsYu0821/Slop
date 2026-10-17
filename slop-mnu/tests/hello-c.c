@@ -93,5 +93,11 @@ int main(int argc, char **argv, char **envp) {
         return 1;
     }
     puts("c runtime: passed");
-    return 0;
+    {
+        char *av[] = {"hello-posix", "from-c", 0};
+        char *ev[] = {"SLOP_MNU_POSIX=1", 0};
+        execve("/bin/hello-posix", av, ev);
+    }
+    puts("c runtime: failed: execve /bin/hello-posix");
+    return 1;
 }

@@ -26,6 +26,7 @@ syscall_entry:
     /* Frame: +0 r15 +8 r14 +16 r13 +24 r12 +32 rbp +40 rbx +48 r10 +56 r9
        +64 r8 +72 rdx +80 rsi +88 rdi +96 rax(nr) +104 rcx +112 r11.
        Linux ABI: rax=nr, rdi,rsi,rdx,r10,r8,r9=args. SysV call has arg7 on stack. */
+    mov %rsp, SYSCALL_FRAME(%rip)
     mov 96(%rsp), %rdi
     mov 88(%rsp), %rsi
     mov 80(%rsp), %rdx

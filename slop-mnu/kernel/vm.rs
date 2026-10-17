@@ -6,7 +6,7 @@ pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
 #[derive(Clone,Copy,Default,PartialEq,Eq)] pub struct VmFlags(pub u8);
 impl VmFlags { pub const READ:Self=Self(1);pub const WRITE:Self=Self(2);pub const EXEC:Self=Self(4);pub const USER:Self=Self(8);pub const ANON:Self=Self(16);pub fn contains(self,x:Self)->bool{self.0&x.0==x.0} }
 #[derive(Clone,Copy,Default)] pub struct Area{pub start:usize,pub end:usize,pub flags:VmFlags}
-pub struct Map{areas:[Area;MAX_AREAS],len:usize,next_hint:usize}
+#[derive(Clone)] pub struct Map{areas:[Area;MAX_AREAS],len:usize,next_hint:usize}
 impl Map{
  pub const fn new()->Self{Self{areas:[Area{start:0,end:0,flags:VmFlags(0)};MAX_AREAS],len:0,next_hint:MMAP_BASE}}
  pub fn insert(&mut self,start:usize,len:usize,flags:VmFlags)->Result<(),i64>{
