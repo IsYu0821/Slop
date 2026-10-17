@@ -4,7 +4,6 @@ mkdir -p build/efi/EFI/BOOT
 ./tools/check-toolchain.sh
 ./tools/build-test-elf.sh
 ./tools/build-initramfs.py
-llvm-objcopy -I binary -O coff-x86-64 build/initramfs.nsar build/initramfs.obj
 cargo +nightly build -Zbuild-std=core,compiler_builtins -Zbuild-std-features=compiler-builtins-mem --target x86_64-pc-windows-msvc --release
 KLIB=$(find target/x86_64-pc-windows-msvc/release -maxdepth 1 -type f \( -name '*slop_mnu_kernel*.lib' -o -name '*slop_mnu_kernel*.a' \) | head -n 1)
 test -n "$KLIB"

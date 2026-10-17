@@ -1,6 +1,8 @@
 .text
 .global apic_timer_entry
+#ifdef __ELF__
 .type apic_timer_entry,@function
+#endif
 apic_timer_entry:
     cld
     push %rax
@@ -37,4 +39,6 @@ apic_timer_entry:
     pop %rcx
     pop %rax
     iretq
+#ifdef __ELF__
 .size apic_timer_entry,.-apic_timer_entry
+#endif

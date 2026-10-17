@@ -15,7 +15,5 @@ typedef EFI_STATUS(EFIAPI *EFI_EXIT_BOOT_SERVICES)(EFI_HANDLE,UINTN);
 typedef struct { uint32_t Data1;uint16_t Data2,Data3;uint8_t Data4[8]; } EFI_GUID;
 typedef struct { EFI_GUID VendorGuid;void* VendorTable; } EFI_CONFIGURATION_TABLE;
 typedef struct { EFI_TABLE_HEADER Hdr; void* RaiseTPL;void* RestoreTPL;void* AllocatePages;void* FreePages;EFI_GET_MEMORY_MAP GetMemoryMap;EFI_ALLOCATE_POOL AllocatePool;void* FreePool;void* CreateEvent;void* SetTimer;void* WaitForEvent;void* SignalEvent;void* CloseEvent;void* CheckEvent;void* InstallProtocolInterface;void* ReinstallProtocolInterface;void* UninstallProtocolInterface;void* HandleProtocol;void* Reserved;void* RegisterProtocolNotify;void* LocateHandle;void* LocateDevicePath;void* InstallConfigurationTable;void* LoadImage;void* StartImage;void* Exit;void* UnloadImage;EFI_EXIT_BOOT_SERVICES ExitBootServices; } EFI_BOOT_SERVICES;
-typedef struct { uint32_t Data1;uint16_t Data2,Data3;uint8_t Data4[8]; } EFI_GUID;
-typedef struct { EFI_GUID VendorGuid;void* VendorTable; } EFI_CONFIGURATION_TABLE;
 typedef struct { EFI_TABLE_HEADER Hdr;CHAR16* FirmwareVendor;uint32_t FirmwareRevision;EFI_HANDLE ConsoleInHandle;void* ConIn;EFI_HANDLE ConsoleOutHandle;void* ConOut;EFI_HANDLE StandardErrorHandle;void* StdErr;void* RuntimeServices;EFI_BOOT_SERVICES* BootServices;UINTN NumberOfTableEntries;EFI_CONFIGURATION_TABLE* ConfigurationTable; } EFI_SYSTEM_TABLE;
 #endif
