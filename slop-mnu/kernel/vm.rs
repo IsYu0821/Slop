@@ -1,11 +1,14 @@
 //! Architecture-neutral virtual-memory area ledger. Hardware PTE work stays in arch.
 pub const PAGE_SIZE:usize=4096; pub const MAX_AREAS:usize=64;
+// Anonymous mappings live in PML4 slot 129: the 64 GiB firmware identity
+// map in slot 0 and the ELF/stack slots stay untouched.
+pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
 #[derive(Clone,Copy,Default,PartialEq,Eq)] pub struct VmFlags(pub u8);
 impl VmFlags { pub const READ:Self=Self(1);pub const WRITE:Self=Self(2);pub const EXEC:Self=Self(4);pub const USER:Self=Self(8);pub const ANON:Self=Self(16);pub fn contains(self,x:Self)->bool{self.0&x.0==x.0} }
 #[derive(Clone,Copy,Default)] pub struct Area{pub start:usize,pub end:usize,pub flags:VmFlags}
 pub struct Map{areas:[Area;MAX_AREAS],len:usize,next_hint:usize}
 impl Map{
- pub const fn new()->Self{Self{areas:[Area{start:0,end:0,flags:VmFlags(0)};MAX_AREAS],len:0,next_hint:0x0000_0010_0000_0000}}
+ pub const fn new()->Self{Self{areas:[Area{start:0,end:0,flags:VmFlags(0)};MAX_AREAS],len:0,next_hint:MMAP_BASE}}
  pub fn insert(&mut self,start:usize,len:usize,flags:VmFlags)->Result<(),i64>{
   if start%PAGE_SIZE!=0||len==0{return Err(crate::errno::EINVAL)} let end=start.checked_add(align_up(len)?).ok_or(crate::errno::ENOMEM)?;
   if start<crate::usercopy::USER_MIN||end>crate::usercopy::USER_MAX{return Err(crate::errno::ENOMEM)}

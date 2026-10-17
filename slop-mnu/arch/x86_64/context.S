@@ -1,6 +1,8 @@
 .text
 .global switch_context
+#ifdef __ELF__
 .type switch_context,@function
+#endif
 /* SysV64: RDI=&old_rsp, RSI=new_rsp. Saves callee-preserved state. */
 switch_context:
     push %rbp
@@ -18,4 +20,6 @@ switch_context:
     pop %rbx
     pop %rbp
     ret
+#ifdef __ELF__
 .size switch_context,.-switch_context
+#endif

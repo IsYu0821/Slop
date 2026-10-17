@@ -19,13 +19,13 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
-fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
+fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>{return if done==0{errno::neg(e)}else{done as i64}}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
 fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
     if fd!=1&&fd!=2{return errno::neg(errno::EBADF)} if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
     let mut done=0usize; let mut buf=[0u8;256]; while done<len as usize {let n=core::cmp::min(buf.len(),len as usize-done);
         let src=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
         if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],src){return errno::neg(e)}
-        for &b in &buf[..n]{crate::print!("{}",b as char)} done+=n;} done as i64
+        crate::console::write_bytes(&buf[..n]); done+=n;} done as i64
 }
 fn sys_close(fd:u64)->i64{if fd<=2{0}else{unit(crate::fd::close(fd as usize))}}
 fn sys_fstat(fd:u64,ptr:u64)->i64 {let mut st=Stat::default();if fd<=2{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;}else{let n=match crate::fd::inode(fd as usize){Ok(n)=>n,Err(e)=>return errno::neg(e)};st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blocks=((n.size+511)/512)as i64;}st.st_blksize=4096;copy_obj(ptr,&st)}
@@ -34,7 +34,7 @@ fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.l
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&3!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
 fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};let n=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blksize=4096;st.st_blocks=((n.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
-fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.25.2"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
+fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.26.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::process::fs_base()),_=>errno::neg(errno::EINVAL)}}
 fn sys_prlimit(a:[u64;6])->i64{if a[0]!=0&&a[0]!=crate::task::current_pid() as u64{return errno::neg(errno::ESRCH)} if a[2]!=0{return errno::neg(errno::EPERM)} if a[3]!=0{copy_obj(a[3],&Rlimit{cur:u64::MAX,max:u64::MAX})}else{0}}
 fn copy_obj<T>(dst:u64,obj:&T)->i64{let bytes=unsafe{core::slice::from_raw_parts((obj as *const T).cast::<u8>(),size_of::<T>())};match crate::usercopy::copy_to_user(dst as usize,bytes){Ok(())=>0,Err(e)=>errno::neg(e)}}
