@@ -4,7 +4,7 @@ _start:
     cmpq $1,(%rsp); jne failure
     mov 8(%rsp),%rax; cmpl $0x6c6c6568,(%rax); jne failure
     mov 24(%rsp),%rax; test %rax,%rax; je failure
-    cmpl $0x54524f4e,(%rax); jne failure
+    cmpl $0x504f4c53,(%rax); jne failure
     mov $1,%rax; mov $1,%rdi; mov $0x1234,%rsi; mov $8,%rdx; syscall
     cmp $-14,%rax; jne failure
     mov $257,%rax; mov $-100,%rdi; lea motd_path(%rip),%rsi; xor %rdx,%rdx; xor %r10,%r10; syscall

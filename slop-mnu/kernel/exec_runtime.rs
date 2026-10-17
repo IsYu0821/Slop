@@ -12,7 +12,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let parsed=elf::plan(image)?;let access=Identity;let firmware=PageTableRoot::current();
  let image_slot=((ep.entry>>39)&511)as usize;let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
  if image_slot==0{return Err("ELF must not share bootstrap identity slot")}
- let root=firmware.clone_bootstrap(&access,&[image_slot,stack_slot]).map_err(|_|"private CR3 allocation failed")?;
+ let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;let root=firmware.clone_bootstrap(&access,&[image_slot,stack_slot,mmap_slot]).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  for seg in &parsed.segments[..parsed.segment_count]{
   if ((seg.vaddr>>39)&511)as usize!=image_slot{return Err("ELF crosses private PML4 slot")}

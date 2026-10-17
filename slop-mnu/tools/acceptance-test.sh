@@ -6,6 +6,10 @@ LOG=${LOG:-build/acceptance-serial.log}
 TIMEOUT=${TIMEOUT:-30}
 mkdir -p build
 rm -f "$LOG"
+if ! ./tools/build-uefi.sh; then
+  printf 'acceptance: build failed\n' >&2
+  exit 1
+fi
 set +e
 timeout "$TIMEOUT" ./tools/run-qemu.sh >"$LOG" 2>&1
 status=$?

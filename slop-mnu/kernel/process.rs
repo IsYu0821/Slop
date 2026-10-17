@@ -1,7 +1,7 @@
 //! Bootstrap process VM and TLS state. Ownership moves into Process when clone lands.
 use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX},phys::Identity},sync::SpinLock,vm::{Map,VmFlags}};
 use core::sync::atomic::{AtomicU64,Ordering};
-const PAGE:u64=4096;const BRK_BASE:u64=0x0000_0000_4000_0000;
+const PAGE:u64=4096;/* Slot 129 keeps the heap out of the firmware identity map. */const BRK_BASE:u64=0x0000_4080_0000_0000;
 static BRK:AtomicU64=AtomicU64::new(BRK_BASE);static FS_BASE:AtomicU64=AtomicU64::new(0);static CLEAR_CHILD_TID:AtomicU64=AtomicU64::new(0);
 static VM:SpinLock<Map>=SpinLock::new(Map::new());
 fn up(v:u64)->Result<u64,i64>{v.checked_add(PAGE-1).map(|x|x&!(PAGE-1)).ok_or(crate::errno::ENOMEM)}

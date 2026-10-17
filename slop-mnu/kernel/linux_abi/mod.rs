@@ -19,13 +19,13 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
-fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
+fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>{return if done==0{errno::neg(e)}else{done as i64}}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
 fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
     if fd!=1&&fd!=2{return errno::neg(errno::EBADF)} if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
     let mut done=0usize; let mut buf=[0u8;256]; while done<len as usize {let n=core::cmp::min(buf.len(),len as usize-done);
         let src=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
         if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],src){return errno::neg(e)}
-        for &b in &buf[..n]{crate::print!("{}",b as char)} done+=n;} done as i64
+        crate::console::write_bytes(&buf[..n]); done+=n;} done as i64
 }
 fn sys_close(fd:u64)->i64{if fd<=2{0}else{unit(crate::fd::close(fd as usize))}}
 fn sys_fstat(fd:u64,ptr:u64)->i64 {let mut st=Stat::default();if fd<=2{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;}else{let n=match crate::fd::inode(fd as usize){Ok(n)=>n,Err(e)=>return errno::neg(e)};st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blocks=((n.size+511)/512)as i64;}st.st_blksize=4096;copy_obj(ptr,&st)}

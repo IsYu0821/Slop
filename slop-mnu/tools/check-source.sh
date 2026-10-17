@@ -7,7 +7,7 @@ from pathlib import Path
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
- 'arch/x86_64/syscall.S':['push $0','push %r9','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','sysretq'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','sysretq'],
  'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust'],
  'kernel/lib.rs':['spawn_user(loaded)','wait_child(user_pid)','scheduler: user process reaped'],
  'kernel/usercopy.rs':['root.query','PRESENT|USER|WRITABLE'],
