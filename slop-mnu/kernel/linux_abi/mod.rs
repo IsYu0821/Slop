@@ -7,35 +7,92 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::READ=>sys_read(a[0],a[1],a[2]), nr::WRITE=>sys_write(a[0],a[1],a[2]), nr::CLOSE=>sys_close(a[0]),
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
     nr::OPENAT=>sys_openat(a[0] as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat(a[0] as i64,a[1],a[2],a[3]),
-    nr::MMAP=>result(crate::process::mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
-    nr::MPROTECT=>unit(crate::process::mprotect(a[0] as usize,a[1] as usize,a[2])),
-    nr::MUNMAP=>unit(crate::process::munmap(a[0] as usize,a[1] as usize)), nr::BRK=>crate::process::brk(a[0]) as i64,
-    nr::SCHED_YIELD=>0, nr::GETPID|nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
+    nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
+    nr::MPROTECT=>proc_unit(|p|p.mprotect(a[0] as usize,a[1] as usize,a[2])),
+    nr::MUNMAP=>proc_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_u64(|p|Ok(p.brk(a[0]))),
+    nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID|nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
     nr::EXECVE=>sys_execve(a[0],a[1],a[2]),
     nr::GETUID|nr::GETGID|nr::GETEUID|nr::GETEGID=>0, nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
-    nr::SET_TID_ADDRESS=>{crate::process::set_clear_child_tid(a[0]);crate::task::current_pid() as i64},
+    nr::SET_TID_ADDRESS=>sys_set_tid_address(a[0]),
+    nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
+    nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
+    nr::DUP2=>fd_result(crate::fd::dup2(a[0] as usize,a[1] as usize)), nr::DUP3=>sys_dup3(a[0] as usize,a[1] as usize,a[2]),
+    nr::FCNTL=>sys_fcntl(a[0] as usize,a[1],a[2]),
     nr::SET_ROBUST_LIST=>if a[1]==24 {0}else{errno::neg(errno::EINVAL)}, nr::PRLIMIT64=>sys_prlimit(a),
     nr::CLOCK_GETTIME=>sys_clock_gettime(a[0],a[1]), nr::NANOSLEEP=>sys_nanosleep(a[0],a[1]),
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
-fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;256];while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);let n=match crate::fd::read(fd as usize,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>{return if done==0{errno::neg(e)}else{done as i64}}};if n==0{break}let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
-fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
-    if fd!=1&&fd!=2{return errno::neg(errno::EBADF)} if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
-    let mut done=0usize; let mut buf=[0u8;256]; while done<len as usize {let n=core::cmp::min(buf.len(),len as usize-done);
-        let src=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
-        if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],src){return errno::neg(e)}
-        crate::console::write_bytes(&buf[..n]); done+=n;} done as i64
+fn fd_id(fd:u64)->Option<u32>{crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten()}
+fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+fn proc_unit(f:impl FnOnce(&mut crate::process::Process)->Result<(),i64>)->i64{match crate::task::with_current_process(f){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+fn proc_u64(f:impl FnOnce(&mut crate::process::Process)->Result<u64,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+fn fd_result(r:Result<i32,i64>)->i64{match r{Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
+fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {
+ if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut done=0usize;let mut buf=[0u8;256];
+ while done<len as usize{let wanted=core::cmp::min(buf.len(),len as usize-done);
+  let n=match crate::fd::read(id,&mut buf[..wanted]){Ok(n)=>n,Err(e)=>{return if done==0{errno::neg(e)}else{done as i64}}};
+  if n==0{break}
+  let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
+  if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}
+  done+=n;
+ }
+ done as i64
 }
-fn sys_close(fd:u64)->i64{if fd<=2{0}else{unit(crate::fd::close(fd as usize))}}
-fn sys_fstat(fd:u64,ptr:u64)->i64 {let mut st=Stat::default();if fd<=2{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;}else{let n=match crate::fd::inode(fd as usize){Ok(n)=>n,Err(e)=>return errno::neg(e)};st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blocks=((n.size+511)/512)as i64;}st.st_blksize=4096;copy_obj(ptr,&st)}
-fn sys_lseek(fd:u64,off:i64,whence:u64)->i64{match crate::fd::seek(fd as usize,off,whence){Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
+fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
+ if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut done=0usize; let mut buf=[0u8;256]; while done<len as usize {let n=core::cmp::min(buf.len(),len as usize-done);
+  let src=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
+  if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],src){return if done==0{errno::neg(e)}else{done as i64}}
+  match crate::fd::write(id,&buf[..n]){Ok(m)if m==n=>{}Ok(m)=>return (done+m)as i64,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+  done+=n;} done as i64
+}
+fn sys_close(fd:u64)->i64{unit(crate::fd::close(fd as usize))}
+fn sys_fstat(fd:u64,ptr:u64)->i64 {let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};let mut st=Stat::default();
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blocks=((n.size+511)/512)as i64;},
+  Some(crate::fd::OpenKind::Console)=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
+  Some(crate::fd::OpenKind::PipeRead(_))|Some(crate::fd::OpenKind::PipeWrite(_))=>{st.st_mode=S_IFIFO|0o600;st.st_nlink=1;},
+  None=>return errno::neg(errno::EBADF),
+ }
+ st.st_blksize=4096;copy_obj(ptr,&st)}
+fn sys_lseek(fd:u64,off:i64,whence:u64)->i64{let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};match crate::fd::seek(id,off,whence){Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
+fn sys_set_tid_address(ptr:u64)->i64{let _=crate::task::with_current_process(|p|p.set_clear_child_tid(ptr));crate::task::current_pid() as i64}
+fn sys_clone(a:[u64;6])->i64{
+ const SIGCHLD:u64=17;
+ if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
+ if a[0]&!SIGCHLD!=0{return errno::neg(errno::EINVAL)}
+ let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+ match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+}
+fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
+ const WNOHANG:u64=1;const WUNTRACED:u64=2;
+ if options&!(WNOHANG|WUNTRACED)!=0{return errno::neg(errno::EINVAL)}
+ loop{match crate::task::reap_child(pid,options&WNOHANG!=0){
+  Ok(crate::task::WaitOutcome::Reaped(cpid,status))=>{
+   if status_ptr!=0{let s=status as i32;let r=copy_obj(status_ptr,&s);if r<0{return r}}
+   if rusage!=0{let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&zeros){return errno::neg(e)}}
+   return cpid as i64;
+  }
+  Ok(crate::task::WaitOutcome::NoHang)=>return 0,
+  Ok(crate::task::WaitOutcome::Blocked)=>crate::task::block_current(),
+  Err(e)=>return errno::neg(e),
+ }}
+}
+fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
+ match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
+fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{if flags&!0x80000!=0||oldfd==newfd{return errno::neg(errno::EINVAL)}fd_result(crate::fd::dup2(oldfd,newfd))}
+fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{match cmd{0=>fd_result(crate::fd::dup_from(fd,arg as usize)),1|2|3|4=>0,_=>errno::neg(errno::EINVAL)}}
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&3!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
 fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};let n=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blksize=4096;st.st_blocks=((n.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
-fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.26.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
-fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::process::fs_base()),_=>errno::neg(errno::EINVAL)}}
+fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.27.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
+fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
 fn sys_prlimit(a:[u64;6])->i64{if a[0]!=0&&a[0]!=crate::task::current_pid() as u64{return errno::neg(errno::ESRCH)} if a[2]!=0{return errno::neg(errno::EPERM)} if a[3]!=0{copy_obj(a[3],&Rlimit{cur:u64::MAX,max:u64::MAX})}else{0}}
 fn copy_obj<T>(dst:u64,obj:&T)->i64{let bytes=unsafe{core::slice::from_raw_parts((obj as *const T).cast::<u8>(),size_of::<T>())};match crate::usercopy::copy_to_user(dst as usize,bytes){Ok(())=>0,Err(e)=>errno::neg(e)}}
 
@@ -52,9 +109,12 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{
  let mut av=["";EXEC_MAX_VEC];for i in 0..ac{av[i]=match core::str::from_utf8(&ab[i][..al[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let mut ev=["";EXEC_MAX_VEC];for i in 0..ec{ev[i]=match core::str::from_utf8(&eb[i][..el[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
- let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,crate::process_runtime::bootstrap_cr3())}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
- if let Err(e)=crate::process_runtime::replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot){return errno::neg(e)}
- crate::process::reset_exec_state();unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
+ let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
+ let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
+ match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
+ let _=crate::task::with_current_process(|p|p.reset_exec_state());
+ crate::task::set_current_fs_base(0);
+ unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
  crate::println!("execve: committed {} rip={:#x} rsp={:#x}",path,loaded.entry,loaded.rsp);0
 }
 

@@ -10,7 +10,7 @@ pub struct Stat {
 #[repr(C)] #[derive(Clone,Copy,Default)] pub struct Rlimit { pub cur:u64, pub max:u64 }
 #[repr(C)] #[derive(Clone,Copy)] pub struct Iovec { pub base:u64, pub len:u64 }
 #[repr(C)] #[derive(Clone,Copy)] pub struct Auxv { pub kind:u64, pub value:u64 }
-pub const S_IFCHR:u32=0o020000; pub const S_IFDIR:u32=0o040000;
+pub const S_IFIFO:u32=0o010000; pub const S_IFCHR:u32=0o020000; pub const S_IFDIR:u32=0o040000;
 pub const AT_NULL:u64=0; pub const AT_PAGESZ:u64=6; pub const AT_PHDR:u64=3;
 pub const AT_PHENT:u64=4; pub const AT_PHNUM:u64=5; pub const AT_ENTRY:u64=9;
 pub const AT_UID:u64=11; pub const AT_EUID:u64=12; pub const AT_GID:u64=13; pub const AT_EGID:u64=14;

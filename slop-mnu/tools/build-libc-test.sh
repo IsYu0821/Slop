@@ -5,8 +5,13 @@ CFLAGS="-target x86_64-unknown-none-elf -ffreestanding -fno-stack-protector -fno
 for src in libc/start.S libc/syscall.S; do
   clang $CFLAGS -c "$src" -o "build/libc/$(basename "$src" .S).o"
 done
-for src in libc/string.c libc/stdio.c libc/stdlib.c libc/unistd.c tests/hello-c.c; do
+for src in libc/string.c libc/stdio.c libc/stdlib.c libc/unistd.c libc/errno.c; do
   clang $CFLAGS -c "$src" -o "build/libc/$(basename "$src" .c).o"
 done
-ld.lld -nostdlib -static -T tests/minimal-linux.ld build/libc/*.o -o build/hello-c.elf
-llvm-readelf -h -l build/hello-c.elf
+for src in tests/hello-c.c tests/hello-posix.c; do
+  clang $CFLAGS -c "$src" -o "build/libc/$(basename "$src" .c).o"
+done
+LIBC="build/libc/start.o build/libc/syscall.o build/libc/string.o build/libc/stdio.o build/libc/stdlib.o build/libc/unistd.o build/libc/errno.o"
+ld.lld -nostdlib -static -T tests/minimal-linux.ld $LIBC build/libc/hello-c.o -o build/hello-c.elf
+ld.lld -nostdlib -static -T tests/minimal-linux.ld $LIBC build/libc/hello-posix.o -o build/hello-posix.elf
+llvm-readelf -h -l build/hello-c.elf build/hello-posix.elf
