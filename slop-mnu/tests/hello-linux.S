@@ -48,13 +48,25 @@ _start:
     test %rax,%rax; jne failure
     mov $1,%rax; mov $1,%rdi; lea message(%rip),%rsi; mov $message_end-message,%rdx; syscall
     cmp $message_end-message,%rax; jne failure
-    mov $231,%rax; xor %rdi,%rdi; syscall
+    /* Hand the process over to the C runtime acceptance program. */
+    mov $59,%rax
+    lea c_path(%rip),%rdi
+    lea c_argv(%rip),%rsi
+    lea c_envp(%rip),%rdx
+    syscall
 failure:
     mov $1,%rax; mov $2,%rdi; lea failed(%rip),%rsi; mov $failed_end-failed,%rdx; syscall
     mov $231,%rax; mov $1,%rdi; syscall
 1:  jmp 1b
 .section .rodata
 motd_path: .asciz "/etc/motd"
+c_path: .asciz "/bin/hello-c"
+c_arg0: .asciz "hello-c"
+c_arg1: .asciz "from-asm"
+c_env0: .asciz "SLOP_MNU_C=1"
+.align 8
+c_argv: .quad c_arg0, c_arg1, 0
+c_envp: .quad c_env0, 0
 message: .ascii "hello from execve /bin/hello; argv, envp, VFS, VM, time, random and EFAULT passed\n"
 message_end:
 failed: .ascii "Slop/MNU Linux ABI acceptance failed\n"
