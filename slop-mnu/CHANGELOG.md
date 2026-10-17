@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.26.0 - 2026-10-17
+- Added a clean-room static C runtime under `libc/`: freestanding startup, Linux syscall shim, string functions, printf subset, first-fit malloc family, getenv and file I/O wrappers.
+- Added `/bin/hello-c`, a C acceptance program compiled with Clang/LLD only and chained after `/bin/hello` through Linux `execve`.
+- Extended the linker script with large-code-model input sections and the acceptance gate with C runtime markers.
+
 ## 0.2.0 - 2026-10-12
 - Added versioned loader/kernel BootInfo ABI and memory-map records.
 - Added bounded physical frame allocator with overflow checks.

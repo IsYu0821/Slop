@@ -84,3 +84,7 @@ Anonymous private `mmap` and upward `brk` growth now allocate zeroed physical fr
 ## Static execve (v0.23)
 
 `/init` now uses Linux `execve` to replace itself with `/bin/hello` from initramfs. Path, argv, and envp are copied from user memory before a new CR3 is built. The old image remains active on load failure; on success SYSRET is redirected to the new ELF entry and stack.
+
+## Static C runtime (v0.26)
+
+`/bin/hello-c` is the first C program built without any host libc. The in-tree `libc/` provides freestanding startup, a Linux syscall shim, string functions, a `printf` subset, a first-fit `malloc` family over anonymous mappings, `getenv` and `openat`/`read`/`close` wrappers. `/bin/hello` now hands the process to `/bin/hello-c` with `execve`, so the acceptance chain covers two address-space replacements and a C `main` returning 0. Build it standalone with `./tools/build-libc-test.sh`.

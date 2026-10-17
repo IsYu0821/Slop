@@ -26,6 +26,9 @@ for text in \
   'vfs: path lookup and file read self-test passed' \
   'execve: committed /bin/hello' \
   'argv, envp, VFS, VM, time, random and EFAULT passed' \
+  'execve: committed /bin/hello-c' \
+  'c runtime: main entered' \
+  'c runtime: passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
