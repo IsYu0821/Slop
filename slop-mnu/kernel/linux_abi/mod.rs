@@ -25,6 +25,12 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::SET_ROBUST_LIST=>if a[1]==24 {0}else{errno::neg(errno::EINVAL)}, nr::PRLIMIT64=>sys_prlimit(a),
     nr::CLOCK_GETTIME=>sys_clock_gettime(a[0],a[1]), nr::NANOSLEEP=>sys_nanosleep(a[0],a[1]),
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
+    nr::READV=>sys_readv(a[0],a[1],a[2] as i32),
+    nr::WRITEV=>sys_writev(a[0],a[1],a[2] as i32),
+    nr::GETDENTS64=>sys_getdents64(a[0],a[1],a[2] as i32),
+    nr::FUTEX=>sys_futex(a[0],a[1] as i32,a[2] as i32,a[3],a[4] as u64,a[5] as i32),
+    nr::GETCWD=>sys_getcwd(a[0],a[1]),
+    nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
 fn fd_id(fd:u64)->Option<u32>{crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten()}
@@ -89,7 +95,7 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
 fn sys_kill(pid:u32,sig:i32)->i64{match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}}
 fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
  if act==0{let a=match crate::signal::action_get(sig){Ok(v)=>v,Err(e)=>return errno::neg(e)};if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&a as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
- else{let mut a=crate::signal::Action{handler:0,mask:0,flags:0};let b=unsafe{core::slice::from_raw_parts_mut((&mut a as*mut crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_from_user(b,act as usize){return errno::neg(e)}if let Err(e)=crate::signal::action_set(sig,a){return errno::neg(e)}if old!=0{let d=match crate::signal::action_get(sig){Ok(v)=>v,Err(_)=>crate::signal::Action{handler:0,mask:0,flags:0}};let bytes=unsafe{core::slice::from_raw_parts((&d as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
+ else{let mut a=crate::signal::Action{handler:0,mask:0,flags:0,restorer:0};let b=unsafe{core::slice::from_raw_parts_mut((&mut a as*mut crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_from_user(b,act as usize){return errno::neg(e)}if let Err(e)=crate::signal::action_set(sig,a){return errno::neg(e)}if old!=0{let d=match crate::signal::action_get(sig){Ok(v)=>v,Err(_)=>crate::signal::Action{handler:0,mask:0,flags:0,restorer:0}};let bytes=unsafe{core::slice::from_raw_parts((&d as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
 }
 fn sys_rt_sigprocmask(how:u64,set:u64,old:u64)->i64{
  let prev=match crate::signal::mask_op(how,set){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -135,3 +141,69 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{
 fn sys_clock_gettime(clock:u64,ptr:u64)->i64{if clock!=0&&clock!=1{return errno::neg(errno::EINVAL)}let ns=crate::time::monotonic_ns();let ts=Timespec{tv_sec:(ns/1_000_000_000)as i64,tv_nsec:(ns%1_000_000_000)as i64};copy_obj(ptr,&ts)}
 fn sys_nanosleep(req:u64,rem:u64)->i64{let mut ts=Timespec::default();let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};if let Err(e)=crate::usercopy::copy_from_user(b,req as usize){return errno::neg(e)}if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);crate::task::sleep_until(crate::time::ticks_after_ns(ns));if rem!=0{let zero=Timespec::default();let _=copy_obj(rem,&zero);}0}
 fn sys_getrandom(ptr:u64,len:u64,flags:u64)->i64{if flags&!3!=0{return errno::neg(errno::EINVAL)}if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;64];while done<len as usize{let n=core::cmp::min(buf.len(),len as usize-done);crate::time::fill_random(&mut buf[..n]);if let Err(e)=crate::usercopy::copy_to_user(ptr as usize+done,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
+fn sys_getcwd(ptr:u64,len:u64)->i64{
+ if len==0{return errno::neg(errno::EINVAL)}
+ let cwd=b"/";
+ if len<cwd.len()as u64{return errno::neg(errno::ERANGE)}
+ if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,cwd){return errno::neg(e)}
+ 0
+}
+fn sys_ioctl(fd:usize,cmd:u64,arg:u64)->i64{
+ let _id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let _=cmd;
+ let _=arg;
+ errno::neg(errno::ENOTTY)
+}
+fn sys_readv(fd:u64,ptr:u64,count:i32)->i64{
+ if count<=0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut iov=[Iovec{iov_base:0,iov_len:0};8];
+ for i in 0..count.min(8){
+  let mut b=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(ptr as usize)+(i as usize*16)){return errno::neg(e)}
+  iov[i as usize]=Iovec{iov_base:u64::from_ne_bytes(b[0..8].try_into().unwrap()),iov_len:u64::from_ne_bytes(b[8..16].try_into().unwrap())};
+ }
+ let mut total=0i64;
+ for i in 0..count.min(8){
+  let mut buf=[0u8;256];
+  let n=core::cmp::min(buf.len(),iov[i as usize].iov_len as usize);
+  let got=match crate::fd::read(id,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)};
+  if let Err(e)=crate::usercopy::copy_to_user(iov[i as usize].iov_base as usize,&buf[..got]){return errno::neg(e)}
+  total+=got as i64;
+ }
+ total
+}
+fn sys_writev(fd:u64,ptr:u64,count:i32)->i64{
+ if count<=0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut iov=[Iovec{iov_base:0,iov_len:0};8];
+ for i in 0..count.min(8){
+  let mut b=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(ptr as usize)+(i as usize*16)){return errno::neg(e)}
+  iov[i as usize]=Iovec{iov_base:u64::from_ne_bytes(b[0..8].try_into().unwrap()),iov_len:u64::from_ne_bytes(b[8..16].try_into().unwrap())};
+ }
+ let mut total=0i64;
+ for i in 0..count.min(8){
+  let mut buf=[0u8;256];
+  let n=core::cmp::min(buf.len(),iov[i as usize].iov_len as usize);
+  if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],iov[i as usize].iov_base as usize){return errno::neg(e)}
+  match crate::fd::write(id,&buf[..n]){Ok(m)=>{total+=m as i64},Err(e)=>return errno::neg(e)}
+ }
+ total
+}
+fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
+ if count<=0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let _=id;
+ /* Return 0 for empty directory listing */
+ let _=ptr;
+ let _=count;
+ 0
+}
+fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
+ /* Minimal futex stub: FUTEX_WAIT returns 0, FUTEX_WAKE returns 0 */
+ match op&0x7f{
+  1=>0,
+  _=>errno::neg(errno::ENOSYS)
+ }
+}

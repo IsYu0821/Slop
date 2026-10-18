@@ -8,7 +8,7 @@ pub struct Stat {
     pub st_mtime_nsec:i64, pub st_ctime:i64, pub st_ctime_nsec:i64, pub __unused:[i64;3],
 }
 #[repr(C)] #[derive(Clone,Copy,Default)] pub struct Rlimit { pub cur:u64, pub max:u64 }
-#[repr(C)] #[derive(Clone,Copy)] pub struct Iovec { pub base:u64, pub len:u64 }
+#[repr(C)] #[derive(Clone,Copy)] pub struct Iovec { pub iov_base:u64, pub iov_len:u64 }
 #[repr(C)] #[derive(Clone,Copy)] pub struct Auxv { pub kind:u64, pub value:u64 }
 pub const S_IFIFO:u32=0o010000; pub const S_IFCHR:u32=0o020000; pub const S_IFDIR:u32=0o040000;
 pub const AT_NULL:u64=0; pub const AT_PAGESZ:u64=6; pub const AT_PHDR:u64=3;

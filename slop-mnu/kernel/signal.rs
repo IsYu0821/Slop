@@ -15,20 +15,20 @@ fn task_index(pid:u32)->Option<usize>{let s=task::sched_pids();(0..8).find(|&i|s
 pub fn send(pid:u32,sig:i32)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
  if sig!=SIGKILL&&sig!=SIGSTOP&&!task_index(pid).is_some(){return Err(crate::errno::ESRCH)}
- task::with_current_process(|p|{p.pending|=bit(sig);Ok(())});
+ task::with_current_process(|p|{p.pending|=bit(sig);Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
  Ok(())
 }
 pub fn action_get(sig:i32)->Result<Action,i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
- task::with_current_process(|p|{Ok(p.handlers[sig as usize])}).ok_or(crate::errno::ESRCH)
+ task::with_current_process(|p|{Ok(p.handlers[sig as usize])}).ok_or(crate::errno::ESRCH)?
 }
 pub fn action_set(sig:i32,a:Action)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
- task::with_current_process(|p|{p.handlers[sig as usize]=a;Ok(())});
+ task::with_current_process(|p|{p.handlers[sig as usize]=a;Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
  Ok(())
 }
 pub fn mask_op(how:u64,set:u64)->Result<u64,i64>{
- task::with_current_process(|p|{let old=p.sigmask;match how{BLOCK=>p.sigmask|=set,UNBLOCK=>p.sigmask&=!set,SETMASK=>p.sigmask=set,_=>return Err(crate::errno::EINVAL)};Ok(old)}).ok_or(crate::errno::ESRCH)
+ task::with_current_process(|p|{let old=p.sigmask;match how{BLOCK=>p.sigmask|=set,UNBLOCK=>p.sigmask&=!set,SETMASK=>p.sigmask=set,_=>return Err(crate::errno::EINVAL)};Ok(old)}).ok_or(crate::errno::ESRCH)?
 }
 pub fn pending()->Option<i64>{
  task::with_current_process(|p|{let m=p.pending&!p.sigmask;if m==0{None}else{Some(m.trailing_zeros()as i64+1)}}).flatten()
