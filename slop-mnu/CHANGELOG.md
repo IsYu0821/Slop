@@ -1,3 +1,12 @@
+## 0.58.0 - 2026-10-18
+- Implemented the POSIX timer family (`timer_create/settime/gettime/getoverrun/delete`) with signal notification, `si_value`, overrun counting and `TIMER_ABSTIME`.
+- Made `alarm`, `getitimer` and `setitimer` share a per-process `ITIMER_REAL` timer; `ITIMER_VIRTUAL`/`ITIMER_PROF` report `EINVAL` pending CPU-time accounting.
+- Added `clock_settime` plus a CMOS RTC seed for `CLOCK_REALTIME`, truthful clock-id classification in `clock_gettime`/`clock_getres`, and `TIMER_ABSTIME` support in `clock_nanosleep`.
+- Implemented `rt_sigpending`, `rt_sigtimedwait` with timer siginfo delivery, and `pause` returning `EINTR`.
+- Added `set_robust_list`/`get_robust_list` storage and round trip.
+- Fixed the timer IRQ stub to align the kernel stack dynamically before the Rust handler; a `movaps` in the new tick code exposed the statically assumed alignment.
+- Expanded native/guest differential tests with timer, itimer, clock, robust-list and sigpending cases.
+
 ## 0.57.0 - 2026-10-18
 - Added per-open-file status flags: `O_NONBLOCK` for opens, pipes and sockets, live-`O_APPEND` writes, and `FD_CLOEXEC` cleared on `execve`.
 - Implemented the descriptor-control surface of `fcntl` (`F_DUPFD`, `F_DUPFD_CLOEXEC`, `F_GETFD`/`F_SETFD`, `F_GETFL`/`F_SETFL`, `F_GETLK`) and flag handling in `open`/`openat`, `socket`/`accept4`, and `dup3`.

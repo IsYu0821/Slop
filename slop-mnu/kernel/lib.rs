@@ -26,6 +26,7 @@ pub mod ext2;
 pub mod inotify;
 pub mod fd;
 pub mod flock;
+pub mod posix_timer;
 pub mod futex;
 pub mod vm;
 pub mod wait_queue;
@@ -53,6 +54,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     unsafe { arch::x86_64::descriptors::init(rsp0,ist,irq_stack); arch::x86_64::idt::init(); arch::x86_64::apic::init(irq_info).unwrap_or_else(|e|{println!("APIC init failed: {}",e);arch::halt()}); arch::x86_64::syscall::init(rsp0); }
     println!("Slop/MNU 0.27.0: BootInfo accepted, {} free pages",pages);
     println!("interrupts: lapic={:#x} ioapic={:#x} timer-vector={:#x}",irq_info.lapic,irq_info.ioapic,arch::x86_64::apic::TIMER_VECTOR);
+    if let Some(secs)=arch::x86_64::rtc::epoch_seconds(){time::set_realtime_ns(secs.saturating_mul(1_000_000_000));println!("rtc: CLOCK_REALTIME seeded epoch={}",secs);}
     let first_tick=match arch::x86_64::apic::self_test(){Ok(v)=>v,Err(e)=>{println!("APIC timer self-test failed: {}",e);arch::halt()}};
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);

@@ -76,7 +76,7 @@ pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u6
 extern "sysv64" fn fork_thread_trampoline()->!{let slot=SCHED.lock().current;let frame=FORK_RESUMES.lock()[slot].take().unwrap();crate::println!("task: fork child resumed pid={}",current_pid());unsafe{crate::arch::x86_64::user::resume(&frame)}}
 extern "sysv64" fn kernel_thread_trampoline()->!{let slot=SCHED.lock().current;let entry=KERNEL_ENTRIES.lock()[slot].take().unwrap();unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags));}entry();finish_current(0)}
 pub fn yield_now(){schedule(false)}
-pub fn on_timer_tick(){NEED_RESCHED.store(true,Ordering::Release);wake_sleepers(crate::arch::x86_64::apic::ticks());}
+pub fn on_timer_tick(){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();wake_sleepers(now);crate::posix_timer::tick(now);}
 pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
 /* A wake that lands before the target blocks is latched in wake_pending, so a
    register-then-block waiter can never lose it. */
@@ -87,9 +87,21 @@ pub fn wake_pid(pid:u32)->bool{let mut s=SCHED.lock();if let Some(t)=s.tasks.ite
 /* Marks sig pending on the task owning pid and wakes it if blocked. */
 pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
  let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
- PROCS.lock()[slot].as_mut().ok_or(crate::errno::ESRCH)?.pending|=crate::signal::bit(sig);
+ {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
+ p.pending|=crate::signal::bit(sig);
+ p.si_code[sig as usize]=0;p.si_value[sig as usize]=0;p.si_overrun[sig as usize]=0;}
  wake_pid(pid);
  Ok(())
+}
+/* Queues a timer-originated signal; returns false when it coalesced with an
+   already-pending signal (the caller then accounts the overrun). */
+pub fn timer_signal(pid:u32,sig:i32,value:u64,overrun:u32)->bool{
+ let slot=match {let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused&&t.state!=State::Zombie)}{Some(v)=>v,None=>return false};
+ let queued={let mut procs=PROCS.lock();match procs[slot].as_mut(){
+  Some(p)=>{let b=crate::signal::bit(sig);if p.pending&b!=0{false}else{p.pending|=b;p.si_code[sig as usize]=-2;p.si_value[sig as usize]=value;p.si_overrun[sig as usize]=overrun;true}}
+  None=>return false}};
+ if queued{wake_pid(pid);}
+ queued
 }
 fn finish(code:i32,signal:u8)->!{{let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;s.tasks[current].term_signal=signal;let parent=s.tasks[current].ppid;drop(s);if parent!=0{let _=signal_pid(parent,crate::signal::SIGCHLD);}}loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
 pub fn setpgid(pid:u32,pgid:u32)->Result<(),i64>{

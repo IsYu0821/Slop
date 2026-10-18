@@ -9,6 +9,7 @@ pub mod qemu;
 pub mod cpu;
 pub mod apic;
 pub mod port;
+pub mod rtc;
 
 pub fn init() {
     // Milestone 2: install GDT/IDT, APIC, timer, page tables and SYSCALL MSRs.

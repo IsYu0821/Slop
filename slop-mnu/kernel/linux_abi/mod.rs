@@ -31,9 +31,9 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::FSYNC=>sys_fsync(a[0] as usize), nr::FDATASYNC=>sys_fsync(a[0] as usize),
     nr::EVENTFD2=>sys_eventfd2(a[0],a[1]), nr::TIMERFD_CREATE=>sys_timerfd_create(a[0] as i32,a[1]),
     nr::TIME=>sys_time(a[0]), nr::TGKILL=>sys_tgkill(a[0] as u32,a[1] as u32,a[2] as i32), nr::TKILL=>sys_tgkill(crate::task::current_pid(),a[0] as u32,a[1] as i32),
-    nr::RT_SIGPENDING=>0, nr::RT_SIGTIMEDWAIT=>errno::neg(errno::EAGAIN),
-    nr::GETPRIORITY=>0, nr::SETPRIORITY=>0, nr::PAUSE=>{crate::task::block_current();0}, nr::ALARM=>0,
-    nr::GETITIMER=>0, nr::SETITIMER=>0,
+    nr::RT_SIGPENDING=>sys_rt_sigpending(a[0],a[1]), nr::RT_SIGTIMEDWAIT=>sys_rt_sigtimedwait(a[0],a[1],a[2],a[3]),
+    nr::GETPRIORITY=>0, nr::SETPRIORITY=>0, nr::PAUSE=>sys_pause(), nr::ALARM=>sys_alarm(a[0]),
+    nr::GETITIMER=>sys_getitimer(a[0],a[1]), nr::SETITIMER=>sys_setitimer(a[0],a[1],a[2]),
     nr::STAT=>sys_stat(a[0],a[1]), nr::LSTAT=>sys_lstat(a[0],a[1]), nr::UNLINK=>sys_unlink(a[0]),
     nr::SYMLINK=>sys_symlink(a[0],a[1]), nr::LINK=>sys_link(a[0],a[1]),
     nr::SYMLINKAT=>sys_symlink(a[0],a[2]), nr::LINKAT=>sys_link(a[0],a[2]),
@@ -72,7 +72,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::DUP2=>fd_result(crate::fd::dup2(a[0] as usize,a[1] as usize)), nr::DUP3=>sys_dup3(a[0] as usize,a[1] as usize,a[2]),
     nr::FCNTL=>sys_fcntl(a[0] as usize,a[1],a[2]),
     nr::FLOCK=>sys_flock(a[0] as usize,a[1]),
-    nr::SET_ROBUST_LIST=>if a[1]==24 {0}else{errno::neg(errno::EINVAL)}, nr::PRLIMIT64=>sys_prlimit(a),
+    nr::SET_ROBUST_LIST=>sys_set_robust_list(a[0],a[1]), nr::GET_ROBUST_LIST=>sys_get_robust_list(a[0] as u32,a[1],a[2]), nr::PRLIMIT64=>sys_prlimit(a),
     nr::CLOCK_GETTIME=>sys_clock_gettime(a[0],a[1]), nr::NANOSLEEP=>sys_nanosleep(a[0],a[1]),
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
     nr::READV=>sys_readv(a[0],a[1],a[2] as i32),
@@ -104,7 +104,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::EPOLL_CTL=>sys_epoll_ctl(a[0] as usize,a[1] as i32,a[2] as usize,a[3]),
     nr::EPOLL_WAIT=>sys_epoll_wait(a[0] as usize,a[1],a[2] as i32,a[3] as i32),
     nr::EPOLL_PWAIT=>sys_epoll_wait(a[0] as usize,a[1],a[2] as i32,a[3] as i32),
-    nr::TIMER_CREATE=>0,
+    nr::TIMER_CREATE=>sys_timer_create(a[0] as i32,a[1],a[2]), nr::TIMER_SETTIME=>sys_timer_settime(a[0] as u32,a[1],a[2],a[3]), nr::TIMER_GETTIME=>sys_timer_gettime(a[0] as u32,a[1]), nr::TIMER_GETOVERRUN=>sys_timer_getoverrun(a[0] as u32), nr::TIMER_DELETE=>sys_timer_delete(a[0] as u32),
     nr::CLONE3=>sys_clone3(a[0]),
     nr::FORK=>sys_fork(),
     nr::SOCKET=>sys_socket(a[0] as i32,a[1] as i32,a[2] as i32),
@@ -155,7 +155,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::GETTIMEOFDAY=>sys_gettimeofday(a[0],a[1]),
     nr::GETRLIMIT=>sys_getrlimit(a[0],a[1]), nr::SETRLIMIT=>sys_setrlimit(a[0],a[1]),
     nr::GETRUSAGE=>sys_getrusage(a[0],a[1]),
-    nr::CLOCK_GETRES=>sys_clock_getres(a[0],a[1]), nr::CLOCK_NANOSLEEP=>sys_clock_nanosleep(a[0],a[1],a[2],a[3]),
+    nr::CLOCK_GETRES=>sys_clock_getres(a[0],a[1]), nr::CLOCK_NANOSLEEP=>sys_clock_nanosleep(a[0],a[1],a[2],a[3]), nr::CLOCK_SETTIME=>sys_clock_settime(a[0],a[1]),
     nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
     nr::UTIMENSAT=>sys_utimensat(a[0] as i64,a[1],a[2],a[3]),
@@ -361,20 +361,33 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
+ crate::posix_timer::release_pid(crate::task::current_pid());
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
  crate::println!("execve: committed {} rip={:#x} rsp={:#x}",path,loaded.entry,loaded.rsp);0
 }
 
-fn sys_clock_gettime(clock:u64,ptr:u64)->i64{
+fn clock_ns(clock:u64)->Option<u64>{
  match clock{
-  0|1|2|3|4|5|6|7|8|9|10|11=>{
-   let ns=crate::time::monotonic_ns();
-   let ts=Timespec{tv_sec:(ns/1_000_000_000)as i64,tv_nsec:(ns%1_000_000_000)as i64};
-   copy_obj(ptr,&ts)
-  }
-  _=>errno::neg(errno::EINVAL)
+  0|5|8|11=>Some(crate::time::realtime_ns()),
+  1|4|6|7|9|10=>Some(crate::time::monotonic_ns()),
+  2|3=>Some(0),
+  _=>None
  }
+}
+fn sys_clock_gettime(clock:u64,ptr:u64)->i64{
+ let ns=match clock_ns(clock){Some(v)=>v,None=>return errno::neg(errno::EINVAL)};
+ let ts=Timespec{tv_sec:(ns/1_000_000_000)as i64,tv_nsec:(ns%1_000_000_000)as i64};
+ copy_obj(ptr,&ts)
+}
+fn sys_clock_settime(clock:u64,ptr:u64)->i64{
+ if clock!=0{return errno::neg(errno::EINVAL)}
+ let mut ts=Timespec::default();
+ let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};
+ if let Err(e)=crate::usercopy::copy_from_user(b,ptr as usize){return errno::neg(e)}
+ if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}
+ crate::time::set_realtime_ns((ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64));
+ 0
 }
 fn sys_nanosleep(req:u64,rem:u64)->i64{let mut ts=Timespec::default();let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};if let Err(e)=crate::usercopy::copy_from_user(b,req as usize){return errno::neg(e)}if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);crate::task::sleep_until(crate::time::ticks_after_ns(ns));if rem!=0{let zero=Timespec::default();let _=copy_obj(rem,&zero);}0}
 fn sys_getrandom(ptr:u64,len:u64,flags:u64)->i64{if flags&!3!=0{return errno::neg(errno::EINVAL)}if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;64];while done<len as usize{let n=core::cmp::min(buf.len(),len as usize-done);crate::time::fill_random(&mut buf[..n]);if let Err(e)=crate::usercopy::copy_to_user(ptr as usize+done,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
@@ -1089,12 +1102,26 @@ fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
 fn sys_getrusage(who:u64,ru:u64)->i64{let _=who;if ru==0{return errno::neg(errno::EFAULT)}let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(ru as usize,&zeros){return errno::neg(e)}0}
 fn sys_times(ptr:u64)->i64{if ptr!=0{let zeros=[0u8;32];let _=crate::usercopy::copy_to_user(ptr as usize,&zeros);}0}
 fn sys_clock_getres(clock:u64,ptr:u64)->i64{
- let _=clock;
- if ptr!=0{copy_obj(ptr,&Timespec{tv_sec:0,tv_nsec:1_000_000})}else{0}
+ let ns=if let Some(v)=clock_ns(clock){if v==0&&matches!(clock,2|3){0}else{1_000_000}}else{return errno::neg(errno::EINVAL)};
+ if ptr!=0{copy_obj(ptr,&Timespec{tv_sec:0,tv_nsec:ns as i64})}else{0}
 }
 fn sys_clock_nanosleep(clock:u64,flags:u64,req:u64,rem:u64)->i64{
- let _=clock;let _=flags;let _=rem;
- sys_nanosleep(req,0)
+ if flags&!1!=0{return errno::neg(errno::EINVAL)}
+ if clock_ns(clock).is_none(){return errno::neg(errno::EINVAL)}
+ let mut ts=Timespec::default();
+ let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};
+ if let Err(e)=crate::usercopy::copy_from_user(b,req as usize){return errno::neg(e)}
+ if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}
+ let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);
+ if flags&1!=0{
+  let now=clock_ns(clock).unwrap_or(0);
+  if ns<=now{return 0}
+  crate::task::sleep_until(crate::time::ticks_after_ns(ns-now));
+ }else{
+  crate::task::sleep_until(crate::time::ticks_after_ns(ns));
+ }
+ if rem!=0{let zero=Timespec::default();let _=copy_obj(rem,&zero);}
+ 0
 }
 fn bit_get(ptr:u64,fd:i32)->bool{
  let byte=(fd/8) as usize;let bit=fd%8;
@@ -1310,6 +1337,174 @@ fn sys_timerfd_gettime(fd:usize,ptr:u64)->i64{
  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf){return errno::neg(e)}
  0
 }
+
+#[repr(C)]#[derive(Clone,Copy,Default)]struct ItimerSpec{iv_sec:i64,iv_nsec:i64,v_sec:i64,v_nsec:i64}
+#[repr(C)]#[derive(Clone,Copy,Default)]struct ItimerVal{iv_sec:i64,iv_sec2:i64,v_sec:i64,v_sec2:i64}
+fn read_itimer<T:Default+Copy>(ptr:u64)->Result<T,i64>{
+ let mut v=T::default();
+ let b=unsafe{core::slice::from_raw_parts_mut((&mut v as*mut T).cast::<u8>(),size_of::<T>())};
+ crate::usercopy::copy_from_user(b,ptr as usize)?;
+ Ok(v)
+}
+fn timer_ns(sec:i64,nsec:i64)->Result<u64,i64>{if sec<0||nsec<0||nsec>=1_000_000_000{return Err(errno::EINVAL)}Ok((sec as u64).saturating_mul(1_000_000_000).saturating_add(nsec as u64))}
+fn sys_timer_create(clock:i32,sevptr:u64,out:u64)->i64{
+ let (notify,sig,value)=if sevptr==0{(0i32,crate::signal::SIGALRM,0u64)}else{
+  let mut b=[0u8;24];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,sevptr as usize){return errno::neg(e)}
+  let value=u64::from_ne_bytes(b[0..8].try_into().unwrap());
+  let signo=i32::from_ne_bytes(b[8..12].try_into().unwrap());
+  let n=i32::from_ne_bytes(b[12..16].try_into().unwrap());
+  (n,signo,value)
+ };
+ let notify=match notify{
+  0|4=>{if !crate::signal::valid(sig)||crate::signal::unblockable(sig){return errno::neg(errno::EINVAL)}crate::posix_timer::Notify::Signal{sig,value}},
+  1=>crate::posix_timer::Notify::None,
+  _=>return errno::neg(errno::EINVAL)
+ };
+ let pid=crate::task::current_pid();
+ let id=match crate::posix_timer::create(pid,clock,notify){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let r=copy_obj(out,&id);
+ if r!=0{crate::posix_timer::delete(id,pid).ok();}
+ r
+}
+fn sys_timer_settime(id:u32,flags:u64,newptr:u64,oldptr:u64)->i64{
+ if flags&!1!=0{return errno::neg(errno::EINVAL)}
+ let pid=crate::task::current_pid();
+ let now=crate::arch::x86_64::apic::ticks();
+ let (old_rem,old_iv)=match crate::posix_timer::gettime(id,pid,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let spec=match read_itimer::<ItimerSpec>(newptr){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let iv_ns=match timer_ns(spec.iv_sec,spec.iv_nsec){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let v_ns=match timer_ns(spec.v_sec,spec.v_nsec){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let active=v_ns!=0;
+ let interval=crate::time::ns_to_ticks_ceil(iv_ns);
+ let next=if !active{0}else if flags&1!=0{let t=v_ns/1_000_000;if t<=now{now}else{t}}else{crate::time::ticks_after_ns(v_ns)};
+ if let Err(e)=crate::posix_timer::settime(id,pid,active,next,interval){return errno::neg(e)}
+ if oldptr!=0{
+  let rem_ns=crate::time::ticks_to_ns(old_rem);let iv_ticks_ns=crate::time::ticks_to_ns(old_iv);
+  let old=ItimerSpec{iv_sec:(iv_ticks_ns/1_000_000_000)as i64,iv_nsec:(iv_ticks_ns%1_000_000_000)as i64,v_sec:(rem_ns/1_000_000_000)as i64,v_nsec:(rem_ns%1_000_000_000)as i64};
+  return copy_obj(oldptr,&old)
+ }
+ 0
+}
+fn sys_timer_gettime(id:u32,ptr:u64)->i64{
+ let now=crate::arch::x86_64::apic::ticks();
+ let (rem,iv)=match crate::posix_timer::gettime(id,crate::task::current_pid(),now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let rem_ns=crate::time::ticks_to_ns(rem);let iv_ns=crate::time::ticks_to_ns(iv);
+ let spec=ItimerSpec{iv_sec:(iv_ns/1_000_000_000)as i64,iv_nsec:(iv_ns%1_000_000_000)as i64,v_sec:(rem_ns/1_000_000_000)as i64,v_nsec:(rem_ns%1_000_000_000)as i64};
+ copy_obj(ptr,&spec)
+}
+fn sys_timer_getoverrun(id:u32)->i64{
+ match crate::posix_timer::getoverrun(id,crate::task::current_pid()){Ok(v)=>v as i64,Err(e)=>errno::neg(e)}
+}
+fn sys_timer_delete(id:u32)->i64{match crate::posix_timer::delete(id,crate::task::current_pid()){Ok(())=>0,Err(e)=>errno::neg(e)}}
+/* User-visible siginfo_t layout (matches the x86-64 kernel): for SI_TIMER
+   si_timerid@16, si_overrun@20 and si_value@24. */
+fn build_siginfo(sig:i32,code:i32,value:u64,overrun:u32)->[u8;128]{
+ let mut b=[0u8;128];
+ b[0..4].copy_from_slice(&sig.to_ne_bytes());
+ b[8..12].copy_from_slice(&code.to_ne_bytes());
+ b[20..24].copy_from_slice(&(overrun as i32).to_ne_bytes());
+ b[24..32].copy_from_slice(&value.to_ne_bytes());
+ b
+}
+fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
+ if setsize!=8{return errno::neg(errno::EINVAL)}
+ let mut mb=[0u8;8];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut mb,setptr as usize){return errno::neg(e)}
+ let mask=u64::from_ne_bytes(mb);
+ let deadline=if timeoutptr!=0{
+  let ts=match read_itimer::<Timespec>(timeoutptr){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}
+  let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);
+  Some(crate::time::ticks_after_ns(ns))
+ }else{None};
+ loop{
+  let found=crate::task::with_current_process(|p|{
+   let m=p.pending&mask&!(crate::signal::unblockable_mask());
+   if m==0{return None}
+   let sig=(m.trailing_zeros()as i32)+1;
+   p.pending&=!crate::signal::bit(sig);
+   Some((sig,p.si_code[sig as usize],p.si_value[sig as usize],p.si_overrun[sig as usize]))
+  }).flatten();
+  if let Some((sig,code,value,overrun))=found{
+   if infoptr!=0{
+    let b=build_siginfo(sig,code,value,overrun);
+    if let Err(e)=crate::usercopy::copy_to_user(infoptr as usize,&b){return errno::neg(e)}
+   }
+   return sig as i64
+  }
+  if let Some(d)=deadline{
+   if crate::arch::x86_64::apic::ticks()>=d{return errno::neg(errno::EAGAIN)}
+   crate::task::sleep_until(d);
+  }else{
+   crate::task::block_current();
+  }
+ }
+}
+fn sys_rt_sigpending(ptr:u64,setsize:u64)->i64{
+ if setsize!=8{return errno::neg(errno::EINVAL)}
+ let m=crate::task::with_current_process(|p|p.pending).unwrap_or(0);
+ copy_obj(ptr,&m)
+}
+fn sys_pause()->i64{
+ loop{
+  let ready=crate::task::with_current_process(|p|{
+   let mut m=p.pending&!(p.sigmask&!crate::signal::unblockable_mask());
+   while m!=0{
+    let sig=m.trailing_zeros()as i32+1;
+    let h=p.handlers[sig as usize].handler;
+    if h!=crate::signal::SIG_IGN&&(h!=crate::signal::SIG_DFL||crate::signal::default_terminates(sig)){return true}
+    m&=!crate::signal::bit(sig);
+   }
+   false
+  }).unwrap_or(false);
+  if ready{return errno::neg(errno::EINTR)}
+  crate::task::block_current();
+ }
+}
+fn write_itimer_val(ptr:u64,rem_ticks:u64,iv_ticks:u64)->i64{
+ let rem_us=rem_ticks.saturating_mul(1000);let iv_us=iv_ticks.saturating_mul(1000);
+ let val=ItimerVal{iv_sec:(iv_us/1_000_000)as i64,iv_sec2:(iv_us%1_000_000)as i64,v_sec:(rem_us/1_000_000)as i64,v_sec2:(rem_us%1_000_000)as i64};
+ copy_obj(ptr,&val)
+}
+fn sys_alarm(sec:u64)->i64{
+ let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
+ let active=sec!=0;let next=if active{now.saturating_add(sec.saturating_mul(1000))}else{0};
+ match crate::posix_timer::alarm_set(pid,active,next,0,now){Ok((old_rem,_))=>((old_rem+999)/1000)as i64,Err(e)=>errno::neg(e)}
+}
+fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
+ if which!=0{return errno::neg(errno::EINVAL)}
+ let val=match read_itimer::<ItimerVal>(newptr){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let iv_ns=match timer_ns(val.iv_sec,val.iv_sec2){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let v_ns=match timer_ns(val.v_sec,val.v_sec2){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
+ let active=v_ns!=0;let next=if active{crate::time::ticks_after_ns(v_ns)}else{0};
+ let interval=crate::time::ns_to_ticks_ceil(iv_ns);
+ let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if oldptr!=0{return write_itimer_val(oldptr,old_rem,old_iv)}
+ 0
+}
+fn sys_getitimer(which:u64,ptr:u64)->i64{
+ if which!=0{return errno::neg(errno::EINVAL)}
+ let (rem,iv)=crate::posix_timer::alarm_get(crate::task::current_pid(),crate::arch::x86_64::apic::ticks());
+ write_itimer_val(ptr,rem,iv)
+}
+fn sys_set_robust_list(head:u64,len:u64)->i64{
+ if len!=24{return errno::neg(errno::EINVAL)}
+ if head!=0{
+  let end=match head.checked_add(24){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
+  if end>crate::usercopy::USER_MAX as u64{return errno::neg(errno::EFAULT)}
+ }
+ match crate::task::with_current_process(|p|{p.robust_list_head=head;p.robust_list_len=len;}){Some(())=>0,None=>errno::neg(errno::ESRCH)}
+}
+fn sys_get_robust_list(pid:u32,headptr:u64,lenptr:u64)->i64{
+ let target=if pid==0{crate::task::current_pid()}else{pid};
+ let head=match crate::task::with_process_pid(target,|p|p.robust_list_head){Some(v)=>v,None=>return errno::neg(errno::ESRCH)};
+ if headptr!=0{let r=copy_obj(headptr,&head);if r!=0{return r}}
+ if lenptr!=0{let r=copy_obj(lenptr,&24u64);if r!=0{return r}}
+ 0
+}
+
 fn sys_timerfd_create(clock:i32,flags:u64)->i64{
  if clock!=0 && clock!=1{return errno::neg(errno::EINVAL)}
  if flags&!3!=0{return errno::neg(errno::EINVAL)}

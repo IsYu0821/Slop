@@ -20,9 +20,10 @@ apic_timer_entry:
     push %r13
     push %r14
     push %r15
-    sub $8, %rsp
+    mov %rsp, %r15
+    and $-16, %rsp
     call apic_timer_rust
-    add $8, %rsp
+    mov %r15, %rsp
     pop %r15
     pop %r14
     pop %r13

@@ -23,7 +23,7 @@ pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
  pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,pub cwd:[u8;128],pub cwd_len:usize,pub root:[u8;128],pub root_len:usize,
- pub pending:u64,pub sigmask:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
+ pub pending:u64,pub sigmask:u64,pub si_code:[i32;64],pub si_value:[u64;64],pub si_overrun:[u32;64],pub robust_list_head:u64,pub robust_list_len:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
  pub segs:[crate::exec_runtime::MapSeg;crate::exec_runtime::MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64,
  pub seccomp_filter:usize,pub seccomp_filter_len:u16,
@@ -35,7 +35,7 @@ pub struct Process{
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,groups:[0;32],ngroups:0})
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
@@ -67,7 +67,7 @@ impl Process{
  pub fn set_cwd(&mut self,p:&str)->bool{let b=p.as_bytes();if b.len()>=128{return false}self.cwd=[0;128];self.cwd[..b.len()].copy_from_slice(b);self.cwd_len=b.len().max(1);true}
  pub fn root_str(&self)->&[u8]{&self.root[..self.root_len]}
  pub fn set_root(&mut self,p:&str)->bool{let b=p.as_bytes();if b.len()>=128{return false}self.root=[0;128];self.root[..b.len()].copy_from_slice(b);self.root_len=b.len().max(1);true}
- pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;self.handlers=crate::signal::handlers_dfl();self.sigframe=0;}
+ pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;self.handlers=crate::signal::handlers_dfl();self.sigframe=0;self.robust_list_head=0;self.robust_list_len=0;}
  fn pte_flags(prot:u64)->Result<u64,i64>{if prot&!7!=0{return Err(crate::errno::EINVAL)}Ok(USER|if prot&2!=0{WRITABLE}else{0}|if prot&4==0{NX}else{0})}
  fn vm_flags(prot:u64)->Result<VmFlags,i64>{let mut f=VmFlags::USER;let _=Self::pte_flags(prot)?;if prot&1!=0{f.0|=VmFlags::READ.0}if prot&2!=0{f.0|=VmFlags::WRITE.0}if prot&4!=0{f.0|=VmFlags::EXEC.0}f.0|=VmFlags::ANON.0;Ok(f)}
   fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{match root.unmap_page(&phys,va){Ok(pa)=>{if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::release_frame(pa)?}}Err(e)=>{if e!=crate::errno::ENOENT{return Err(e)}}}va+=PAGE;}Ok(())}
@@ -242,7 +242,7 @@ impl Process{
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */

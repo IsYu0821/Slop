@@ -598,6 +598,129 @@ int main(int argc, char **argv) {
         printf("DIFF_CLOEXEC_OK\n");
     }
 
+
+    /* POSIX timers: signal notification, si_value, overrun and lifetime. */
+    {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR1);
+        if (sigprocmask(SIG_BLOCK, &set, NULL) != 0) return fail("timer sigmask");
+        struct sigevent sev;
+        memset(&sev, 0, sizeof sev);
+        sev.sigev_notify = SIGEV_SIGNAL;
+        sev.sigev_signo = SIGUSR1;
+        sev.sigev_value.sival_int = 0x12345678;
+        timer_t tid = 0;
+        if (timer_create(CLOCK_MONOTONIC, &sev, &tid) != 0) return fail("timer_create");
+        struct itimerspec its;
+        memset(&its, 0, sizeof its);
+        its.it_value.tv_nsec = 20 * 1000 * 1000;
+        if (timer_settime(tid, 0, &its, NULL) != 0) return fail("timer_settime");
+        siginfo_t si;
+        memset(&si, 0, sizeof si);
+        int got = sigwaitinfo(&set, &si);
+        if (got != SIGUSR1) return fail("sigwaitinfo");
+        if (si.si_code != SI_TIMER) return fail("si_code timer");
+        if (si.si_value.sival_int != 0x12345678) return fail("si_value timer");
+        if (timer_getoverrun(tid) < 0) return fail("timer_getoverrun");
+        struct itimerspec cur;
+        memset(&cur, 0, sizeof cur);
+        if (timer_gettime(tid, &cur) != 0) return fail("timer_gettime");
+        if (cur.it_value.tv_sec != 0 || cur.it_value.tv_nsec != 0) return fail("timer one-shot");
+        if (timer_delete(tid) != 0) return fail("timer_delete");
+        if (timer_delete(tid) == 0) return fail("timer_delete twice");
+        errno = 0;
+        if (timer_create((clockid_t)0x7fffffff, &sev, &tid) != -1 || errno != EINVAL)
+            return fail("timer bad clock");
+        sigemptyset(&set);
+        if (sigprocmask(SIG_SETMASK, &set, NULL) != 0) return fail("timer unmask");
+        printf("DIFF_TIMER_OK\n");
+    }
+
+    /* setitimer/alarm on ITIMER_REAL share one per-process timer. */
+    {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGALRM);
+        if (sigprocmask(SIG_BLOCK, &set, NULL) != 0) return fail("itimer sigmask");
+        struct itimerval itv;
+        memset(&itv, 0, sizeof itv);
+        itv.it_value.tv_usec = 30 * 1000;
+        struct itimerval old;
+        memset(&old, 0xff, sizeof old);
+        if (setitimer(ITIMER_REAL, &itv, &old) != 0) return fail("setitimer");
+        if (old.it_value.tv_sec != 0 || old.it_value.tv_usec != 0) return fail("setitimer old");
+        siginfo_t si;
+        memset(&si, 0, sizeof si);
+        int got = sigwaitinfo(&set, &si);
+        if (got != SIGALRM) return fail("itimer sigwait");
+        struct itimerval cur_itv;
+        memset(&cur_itv, 0, sizeof cur_itv);
+        if (getitimer(ITIMER_REAL, &cur_itv) != 0) return fail("getitimer");
+        if (cur_itv.it_value.tv_sec != 0 || cur_itv.it_value.tv_usec != 0) return fail("itimer remaining");
+        unsigned remain = alarm(5);
+        if (remain != 0) return fail("alarm start");
+        remain = alarm(0);
+        if (remain != 5) return fail("alarm cancel");
+        sigemptyset(&set);
+        if (sigprocmask(SIG_SETMASK, &set, NULL) != 0) return fail("itimer unmask");
+        printf("DIFF_ITIMER_OK\n");
+    }
+
+    /* Clock surface: resolutions, readable realtime, monotonic not settable. */
+    {
+        struct timespec res, ts;
+        if (clock_getres(CLOCK_REALTIME, &res) != 0) return fail("getres realtime");
+        if (res.tv_sec < 0 || res.tv_nsec < 0 || res.tv_nsec >= 1000000000L) return fail("getres range");
+        if (clock_getres((clockid_t)0x7fffffff, &res) != -1 || errno != EINVAL)
+            return fail("getres bad clock");
+        if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return fail("gettime realtime");
+        if (ts.tv_sec < 100000 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L)
+            return fail("realtime value");
+        memset(&ts, 0, sizeof ts);
+        if (clock_settime(CLOCK_MONOTONIC, &ts) != -1 || errno != EINVAL)
+            return fail("settime monotonic");
+        printf("DIFF_CLOCK_OK\n");
+    }
+
+    /* Robust list round trip through the raw syscalls. */
+    {
+        unsigned long head = 0, len = 0;
+        if (syscall(SYS_get_robust_list, 0, &head, &len) != 0) return fail("get_robust_list");
+        if (len != 24) return fail("robust len");
+        unsigned long fake[3] = { 0, 0, 0 };
+        if (syscall(SYS_set_robust_list, fake, 24) != 0) return fail("set_robust_list");
+        head = 0;
+        len = 0;
+        if (syscall(SYS_get_robust_list, 0, &head, &len) != 0) return fail("get_robust_list 2");
+        if (head != (unsigned long)fake || len != 24) return fail("robust roundtrip");
+        if (syscall(SYS_set_robust_list, fake, 17) != -1 || errno != EINVAL)
+            return fail("set_robust_list bad len");
+        printf("DIFF_ROBUST_OK\n");
+    }
+
+    /* Pending-mask introspection and zero-timeout waits. */
+    {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGUSR2);
+        if (sigprocmask(SIG_BLOCK, &set, NULL) != 0) return fail("sigpend block");
+        if (raise(SIGUSR2) != 0) return fail("sigpend raise");
+        sigset_t pend;
+        if (sigpending(&pend) != 0) return fail("sigpending");
+        if (!sigismember(&pend, SIGUSR2)) return fail("sigpend member");
+        struct timespec zero;
+        memset(&zero, 0, sizeof zero);
+        int got = sigtimedwait(&set, NULL, &zero);
+        if (got != SIGUSR2) return fail("sigtimedwait zero");
+        errno = 0;
+        got = sigtimedwait(&set, NULL, &zero);
+        if (got != -1 || errno != EAGAIN) return fail("sigtimedwait empty");
+        sigemptyset(&set);
+        if (sigprocmask(SIG_SETMASK, &set, NULL) != 0) return fail("sigpend unmask");
+        printf("DIFF_SIGPEND_OK\n");
+    }
+
     int memfd = memfd_create("diff", 0);
     if (memfd < 0) return fail("memfd_create");
     close(memfd);

@@ -8,13 +8,13 @@ pub const GETUID:u64=102; pub const GETGID:u64=104; pub const GETEUID:u64=107; p
 pub const GETPPID:u64=110; pub const ARCH_PRCTL:u64=158; pub const GETTID:u64=186;
 pub const FUTEX:u64=202; pub const CLOCK_GETTIME:u64=228; pub const EXIT_GROUP:u64=231;
 pub const OPENAT:u64=257; pub const NEWFSTATAT:u64=262; pub const SET_TID_ADDRESS:u64=218;
-pub const SET_ROBUST_LIST:u64=273; pub const DUP3:u64=292; pub const PIPE2:u64=293; pub const PRLIMIT64:u64=302; pub const GETRANDOM:u64=318;
+pub const SET_ROBUST_LIST:u64=273; pub const GET_ROBUST_LIST:u64=274; pub const DUP3:u64=292; pub const PIPE2:u64=293; pub const PRLIMIT64:u64=302; pub const GETRANDOM:u64=318;
 pub const MREMAP:u64=25; pub const MADVISE:u64=28; pub const RT_SIGSUSPEND:u64=130; pub const SIGALTSTACK:u64=131;
 pub const WAITID:u64=247; pub const SCHED_GETAFFINITY:u64=204;
 pub const READLINKAT:u64=267; pub const FACCESSAT:u64=269; pub const EXECVEAT:u64=322; pub const MEMBARRIER:u64=324;
 pub const RSEQ:u64=334; pub const STATX:u64=332; pub const ACCESS:u64=21; pub const FACCESSAT2:u64=439; pub const CLONE3:u64=435; pub const POLL:u64=7; pub const PPOLL:u64=271;
 pub const EPOLL_CREATE1:u64=291; pub const EPOLL_CTL:u64=233; pub const EPOLL_WAIT:u64=232; pub const EPOLL_PWAIT:u64=281;
-pub const PKEY_ALLOC:u64=330; pub const TIMER_CREATE:u64=222; pub const GETDENTS:u64=78; pub const PREAD64:u64=17; pub const PWRITE64:u64=18;
+pub const PKEY_ALLOC:u64=330; pub const TIMER_CREATE:u64=222; pub const TIMER_SETTIME:u64=223; pub const TIMER_GETTIME:u64=224; pub const TIMER_GETOVERRUN:u64=225; pub const TIMER_DELETE:u64=226; pub const CLOCK_SETTIME:u64=227; pub const GETDENTS:u64=78; pub const PREAD64:u64=17; pub const PWRITE64:u64=18;
 pub const READV:u64=19; pub const WRITEV:u64=20; pub const GETDENTS64:u64=217; pub const UNLINKAT:u64=263;
 pub const SOCKET:u64=41; pub const CONNECT:u64=42; pub const ACCEPT:u64=43; pub const SENDTO:u64=44; pub const RECVFROM:u64=45;
 pub const SHUTDOWN:u64=48; pub const BIND:u64=49; pub const LISTEN:u64=50; pub const GETSOCKNAME:u64=51; pub const GETPEERNAME:u64=52; pub const SOCKETPAIR:u64=53; pub const FORK:u64=57;
