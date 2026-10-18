@@ -92,3 +92,7 @@ Anonymous private `mmap` and upward `brk` growth now allocate zeroed physical fr
 ## Processes, pipes and wait4 (v0.27)
 
 `/bin/hello-c` now execs `/bin/hello-posix`: a C program that creates a pipe, forks, has the child `dup2` the pipe write end onto stdout and exit with status 7, then reads the pipe to EOF, matches the message and reaps the child with `wait4`. Kernel-side this adds a per-process address-space and descriptor owner, deep-copy `fork` of the private PML4 slots, reference-counted open-file descriptions, blocking pipes with EOF/`EPIPE`, `clone`, `wait4`, `dup2`/`dup3`, `pipe`/`pipe2` and a minimal `fcntl`. The libc runtime now carries `errno` and `fork`/`pipe`/`dup2`/`waitpid` wrappers. Threads (`CLONE_VM`), copy-on-write and signals remain future work.
+
+## Signal ABI foundation (v0.28)
+
+The kernel accepts `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn`. Per-process pending and blocked signal masks live in `kernel/signal.rs`; `Process` carries the mask fields so `fork` preserves them and `execve` resets them. `libc/signal.c` provides `kill`, `sigaction`, `sigprocmask` and `sigreturn` wrappers. `signal_pending_check` runs before `SYSRET`; full handler-frame delivery lands in the next milestone.
