@@ -56,7 +56,7 @@ fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
   match res{Ok(())=>continue,Err(e)=>return Err(e)}
  }
 }
-fn wake(uaddr:u64,count:u32)->Result<i64,i64>{
+pub fn wake(uaddr:u64,count:u32)->Result<i64,i64>{
  let mut woken=0i64;
  let targets:([u32;MAX_WAITERS],usize)={
   let mut w=WAITERS.lock();

@@ -131,3 +131,8 @@ pub unsafe fn signal_restore_frame()->i64{
  }
  0
 }
+
+/* Per-task user RSP accessors used by the scheduler when switching between
+   threads that share the global syscall frame slot. */
+pub unsafe fn read_user_rsp()->u64{unsafe{SYSCALL_USER_RSP}}
+pub unsafe fn write_user_rsp(v:u64){unsafe{SYSCALL_USER_RSP=v}}

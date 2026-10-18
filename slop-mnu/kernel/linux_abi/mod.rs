@@ -98,11 +98,25 @@ fn sys_fstat(fd:u64,ptr:u64)->i64 {let id=match fd_id(fd){Some(id)=>id,None=>ret
 fn sys_lseek(fd:u64,off:i64,whence:u64)->i64{let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};match crate::fd::seek(id,off,whence){Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
 fn sys_set_tid_address(ptr:u64)->i64{let _=crate::task::with_current_process(|p|p.set_clear_child_tid(ptr));crate::task::current_pid() as i64}
 fn sys_clone(a:[u64;6])->i64{
+ const CLONE_VM:u64=0x100;const CLONE_FS:u64=0x200;const CLONE_FILES:u64=0x400;const CLONE_SIGHAND:u64=0x800;
+ const CLONE_THREAD:u64=0x10000;const CLONE_SYSVSEM:u64=0x40000;const CLONE_SETTLS:u64=0x80000;
+ const CLONE_PARENT_SETTID:u64=0x100000;const CLONE_CHILD_CLEARTID:u64=0x200000;const CLONE_CHILD_SETTID:u64=0x1000000;
+ /* musl uses this private flag in place of Linux CLONE_CHILD_SETTID. */
+ const CLONE_DETACHED:u64=0x400000;
  const SIGCHLD:u64=17;
- if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
- if a[0]&!SIGCHLD!=0{return errno::neg(errno::EINVAL)}
- let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
- match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ let flags=a[0]&!SIGCHLD;
+ if flags&CLONE_VM!=0{
+  let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED;
+  if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
+  if a[1]==0{return errno::neg(errno::EINVAL)}
+  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+  match crate::task::spawn_thread(frame,a[1],a[4],a[3]){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ }else{
+  if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
+  if flags!=0{return errno::neg(errno::EINVAL)}
+  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+  match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ }
 }
 fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
  const WNOHANG:u64=1;const WUNTRACED:u64=2;
@@ -467,9 +481,17 @@ fn sys_pwrite64(fd:u64,ptr:u64,len:i32,off:i64)->i64{
 fn sys_clone3(args:u64)->i64{
  let mut b=[0u8;64];
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,args as usize)}{return errno::neg(e)}
- let flags=u64::from_ne_bytes(b[0..8].try_into().unwrap());
- /* Treat every clone3 as a fork; CLONE_VM/THREAD families are rejected. */
- if flags&!(17|0x80000)!=0{return errno::neg(errno::EINVAL)}
- let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
- match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ let flags=u64::from_ne_bytes(b[0..8].try_into().unwrap())&!17;
+ let stack=u64::from_ne_bytes(b[24..32].try_into().unwrap());
+ let tls=u64::from_ne_bytes(b[40..48].try_into().unwrap());
+ let ctid=u64::from_ne_bytes(b[32..40].try_into().unwrap());
+ if flags&0x100!=0{
+  if stack==0{return errno::neg(errno::EINVAL)}
+  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+  match crate::task::spawn_thread(frame,stack,tls,ctid){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ }else{
+  if flags!=0{return errno::neg(errno::EINVAL)}
+  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+  match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ }
 }

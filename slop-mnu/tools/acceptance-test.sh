@@ -43,6 +43,9 @@ for text in \
   'syscalls: iov, positional io, access, readlink and mremap passed' \
   'execve: committed /bin/hello-dyn' \
   'dyn: dynamic linking works' \
+  'execve: committed /bin/hello-thread' \
+  'thread: main entered' \
+  'thread: create, join and mutex passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
