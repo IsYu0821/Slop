@@ -1,3 +1,10 @@
+## 0.56.0 - 2026-10-18
+- Replaced placeholder `/proc` data with truthful per-process cmdline, environ, status, stat, statm and maps, including `/proc/<pid>` introspection.
+- Added dynamic `/proc/self/fd` enumeration and readlink targets for pipes, sockets, devices, inodes and anon inodes; generalized readlink/readlinkat over all proc links.
+- Derived system files from live state: meminfo (frame allocator), uptime (monotonic clock), loadavg and mounts (scheduler and mount registry).
+- Implemented `madvise(MADV_DONTNEED|MADV_FREE)` page discard, `MAP_POPULATE` eager fault-in, and truthful `mincore` residency reporting.
+- Expanded native/guest differential tests with procfs truth, madvise zeroing and mincore/populate residency cases.
+
 ## 0.55.0 - 2026-10-18
 - Added per-process descriptor, open-file, VM-area/page and scheduler-state accounting with exit-time reclamation checks.
 - Moved mount routing into the VFS and added namespace-cloned tmpfs mounts with longest-prefix path selection.

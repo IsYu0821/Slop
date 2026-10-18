@@ -381,6 +381,110 @@ int main(void) {
         printf("DIFF_MPROTECT_SPLIT_OK\n");
     }
 
+    /* /proc exposes real process and system data. */
+    {
+        char sbuf[2048];
+        ssize_t n;
+        int fd = open("/proc/self/status", O_RDONLY);
+        if (fd < 0) return fail("proc status open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc status read");
+        sbuf[n] = 0;
+        char name[64] = "";
+        if (sscanf(sbuf, "Name:\t%63s", name) != 1 || name[0] == 0) return fail("proc status name");
+        if (!strstr(sbuf, "Pid:") || !strstr(sbuf, "PPid:")) return fail("proc status fields");
+        char *pidline = strstr(sbuf, "\nPid:\t");
+        int self_pid = 0;
+        if (!pidline || sscanf(pidline + 6, "%d", &self_pid) != 1 || self_pid <= 0)
+            return fail("proc status pid");
+        fd = open("/proc/self/cmdline", O_RDONLY);
+        if (fd < 0) return fail("proc cmdline open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0 || sbuf[n - 1] != 0) return fail("proc cmdline content");
+        fd = open("/proc/self/stat", O_RDONLY);
+        if (fd < 0) return fail("proc stat open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc stat read");
+        sbuf[n] = 0;
+        if (atoi(sbuf) != self_pid || !strchr(sbuf, ')')) return fail("proc stat pid");
+        char pidpath[64];
+        snprintf(pidpath, sizeof(pidpath), "/proc/%d/stat", self_pid);
+        fd = open(pidpath, O_RDONLY);
+        if (fd < 0) return fail("proc pid stat open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc pid stat read");
+        sbuf[n] = 0;
+        if (atoi(sbuf) != self_pid) return fail("proc pid stat match");
+        fd = open("/proc/self/maps", O_RDONLY);
+        if (fd < 0) return fail("proc maps open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc maps read");
+        sbuf[n] = 0;
+        if (!strstr(sbuf, "[stack]")) return fail("proc maps stack");
+        if (!strstr(sbuf, "r-xp") && !strstr(sbuf, "r--p")) return fail("proc maps perms");
+        fd = open("/proc/uptime", O_RDONLY);
+        if (fd < 0) return fail("proc uptime open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc uptime read");
+        sbuf[n] = 0;
+        if (!strchr(sbuf, '.')) return fail("proc uptime format");
+        fd = open("/proc/meminfo", O_RDONLY);
+        if (fd < 0) return fail("proc meminfo open");
+        n = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (n <= 0) return fail("proc meminfo read");
+        sbuf[n] = 0;
+        if (!strstr(sbuf, "MemTotal:")) return fail("proc meminfo content");
+        char link[128];
+        n = readlink("/proc/self/fd/1", link, sizeof(link) - 1);
+        if (n <= 0) return fail("proc fd readlink");
+        link[n] = 0;
+        if (link[0] != '/' && strncmp(link, "pipe:[", 6) != 0 &&
+            strncmp(link, "socket:[", 8) != 0 && strncmp(link, "anon_inode", 10) != 0)
+            return fail("proc fd link format");
+        printf("DIFF_PROCFS_OK\n");
+    }
+
+    /* MADV_DONTNEED discards anonymous pages; they read back as zero. */
+    {
+        char *m = mmap(NULL, 8192, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m == MAP_FAILED) return fail("madvise mmap");
+        memset(m, 0x7b, 8192);
+        if (madvise(m, 8192, MADV_DONTNEED) != 0) return fail("madvise call");
+        for (int i = 0; i < 8192; i++) if (m[i] != 0) return fail("madvise dontneed zero");
+        if (munmap(m, 8192) != 0) return fail("madvise munmap");
+        printf("DIFF_MADVISE_OK\n");
+    }
+
+    /* mincore reports residency; MAP_POPULATE makes fresh pages resident. */
+    {
+        unsigned char *m = mmap(NULL, 12288, PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m == MAP_FAILED) return fail("mincore mmap");
+        m[0] = 1;
+        m[4096] = 2;
+        unsigned char vec[3] = {9, 9, 9};
+        if (mincore(m, 12288, vec) != 0) return fail("mincore call");
+        if ((vec[0] & 1) != 1 || (vec[1] & 1) != 1 || (vec[2] & 1) != 0)
+            return fail("mincore vec");
+        unsigned char *p = mmap(NULL, 8192, PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+        if (p == MAP_FAILED) return fail("populate mmap");
+        unsigned char pv[2] = {9, 9};
+        if (mincore(p, 8192, pv) != 0) return fail("populate mincore");
+        if ((pv[0] & 1) != 1 || (pv[1] & 1) != 1) return fail("populate resident");
+        if (munmap(m, 12288) != 0) return fail("mincore munmap");
+        if (munmap(p, 8192) != 0) return fail("populate munmap");
+        printf("DIFF_MINCORE_OK\n");
+    }
+
     int memfd = memfd_create("diff", 0);
     if (memfd < 0) return fail("memfd_create");
     close(memfd);

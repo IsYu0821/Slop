@@ -7,7 +7,15 @@ const PAGE:u64=4096;const MAX_COMMITTED:usize=512;const USER_STACK_PAGES:u64=8;
    same PML4 slot. */
 const LD_BASE:u64=0x0000_4000_0000_0000;
 const EXE_BASE:u64=0x0000_4001_0000_0000;
-#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize}
+/* One committed PT_LOAD range, kept for /proc/<pid>/maps. */
+#[derive(Clone,Copy,Default)]pub struct MapSeg{pub start:u64,pub end:u64,pub flags:u32}
+pub const MAX_MAP_SEGS:usize=8;
+#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,
+ pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
+ pub segs:[MapSeg;MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64}
+fn pack_vec(out:&mut [u8],out_len:&mut usize,items:&[&str]){
+ for s in items{let b=s.as_bytes();if *out_len+b.len()+1>out.len(){return}out[*out_len..*out_len+b.len()].copy_from_slice(b);*out_len+=b.len();out[*out_len]=0;*out_len+=1;}
+}
 #[derive(Clone,Copy)]struct Owned{va:u64,pa:u64}const EMPTY:Owned=Owned{va:0,pa:0};
 struct Transaction<'a>{root:&'a PageTableRoot,phys:&'a Identity,pages:[Owned;MAX_COMMITTED],len:usize,committed:bool}
 impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{Self{root,phys,pages:[EMPTY;MAX_COMMITTED],len:0,committed:false}}fn page(&mut self,va:u64,flags:u64)->Result<u64,&'static str>{if let Some(pa)=self.root.translate(self.phys,va){return Ok(pa&!(PAGE-1))}if self.len==MAX_COMMITTED{return Err("ELF transaction page limit")}let pa=memory::alloc_frame().ok_or("out of physical frames")?;unsafe{self.phys.bytes(pa,PAGE as usize).fill(0)};if self.root.map_page(self.phys,va,pa,flags).is_err(){let _=memory::free_frame(pa);return Err("map_page failed")}self.pages[self.len]=Owned{va,pa};self.len+=1;Ok(pa)}fn commit(mut self){self.committed=true;}}
@@ -53,8 +61,13 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
   if phoff>=s.file_offset&&phoff<s.file_offset+s.file_size{Some(exe_base+s.vaddr+(phoff-s.file_offset))}else{None}
  }).ok_or("program headers not mapped")?;
  let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0}};
- let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],info).map_err(|_|"stack build failed")?;
- let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot};tx.commit();Ok(loaded)
+  let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],info).map_err(|_|"stack build failed")?;
+  let mut segs=[MapSeg::default();MAX_MAP_SEGS];let mut nsegs=0usize;
+  if let Some(ip)=interp.as_ref(){for seg in &ip.segments[..ip.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:LD_BASE+seg.vaddr&!(PAGE-1),end:align(LD_BASE+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}}
+  for seg in &parsed.segments[..parsed.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:exe_base+seg.vaddr&!(PAGE-1),end:align(exe_base+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}
+  let mut cmdline=[0u8;512];let mut cmdline_len=0usize;pack_vec(&mut cmdline,&mut cmdline_len,argv);
+  let mut environ=[0u8;512];let mut environ_len=0usize;pack_vec(&mut environ,&mut environ_len,envp);
+  let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot,cmdline,cmdline_len,environ,environ_len,segs,nsegs,stack_base,stack_top};tx.commit();Ok(loaded)
 }
 /* Maps one PT_LOAD at base+seg.vaddr, copying file bytes and zeroing the rest. */
 fn map_segment(tx:&mut Transaction,root:&PageTableRoot,access:&Identity,image:&[u8],base:u64,seg:&elf::LoadSegment)->Result<(),&'static str>{

@@ -28,6 +28,7 @@ impl FdTable{
   pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;release(s as u32);Ok(())}
   pub fn clone_incref(&self)->Self{let mut t=Self{slots:self.slots};for &s in t.slots.iter(){if s>=0{incref(s as u32)}}t}
   pub fn descriptor_count(&self)->usize{self.slots.iter().filter(|&&s|s>=0).count()}
+  pub fn open_fds(&self,mut cb:impl FnMut(usize)){for i in 0..MAX_FDS{if self.slots[i]>=0{cb(i)}}}
   pub fn open_description_count(&self)->usize{
    let mut ids=[FREE_FD;MAX_FDS];let mut count=0;
    for &slot in &self.slots{if slot<0||ids[..count].contains(&slot){continue}ids[count]=slot;count+=1;}

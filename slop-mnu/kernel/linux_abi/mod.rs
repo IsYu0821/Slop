@@ -81,7 +81,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::UNLINKAT=>sys_unlinkat(a[0] as i64,a[1],a[2]),
     nr::STATX=>sys_statx(a[0] as i64,a[1],a[2],a[3],a[4]),
     nr::MREMAP=>proc_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64,a[4])),
-    nr::MADVISE=>0,
+    nr::MADVISE=>proc_result(|p|p.madvise(a[0] as usize,a[1] as usize,a[2])),
     nr::MEMBARRIER=>0,
     nr::RSEQ=>0,
     nr::PKEY_ALLOC=>0,
@@ -339,7 +339,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
- let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();});
+ let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);});
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
  crate::println!("execve: committed {} rip={:#x} rsp={:#x}",path,loaded.entry,loaded.rsp);0
@@ -543,12 +543,10 @@ fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
  let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
- if p!="/proc/self/exe"{return errno::neg(errno::EINVAL)}
- let exe=match crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)){Some(v)=>v,None=>return errno::neg(errno::ENOENT)};
- if exe.1==0{return errno::neg(errno::ENOENT)}
- let n=core::cmp::min(exe.1,bufsiz as usize);
- let bytes=&exe.0[..n];
- if let Err(e)=crate::usercopy::copy_to_user(buf as usize,bytes){return errno::neg(e)}
+ let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+ if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
+ let n=core::cmp::min(node.size as usize,bufsiz as usize);
+ if let Err(e)=crate::usercopy::copy_to_user(buf as usize,unsafe{core::slice::from_raw_parts(node.data,n)}){return errno::neg(e)}
  n as i64
 }
 fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
@@ -1305,13 +1303,6 @@ fn sys_link(old_ptr:u64,new_ptr:u64)->i64{
 fn sys_readlink(path_ptr:u64,buf:u64,bufsiz:u64)->i64{
  let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
- if p=="/proc/self/exe"{
-  let exe=match crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)){Some(v)=>v,None=>return errno::neg(errno::ENOENT)};
-  if exe.1==0{return errno::neg(errno::ENOENT)}
-  let m=core::cmp::min(exe.1,bufsiz as usize);
-  if let Err(e)=crate::usercopy::copy_to_user(buf as usize,&exe.0[..m]){return errno::neg(e)}
-  return m as i64;
- }
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
  let m=core::cmp::min(node.size as usize,bufsiz as usize);
@@ -1329,10 +1320,35 @@ fn sys_close_range(first:usize,last:usize,flags:u64)->i64{
 }
 fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{
  if vec==0{return errno::neg(errno::EFAULT)}
- let pages=(len as usize+4095)/4096;
- let mut v=[1u8;256];
- let n=core::cmp::min(pages,v.len());
- if let Err(e)=crate::usercopy::copy_to_user(vec as usize,&v[..n]){return errno::neg(e)}
+ if len==0{return 0}
+ if addr&4095!=0{return errno::neg(errno::EINVAL)}
+ let end=match addr.checked_add(len){Some(v)=>v,None=>return errno::neg(errno::ENOMEM)};
+ let mapped=crate::task::with_current_process(|p|{
+  let mut va=addr;
+  while va<end{
+   let in_stack=va>=p.stack_base&&va<p.stack_top;
+   let in_seg=p.segs[..p.nsegs].iter().any(|s|va>=s.start&&va<s.end);
+   if !in_stack&&!in_seg&&p.vm.find_vma(va as usize).is_none(){return false}
+   va+=4096;
+  }
+  true
+ }).unwrap_or(false);
+ if !mapped{return errno::neg(errno::ENOMEM)}
+ let pages=((len as usize)+4095)/4096;
+ let mut done=0usize;let mut buf=[0u8;64];
+ while done<pages{
+  let n=core::cmp::min(buf.len(),pages-done);
+  let present=crate::task::with_current_process(|p|{
+   let root=p.root();let phys=crate::arch::x86_64::phys::Identity;let mut v=[0u8;64];
+   for i in 0..n{
+    let resident=root.query(&phys,addr+((done+i)*4096)as u64).map(|(_,f)|f&crate::arch::x86_64::paging::PRESENT!=0).unwrap_or(false);
+    v[i]=if resident{1}else{0};
+   }
+   v
+  }).unwrap_or([0u8;64]);
+  if let Err(e)=crate::usercopy::copy_to_user(vec as usize+done,&present[..n]){return errno::neg(e)}
+  done+=n;
+ }
  0
 }
 

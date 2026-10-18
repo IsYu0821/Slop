@@ -24,6 +24,8 @@ pub struct Process{
  pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,pub cwd:[u8;128],pub cwd_len:usize,pub root:[u8;128],pub root_len:usize,
  pub pending:u64,pub sigmask:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
+ pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
+ pub segs:[crate::exec_runtime::MapSeg;crate::exec_runtime::MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64,
  pub seccomp_filter:usize,pub seccomp_filter_len:u16,
  pub uid:u32,pub gid:u32,pub euid:u32,pub egid:u32,pub suid:u32,pub sgid:u32,pub fsuid:u32,pub fsgid:u32,
  pub cap_inh:u64,pub cap_prm:u64,pub cap_eff:u64,pub cap_bset:u64,
@@ -33,12 +35,34 @@ pub struct Process{
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,groups:[0;32],ngroups:0})
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
  pub fn set_clear_child_tid(&mut self,v:u64){self.clear_child_tid=v}
  pub fn set_exe_path(&mut self,p:&str){let b=p.as_bytes();let n=core::cmp::min(b.len(),64);self.exe_path[..n].copy_from_slice(&b[..n]);self.exe_len=n;}
+ pub fn set_exec_meta(&mut self,l:&crate::exec_runtime::Loaded){self.cmdline=l.cmdline;self.cmdline_len=l.cmdline_len;self.environ=l.environ;self.environ_len=l.environ_len;self.segs=l.segs;self.nsegs=l.nsegs;self.stack_base=l.stack_base;self.stack_top=l.stack_top;}
+ /* Virtual size in bytes: committed image segments, stack, brk and ledger areas. */
+ pub fn vma_bytes(&self)->u64{let mut total=0u64;for s in &self.segs[..self.nsegs]{total=total.saturating_add(s.end-s.start)}if self.stack_top>self.stack_base{total=total.saturating_add(self.stack_top-self.stack_base)}let brk_span=Self::up(self.brk).map(|b|b as u64).unwrap_or(0).saturating_sub(BRK_BASE);total=total.saturating_add(brk_span);let stats=self.vm.resource_stats();total.saturating_add(stats.bytes as u64)}
+ /* Resident user pages across segments, stack, brk and ledger areas. */
+ pub fn resident_pages(&self)->u64{
+  let root=self.root();let phys=Identity;let mut resident=0u64;let mut scan=|start:u64,end:u64,resident:&mut u64|{let mut va=start;while va<end{if root.query(&phys,va).map(|(_,f)|f&PRESENT!=0&&f&USER!=0).unwrap_or(false){*resident+=1}va+=PAGE;}};
+  for s in &self.segs[..self.nsegs]{scan(s.start,s.end,&mut resident)}
+  if self.stack_top>self.stack_base{scan(self.stack_base,self.stack_top,&mut resident)}
+  for i in 0..self.vm.resource_stats().areas{if let Some(a)=self.vm.area(i){scan(a.start as u64,a.end as u64,&mut resident)}}
+  resident
+ }
+ /* madvise(DONTNEED/FREE): drop physical frames but keep the reservation. */
+ pub fn madvise(&mut self,addr:usize,len:usize,advice:u64)->Result<usize,i64>{
+  if addr&4095!=0{return Err(crate::errno::EINVAL)}
+  if len==0{return Ok(0)}
+  let size=Self::up(len as u64)?;
+  match advice{
+   /* MADV_DONTNEED/MADV_FREE: pages read as zero again on next touch. */
+   4|8=>{self.unmap_pages(addr as u64,size as u64)?;Ok(0)}
+   _=>Ok(0),
+  }
+ }
  pub fn cwd_str(&self)->&[u8]{&self.cwd[..self.cwd_len]}
  pub fn set_cwd(&mut self,p:&str)->bool{let b=p.as_bytes();if b.len()>=128{return false}self.cwd=[0;128];self.cwd[..b.len()].copy_from_slice(b);self.cwd_len=b.len().max(1);true}
  pub fn root_str(&self)->&[u8]{&self.root[..self.root_len]}
@@ -51,7 +75,7 @@ impl Process{
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
  pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};if self.vm.insert(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{
-  const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;
+  const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;const MAP_POPULATE:u64=0x8000;
   if len==0{return Err(crate::errno::EINVAL)}
   let map_type=flags&(MAP_PRIVATE|MAP_SHARED);
   if map_type==0||map_type==(MAP_PRIVATE|MAP_SHARED){return Err(crate::errno::EINVAL)}
@@ -59,7 +83,7 @@ impl Process{
  let iouring=!anon && self.fds.get(fd as usize).map(|id|matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring))).unwrap_or(false);
  if anon&&(fd!=-1){return Err(crate::errno::EINVAL)}
  if !anon && !iouring &&(fd<0||offset%4096!=0){return Err(crate::errno::EINVAL)}
- if flags&!(MAP_FIXED|MAP_ANON|MAP_PRIVATE|MAP_SHARED|0x20000|0x100)!=0{return Err(crate::errno::EINVAL)}
+ if flags&!(MAP_FIXED|MAP_ANON|MAP_PRIVATE|MAP_SHARED|MAP_POPULATE|0x20000|0x100)!=0{return Err(crate::errno::EINVAL)}
  if !anon && !iouring &&(flags&MAP_SHARED!=0){return Err(crate::errno::ENODEV)}
   let size=Self::up(len as u64)?;
   let mut vf=Self::vm_flags(prot)?;
@@ -85,6 +109,16 @@ impl Process{
  }
  /* Anonymous, file-backed and brk pages are demand-paged by the fault
     handler: the VMA ledger keeps kind and offset, so mmap only reserves. */
+ if flags&MAP_POPULATE!=0&&!iouring{
+  let writable=vf.contains(VmFlags::WRITE);
+  let mut va=start as u64;let end=(start+size)as u64;
+  while va<end{
+   if !(self.root().query(&Identity,va).map(|(_,f)|f&PRESENT!=0&&(!writable||f&WRITABLE!=0)).unwrap_or(false)){
+    if self.handle_page_fault(va,writable).is_err(){let _=self.munmap(start,size);return Err(crate::errno::ENOMEM)}
+   }
+   va+=PAGE;
+  }
+ }
  Ok(start)
  }
   /* Grows or shrinks an anonymous mapping: allocate the new range, copy the
@@ -208,7 +242,9 @@ impl Process{
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,groups:self.groups,ngroups:self.ngroups})}
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
+ cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
+ seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
   pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */

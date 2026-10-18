@@ -1,5 +1,5 @@
 //! Allocation-free initramfs VFS with read/write support.
-use crate::{arch::x86_64::{paging::PhysAccess,phys::Identity},errno,sync::SpinLock};
+use crate::{arch::x86_64::{paging::PhysAccess,phys::Identity},errno,sync::SpinLock,vm::VmFlags};
 pub type Result<T>=core::result::Result<T,i64>;
 pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
 #[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub npages:u8,pub name:[u8;NAME_MAX+1],pub name_len:usize}
@@ -256,13 +256,25 @@ pub fn readdir(path:&str,mut cb:impl FnMut(u64,u32,&str))->Result<usize>{
    None=>{}
   }
   if path=="/proc"{
-  cb(0x9001,S_IFDIR,"self"); return Ok(1)
+  let mut count=1usize;
+  cb(0x9001,S_IFDIR,"self");
+  crate::task::live_pids(|pid|{let mut b=[0u8;12];let name=num_str(pid,&mut b);cb(0x9400+pid as u64,S_IFDIR,name);count+=1;});
+  for name in ["uptime","meminfo","version","cpuinfo","loadavg","mounts"]{cb(0x90000+name.len()as u64,S_IFREG,name);count+=1;}
+  return Ok(count)
  }
  if path=="/proc/self"{
-  cb(0x9002,S_IFDIR,"fd"); cb(0x9010,S_IFDIR,"ns"); cb(0x9011,S_IFLNK,"exe"); cb(0x9012,S_IFLNK,"root"); cb(0x9013,S_IFLNK,"cwd"); cb(0x9003,S_IFREG,"cmdline"); cb(0x9004,S_IFREG,"environ"); cb(0x9005,S_IFREG,"status"); cb(0x9006,S_IFREG,"stat"); cb(0x9007,S_IFREG,"maps"); cb(0x9008,S_IFREG,"cpuinfo"); cb(0x9009,S_IFREG,"meminfo"); cb(0x900a,S_IFREG,"uptime"); cb(0x900b,S_IFREG,"version"); cb(0x900c,S_IFREG,"loadavg"); return Ok(11)
+  cb(0x9002,S_IFDIR,"fd"); cb(0x9010,S_IFDIR,"ns"); cb(0x9011,S_IFLNK,"exe"); cb(0x9012,S_IFLNK,"root"); cb(0x9013,S_IFLNK,"cwd"); cb(0x9003,S_IFREG,"cmdline"); cb(0x9004,S_IFREG,"environ"); cb(0x9005,S_IFREG,"status"); cb(0x9006,S_IFREG,"stat"); cb(0x900e,S_IFREG,"statm"); cb(0x9007,S_IFREG,"maps"); return Ok(11)
  }
  if path=="/proc/self/fd"{
-  cb(0x9100,S_IFLNK,"0"); cb(0x9101,S_IFLNK,"1"); cb(0x9102,S_IFLNK,"2"); return Ok(3)
+  let mut count=0usize;
+  crate::task::with_current_process(|p|{p.fds.open_fds(|fd|{let mut b=[0u8;12];let name=num_str(fd as u32,&mut b);cb(0x9100+fd as u64,S_IFLNK,name);count+=1;});});
+  return Ok(count)
+ }
+ if let Some((subject,rest))=parse_proc(path){
+  if rest.is_empty()&&subject!=ProcSubject::SelfProc{
+   if !proc_exists(subject){return Err(errno::ENOENT)}
+   cb(0x9003,S_IFREG,"cmdline"); cb(0x9004,S_IFREG,"environ"); cb(0x9005,S_IFREG,"status"); cb(0x9006,S_IFREG,"stat"); cb(0x900e,S_IFREG,"statm"); cb(0x9007,S_IFREG,"maps"); cb(0x9011,S_IFLNK,"exe"); cb(0x9012,S_IFLNK,"root"); cb(0x9013,S_IFLNK,"cwd"); return Ok(9)
+  }
  }
  if path=="/proc/self/ns"{
   cb(0x9200,S_IFLNK,"uts"); cb(0x9201,S_IFLNK,"ipc"); cb(0x9202,S_IFLNK,"mnt"); cb(0x9203,S_IFLNK,"pid"); cb(0x9204,S_IFLNK,"net"); cb(0x9205,S_IFLNK,"user"); cb(0x9206,S_IFLNK,"cgroup"); cb(0x9207,S_IFLNK,"time"); return Ok(8)
@@ -404,11 +416,58 @@ pub const S_IFLNK:u32=0o120000;
 
 static mut PROC_BUF:[u8;4096]=[0;4096];
 
-fn is_proc_file(path:&str)->bool{
- matches!(path,"/proc/self/cmdline"|"/proc/self/environ"|"/proc/self/status"|"/proc/self/stat"|"/proc/self/maps"|"/proc/cpuinfo"|"/proc/meminfo"|"/proc/uptime"|"/proc/version"|"/proc/loadavg")
+#[derive(Clone,Copy,PartialEq)]enum ProcSubject{SelfProc,Pid(u32)}
+fn parse_proc(path:&str)->Option<(ProcSubject,&str)>{
+ if let Some(rest)=path.strip_prefix("/proc/self"){if rest.is_empty()||rest.starts_with('/'){return Some((ProcSubject::SelfProc,rest))}}
+ if let Some(rest)=path.strip_prefix("/proc/"){
+  let digits=rest.split('/').next().unwrap_or("");
+  if !digits.is_empty()&&digits.bytes().all(|b|b.is_ascii_digit()){
+   if let Ok(pid)=digits.parse::<u32>(){return Some((ProcSubject::Pid(pid),&rest[digits.len()..]))}
+  }
+ }
+ None
 }
-fn is_proc_link(path:&str)->bool{
- path=="/proc/self/exe"||path=="/proc/self/root"||path=="/proc/self/cwd"||path.starts_with("/proc/self/ns/")
+fn proc_with<R>(subject:ProcSubject,f:impl FnOnce(&crate::process::Process)->R)->Option<R>{
+ match subject{ProcSubject::SelfProc=>crate::task::with_current_process(|p|f(p)),ProcSubject::Pid(pid)=>crate::task::with_process_pid(pid,f)}
+}
+fn proc_exists(subject:ProcSubject)->bool{proc_with(subject,|_|()).is_some()}
+fn subject_pid(subject:ProcSubject)->u32{match subject{ProcSubject::SelfProc=>crate::task::current_pid(),ProcSubject::Pid(pid)=>pid}}
+fn proc_file_name(name:&str)->bool{matches!(name,"cmdline"|"environ"|"status"|"stat"|"statm"|"maps")}
+fn proc_sys_name(name:&str)->bool{matches!(name,"cpuinfo"|"meminfo"|"uptime"|"version"|"loadavg"|"mounts")}
+fn num_str<'a>(v:u32,buf:&'a mut[u8;12])->&'a str{let mut i=buf.len();let mut x=v;loop{i-=1;buf[i]=b'0'+(x%10)as u8;x/=10;if x==0{break}}core::str::from_utf8(&buf[i..]).unwrap_or("0")}
+fn proc_dir_inode(path:&str,ino:u64)->Inode{let mut name=[0u8;NAME_MAX+1];let b=path.as_bytes();let n=core::cmp::min(b.len(),NAME_MAX);name[..n].copy_from_slice(&b[..n]);Inode{ino,mode:S_IFDIR|0o555,name,name_len:n,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0}}
+fn put_bytes(out:&mut[u8],off:&mut usize,s:&[u8]){let n=core::cmp::min(s.len(),out.len().saturating_sub(*off));out[*off..*off+n].copy_from_slice(&s[..n]);*off+=n;}
+fn comm_of(p:&crate::process::Process,out:&mut[u8;64])->usize{let path=&p.exe_path[..p.exe_len];let base=path.iter().rposition(|&b|b==b'/').map(|i|&path[i+1..]).unwrap_or(path);let n=core::cmp::min(base.len(),15);out[..n].copy_from_slice(&base[..n]);n}
+fn fd_link_target(fd:usize)->Option<([u8;128],usize)>{
+ let id=crate::task::with_current_process(|p|p.fds.get(fd))??;
+ let mut out=[0u8;128];let mut off=0usize;
+ match crate::fd::kind(id)?{
+  crate::fd::OpenKind::Console=>put_bytes(&mut out,&mut off,b"/dev/console"),
+  crate::fd::OpenKind::Inode(ino)=>put_bytes(&mut out,&mut off,&ino.name[..ino.name_len]),
+  crate::fd::OpenKind::PipeRead(x)|crate::fd::OpenKind::PipeWrite(x)=>{put_bytes(&mut out,&mut off,b"pipe:[");append_num(&mut out,&mut off,x as u64);put_bytes(&mut out,&mut off,b"]")}
+  crate::fd::OpenKind::Socket(x)=>{put_bytes(&mut out,&mut off,b"socket:[");append_num(&mut out,&mut off,x as u64);put_bytes(&mut out,&mut off,b"]")}
+  crate::fd::OpenKind::EventFd(_,_)=>put_bytes(&mut out,&mut off,b"anon_inode:[eventfd]"),
+  crate::fd::OpenKind::Epoll=>put_bytes(&mut out,&mut off,b"anon_inode:[eventpoll]"),
+  crate::fd::OpenKind::TimerFd(_,_)=>put_bytes(&mut out,&mut off,b"anon_inode:[timerfd]"),
+  crate::fd::OpenKind::CharDevice(_)=>put_bytes(&mut out,&mut off,b"/dev/console"),
+  crate::fd::OpenKind::BlockDevice(_)=>put_bytes(&mut out,&mut off,b"/dev/vda"),
+  crate::fd::OpenKind::Inotify=>put_bytes(&mut out,&mut off,b"anon_inode:inotify"),
+  crate::fd::OpenKind::SignalFd(_)=>put_bytes(&mut out,&mut off,b"anon_inode:[signalfd]"),
+  crate::fd::OpenKind::Netlink=>put_bytes(&mut out,&mut off,b"socket:[netlink]"),
+  crate::fd::OpenKind::IoUring=>put_bytes(&mut out,&mut off,b"anon_inode:[io_uring]"),
+  crate::fd::OpenKind::PidFd(p)=>{put_bytes(&mut out,&mut off,b"anon_inode:[pidfd:");append_num(&mut out,&mut off,p as u64);put_bytes(&mut out,&mut off,b"]")}
+ }
+ Some((out,off))
+}
+fn ns_link(path:&str,rest:&str)->Result<Inode>{
+ let (uts,ipc,mnt,pid,net,user,cgroup,time)=crate::task::with_current_process(|pr|(pr.ns_uts,pr.ns_ipc,pr.ns_mnt,pr.ns_pid,pr.ns_net,pr.ns_user,pr.ns_cgroup,pr.ns_time)).unwrap_or((1,1,1,1,1,1,1,1));
+ let id=match rest{"uts"=>uts,"ipc"=>ipc,"mnt"=>mnt,"pid"=>pid,"net"=>net,"user"=>user,"cgroup"=>cgroup,"time"=>time,_=>return Err(errno::ENOENT)};
+ let prefix: &[u8]=match rest{"uts"=>b"uts:[", "ipc"=>b"ipc:[", "mnt"=>b"mnt:[", "pid"=>b"pid:[", "net"=>b"net:[", "user"=>b"user:[", "cgroup"=>b"cgroup:[", "time"=>b"time:[", _=>b"ns:["};
+ let mut buf=[0u8;32]; let mut off=0usize; buf[off..off+prefix.len()].copy_from_slice(prefix); off+=prefix.len();
+ let mut tmp=[0u8;20]; let mut i=0; let mut v=id;
+ if v==0{tmp[0]=b'0';i=1}else{while v>0{tmp[i]=b'0'+(v%10)as u8;v/=10;i+=1}for j in 0..i/2{tmp.swap(j,i-1-j)}}
+ buf[off..off+i].copy_from_slice(&tmp[..i]); off+=i; buf[off]=b']'; off+=1;
+ proc_symlink(path,&buf[..off])
 }
 fn is_proc_file_inode(ino:u64)->bool{ (ino>>12)==0x90 }
 fn is_sys_file_inode(ino:u64)->bool{ (ino>>12)==0xa }
@@ -425,65 +484,96 @@ fn append_num(buf:&mut [u8], off:&mut usize, mut v:u64){
  for j in 0..i/2{tmp.swap(j,i-1-j)}
  append(buf,off,&tmp[..i]);
 }
-fn proc_fill(path:&str)->usize{
+fn append_hex(buf:&mut[u8],off:&mut usize,mut v:u64){
+ let mut tmp=[0u8;16];let mut i=0;
+ if v==0{tmp[0]=b'0';i=1}else{while v>0{let d=(v%16)as u8;tmp[i]=if d<10{b'0'+d}else{b'a'+d-10};v/=16;i+=1}}
+ for j in 0..i/2{tmp.swap(j,i-1-j)}
+ append(buf,off,&tmp[..i]);
+}
+fn seg_perms(flags:u32,out:&mut[u8;4]){out[0]=if flags&crate::elf::PF_R!=0{b'r'}else{b'-'};out[1]=if flags&crate::elf::PF_W!=0{b'w'}else{b'-'};out[2]=if flags&crate::elf::PF_X!=0{b'x'}else{b'-'};out[3]=b'p';}
+fn vma_perms(flags:VmFlags,out:&mut[u8;4]){out[0]=if flags.contains(VmFlags::READ){b'r'}else{b'-'};out[1]=if flags.contains(VmFlags::WRITE){b'w'}else{b'-'};out[2]=if flags.contains(VmFlags::EXEC){b'x'}else{b'-'};out[3]=b'p';}
+fn write_map_line(buf:&mut[u8],off:&mut usize,start:u64,end:u64,perm:&[u8;4],offset:u64,ino:u64,path:&[u8]){
+ append_hex(buf,off,start);append(buf,off,b"-");append_hex(buf,off,end);append(buf,off,b" ");append(buf,off,perm);append(buf,off,b" ");append_hex(buf,off,offset);append(buf,off,b" 00:00 ");append_num(buf,off,ino);append(buf,off,b" ");append(buf,off,path);append(buf,off,b"\n");
+}
+fn proc_fill(subject:ProcSubject,file:&str)->usize{
  unsafe{PROC_BUF=[0;4096]}
  let mut off=0usize;
  let buf=unsafe{&mut *(&raw mut PROC_BUF)};
- let pid=crate::task::current_pid();
- match path{
-  "/proc/self/cmdline"=>{append(buf,&mut off,b"init\0");}
-  "/proc/self/environ"=>{append(buf,&mut off,b"SLOP_MNU=1\0");}
-  "/proc/self/status"=>{
-   append(buf,&mut off,b"Name:\tinit\n");
-   append(buf,&mut off,b"Pid:\t"); append_num(buf,&mut off,pid as u64); append(buf,&mut off,b"\n");
-   append(buf,&mut off,b"PPid:\t"); append_num(buf,&mut off,crate::task::current_ppid() as u64); append(buf,&mut off,b"\n");
-   append(buf,&mut off,b"State:\tR (running)\n");
-   append(buf,&mut off,b"VmSize:\t0 kB\n");
+ match file{
+  "cmdline"=>{proc_with(subject,|p|append(buf,&mut off,&p.cmdline[..p.cmdline_len]));}
+  "environ"=>{proc_with(subject,|p|append(buf,&mut off,&p.environ[..p.environ_len]));}
+  "status"=>{
+   let pid=subject_pid(subject);
+   let (comm,n)=proc_with(subject,|p|{let mut b=[0u8;64];let n=comm_of(p,&mut b);(b,n)}).unwrap_or(([0u8;64],0));
+   let (uid,euid,suid,fsuid)=proc_with(subject,|p|(p.uid,p.euid,p.suid,p.fsuid)).unwrap_or((0,0,0,0));
+   let (gid,egid,sgid,fsgid)=proc_with(subject,|p|(p.gid,p.egid,p.sgid,p.fsgid)).unwrap_or((0,0,0,0));
+   let (vsize,rss)=proc_with(subject,|p|(p.vma_bytes(),p.resident_pages())).unwrap_or((0,0));
+   append(buf,&mut off,b"Name:\t");append(buf,&mut off,&comm[..n]);append(buf,&mut off,b"\nState:\tR (running)\nTgid:\t");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b"\nPid:\t");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b"\nPPid:\t");append_num(buf,&mut off,crate::task::ppid_of(pid) as u64);append(buf,&mut off,b"\n");
+   for (label,vals) in [(b"Uid:\t".as_slice(),[uid,euid,suid,fsuid]),(b"Gid:\t".as_slice(),[gid,egid,sgid,fsgid])]{append(buf,&mut off,label);for v in vals{append_num(buf,&mut off,v as u64);append(buf,&mut off,b"\t")}if off>0{buf[off-1]=b'\n'}}
+   append(buf,&mut off,b"Threads:\t");append_num(buf,&mut off,crate::task::thread_count(pid) as u64);append(buf,&mut off,b"\nVmSize:\t");append_num(buf,&mut off,(vsize/1024) as u64);append(buf,&mut off,b" kB\nVmRSS:\t");append_num(buf,&mut off,(rss*4) as u64);append(buf,&mut off,b" kB\n");
   }
-  "/proc/self/stat"=>{
-   append_num(buf,&mut off,pid as u64); append(buf,&mut off,b" (init) R 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
+  "stat"=>{
+   let pid=subject_pid(subject);
+   let (comm,n)=proc_with(subject,|p|{let mut b=[0u8;64];let n=comm_of(p,&mut b);(b,n)}).unwrap_or(([0u8;64],0));
+   let (vsize,rss)=proc_with(subject,|p|(p.vma_bytes(),p.resident_pages())).unwrap_or((0,0));
+   append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" (");append(buf,&mut off,&comm[..n]);append(buf,&mut off,b") R ");append_num(buf,&mut off,crate::task::ppid_of(pid) as u64);append(buf,&mut off,b" ");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" ");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" 0 -1 0 0 0 0 0 0 0 0 20 0 ");append_num(buf,&mut off,crate::task::thread_count(pid) as u64);append(buf,&mut off,b" 0 0 ");append_num(buf,&mut off,vsize);append(buf,&mut off,b" ");append_num(buf,&mut off,rss);append(buf,&mut off,b" 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
   }
-  "/proc/self/maps"=>{ append(buf,&mut off,b""); }
-  "/proc/cpuinfo"=>{ append(buf,&mut off,b"processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel name\t: Slop/MNU virtual CPU\n"); }
-  "/proc/meminfo"=>{ append(buf,&mut off,b"MemTotal:       262144 kB\nMemFree:        262144 kB\n"); }
-  "/proc/uptime"=>{ append(buf,&mut off,b"1.00 1.00\n"); }
-  "/proc/version"=>{ append(buf,&mut off,b"Linux version 6.6.0-slop (slop@build) \n"); }
-  "/proc/loadavg"=>{ append(buf,&mut off,b"0.00 0.00 0.00 1/1 1\n"); }
+  "statm"=>{let (vsize,rss)=proc_with(subject,|p|(p.vma_bytes(),p.resident_pages())).unwrap_or((0,0));append_num(buf,&mut off,vsize/4096);append(buf,&mut off,b" ");append_num(buf,&mut off,rss);append(buf,&mut off,b" 0 0 0 0 0\n");}
+  "maps"=>{
+   proc_with(subject,|p|{
+    for s in &p.segs[..p.nsegs]{let mut perm=[0u8;4];seg_perms(s.flags,&mut perm);write_map_line(buf,&mut off,s.start,s.end,&perm,0,0,b"");}
+    for i in 0..p.vm.resource_stats().areas{
+     if let Some(a)=p.vm.area(i){
+      let mut perm=[0u8;4];vma_perms(a.flags,&mut perm);
+      let mut nbuf=[0u8;128];let mut nlen=0usize;
+      let (offset,ino):(u64,u64)=match a.kind{
+       crate::vm::VmKind::File{inode,offset}=>{nlen=core::cmp::min(inode.name_len,nbuf.len());nbuf[..nlen].copy_from_slice(&inode.name[..nlen]);(offset,inode.ino)}
+       crate::vm::VmKind::Brk=>{nbuf[..6].copy_from_slice(b"[heap]");nlen=6;(0,0)}
+       _=>(0,0),
+      };
+      write_map_line(buf,&mut off,a.start as u64,a.end as u64,&perm,offset,ino,&nbuf[..nlen]);
+     }
+    }
+    if p.stack_top>p.stack_base{let perm=[b'r',b'w',b'-',b'p'];write_map_line(buf,&mut off,p.stack_base,p.stack_top,&perm,0,0,b"[stack]");}
+   });
+  }
+  "cpuinfo"=>{append(buf,&mut off,b"processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel name\t: Slop/MNU virtual CPU\n");}
+  "meminfo"=>{let (total,free)=crate::memory::frame_stats();append(buf,&mut off,b"MemTotal:       ");append_num(buf,&mut off,total*4);append(buf,&mut off,b" kB\nMemFree:        ");append_num(buf,&mut off,free*4);append(buf,&mut off,b" kB\nMemAvailable:   ");append_num(buf,&mut off,free*4);append(buf,&mut off,b" kB\nBuffers:        0 kB\nCached:         0 kB\nSwapTotal:      0 kB\nSwapFree:       0 kB\n");}
+  "uptime"=>{let ns=crate::time::monotonic_ns();let sec=ns/1_000_000_000;let cs=(ns%1_000_000_000)/10_000_000;append_num(buf,&mut off,sec);append(buf,&mut off,if cs<10{b".0"}else{b"."});append_num(buf,&mut off,cs);append(buf,&mut off,b" ");append_num(buf,&mut off,sec);append(buf,&mut off,if cs<10{b".0"}else{b"."});append_num(buf,&mut off,cs);append(buf,&mut off,b"\n");}
+  "version"=>{append(buf,&mut off,b"Linux version 6.6.0-slop (slop@build) (rustc) #1 SMP\n");}
+  "loadavg"=>{let mut count=0u64;crate::task::live_pids(|_|count+=1);append(buf,&mut off,b"0.00 0.00 0.00 ");append_num(buf,&mut off,count.max(1));append(buf,&mut off,b"/");append_num(buf,&mut off,count.max(1));append(buf,&mut off,b" ");append_num(buf,&mut off,crate::task::last_pid() as u64);append(buf,&mut off,b"\n");}
+  "mounts"=>{
+   append(buf,&mut off,b"rootfs / rootfs rw 0 0\n");
+   let ns=current_mount_ns();let reg=MOUNT_REGISTRY.lock();
+   for e in &reg.entries{if !e.used||e.ns!=ns{continue}let (src,fs)=match e.kind{MountKind::Ext2=>(b"vda".as_slice(),b"ext2".as_slice()),_=>(b"tmpfs".as_slice(),b"tmpfs".as_slice())};append(buf,&mut off,src);append(buf,&mut off,b" ");append(buf,&mut off,&e.target[..e.tlen]);append(buf,&mut off,b" ");append(buf,&mut off,fs);append(buf,&mut off,b" rw 0 0\n");}
+  }
   _=>{}
  }
  off
 }
 fn proc_lookup(path:&str)->Result<Inode>{
- if path=="/proc"{
-  let mut name=[0u8;NAME_MAX+1]; name[..5].copy_from_slice(b"/proc"); return Ok(Inode{ino:0x9000,mode:S_IFDIR|0o555,name,name_len:5,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
+ if path=="/proc"{return Ok(proc_dir_inode(path,0x9000))}
+ if let Some(file)=path.strip_prefix("/proc/"){
+  if !file.contains('/')&&proc_sys_name(file){return proc_file_inode(path,ProcSubject::SelfProc,file)}
  }
- if path=="/proc/self"{
-  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b); return Ok(Inode{ino:0x9001,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
- }
- if path=="/proc/self/fd"{
-  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b); return Ok(Inode{ino:0x9002,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
- }
- if path=="/proc/self/ns"{
-  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b); return Ok(Inode{ino:0x9003,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
- }
- if is_proc_file(path){ return proc_file_lookup(path) }
- if path=="/proc/self/exe"{
-  let exe=crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)).unwrap_or(([0;64],0));
-  return proc_symlink(path,&exe.0[..exe.1])
- }
- if path=="/proc/self/root" || path=="/proc/self/cwd"{
-  let (arr,len)=if path.ends_with("root"){crate::task::with_current_process(|pr|(pr.root,pr.root_len)).unwrap_or(([b'/' ;128],1))}else{crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1))};
-  return proc_symlink(path,&arr[..len])
- }
- if let Some(rest)=path.strip_prefix("/proc/self/ns/"){
-  let (uts,ipc,mnt,pid,net,user,cgroup,time)=crate::task::with_current_process(|pr|(pr.ns_uts,pr.ns_ipc,pr.ns_mnt,pr.ns_pid,pr.ns_net,pr.ns_user,pr.ns_cgroup,pr.ns_time)).unwrap_or((1,1,1,1,1,1,1,1));
-  let id=match rest{"uts"=>uts,"ipc"=>ipc,"mnt"=>mnt,"pid"=>pid,"net"=>net,"user"=>user,"cgroup"=>cgroup,"time"=>time,_=>return Err(errno::ENOENT)};
-  let prefix: &[u8]=match rest{"uts"=>b"uts:[", "ipc"=>b"ipc:[", "mnt"=>b"mnt:[", "pid"=>b"pid:[", "net"=>b"net:[", "user"=>b"user:[", "cgroup"=>b"cgroup:[", "time"=>b"time:[", _=>b"ns:["};
-  let mut buf=[0u8;32]; let mut off=0usize; buf[off..off+prefix.len()].copy_from_slice(prefix); off+=prefix.len();
-  let mut tmp=[0u8;20]; let mut i=0; let mut v=id;
-  if v==0{tmp[0]=b'0';i=1}else{while v>0{tmp[i]=b'0'+(v%10)as u8;v/=10;i+=1}for j in 0..i/2{tmp.swap(j,i-1-j)}}
-  buf[off..off+i].copy_from_slice(&tmp[..i]); off+=i; buf[off]=b']'; off+=1;
-  return proc_symlink(path,&buf[..off])
+ if let Some((subject,rest))=parse_proc(path){
+  if rest.is_empty(){if subject!=ProcSubject::SelfProc&&!proc_exists(subject){return Err(errno::ENOENT)}return Ok(proc_dir_inode(path,0x9001))}
+  if !proc_exists(subject){return Err(errno::ENOENT)}
+  if subject==ProcSubject::SelfProc{
+   if rest=="/fd"{return Ok(proc_dir_inode(path,0x9002))}
+   if rest=="/ns"{return Ok(proc_dir_inode(path,0x9003))}
+   if let Some(ns)=rest.strip_prefix("/ns/"){return ns_link(path,ns)}
+   if let Some(fd)=rest.strip_prefix("/fd/"){
+    if let Ok(fd)=fd.parse::<usize>(){if let Some((t,tn))=fd_link_target(fd){return proc_symlink(path,&t[..tn])}}
+    return Err(errno::ENOENT)
+   }
+  }
+  if rest=="/exe"{let exe=proc_with(subject,|p|(p.exe_path,p.exe_len)).unwrap_or(([0;64],0));if exe.1==0{return Err(errno::ENOENT)}return proc_symlink(path,&exe.0[..exe.1])}
+  if rest=="/root"||rest=="/cwd"{
+   let (arr,len)=if rest=="/root"{proc_with(subject,|p|(p.root,p.root_len)).unwrap_or(([b'/' ;128],1))}else{proc_with(subject,|p|(p.cwd,p.cwd_len)).unwrap_or(([b'/' ;128],1))};
+   return proc_symlink(path,&arr[..len])
+  }
+  if let Some(file)=rest.strip_prefix('/'){if proc_file_name(file){return proc_file_inode(path,subject,file)}}
  }
  Err(errno::ENOENT)
 }
@@ -648,7 +738,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
    None=>{}
   }
   if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:1})}
- if path=="/proc"||path=="/proc/self"||path=="/proc/self/fd"||path=="/proc/self/ns"||is_proc_file(path)||is_proc_link(path){
+ if path=="/proc"||path.starts_with("/proc/"){
   return proc_lookup(path)
  }
  if path=="/sys"||path=="/sys/class"||path=="/sys/class/net"||path=="/sys/block"||path=="/sys/devices"||path=="/sys/kernel"||path=="/sys/fs"||is_sys_file(path){
@@ -756,14 +846,11 @@ fn sys_lookup(path:&str)->Result<Inode>{
  Err(errno::ENOENT)
 }
 
-fn proc_file_lookup(path:&str)->Result<Inode>{
- if is_proc_file(path){
-  let size=proc_fill(path);
-  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
-  let ino=0x90000 + (path.len() as u64);
-  return Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:b.len(),size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
- }
- Err(errno::ENOENT)
+fn proc_file_inode(path:&str,subject:ProcSubject,file:&str)->Result<Inode>{
+ let size=proc_fill(subject,file);
+ let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); let n=core::cmp::min(b.len(),NAME_MAX); name[..n].copy_from_slice(&b[..n]);
+ let ino=0x90000 + ((path.len() as u64)&0xfff);
+ Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:n,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
 }
 
 fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
