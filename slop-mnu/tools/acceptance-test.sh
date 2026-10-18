@@ -35,8 +35,12 @@ if [ "$status" -ne 33 ]; then
 fi
 for text in \
   'local APIC timer and EOI passed' \
+  'resources: fd accounting self-test passed' \
+  'resources: mmap ledger self-test passed' \
   'scheduler: context, FS base and zombie reap self-test passed' \
+  'resources: tasks active=1 zombies=0 unused=7' \
   'vfs: path lookup and file read self-test passed' \
+  'vfs: tmpfs mount and namespace self-test passed' \
   'execve: committed /bin/hello' \
   'argv, envp, VFS, VM, time, random and EFAULT passed' \
   'execve: committed /bin/hello-c' \
@@ -72,7 +76,7 @@ for text in \
     exit 1
   fi
 done
-if grep -F 'acceptance failed' "$LOG" >/dev/null || grep -F 'kernel exception' "$LOG" >/dev/null; then
+if grep -F 'acceptance failed' "$LOG" >/dev/null || grep -F 'kernel exception' "$LOG" >/dev/null || grep -F 'resources: cleanup incomplete' "$LOG" >/dev/null; then
   printf 'acceptance: failure marker found\n' >&2
   exit 1
 fi

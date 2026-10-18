@@ -1,3 +1,22 @@
+## 0.55.0 - 2026-10-18
+- Added per-process descriptor, open-file, VM-area/page and scheduler-state accounting with exit-time reclamation checks.
+- Moved mount routing into the VFS and added namespace-cloned tmpfs mounts with longest-prefix path selection.
+- Increased recycled-frame capacity to cover the configured 256 MiB guest and fixed process-exit cleanup failures.
+- Implemented capget/capset, capability-checked identity changes, `PR_SET_NO_NEW_PRIVS`, and stricter seccomp filter validation and lifetime management.
+- Hardened inotify watch matching, event records, overflow, close cleanup and create/modify delivery.
+- Hardened io_uring parameter/ring bounds, descriptor lookup, read/write usercopy, and mapping lifetime; added native/guest NOP coverage.
+- Expanded native/guest tests for errno behavior, `/proc/self/status`, capabilities, seccomp, inotify and io_uring; made the differential runner validate QEMU status and restore inputs on failure.
+
+## 0.54.0 - 2026-10-18
+- Expanded differential syscall coverage across file, directory, process, memory, time, identity and notification APIs.
+- Added native versus guest execution comparison.
+- Kept the full acceptance suite green.
+
+## 0.53.0 - 2026-10-18
+- Added a differential syscall test harness.
+- Added tests for file, directory, process, stat, cwd and identity syscalls.
+- Compared native and guest execution results.
+
 ## 0.52.0 - 2026-10-18
 - Added per-namespace UTS hostname state.
 - Added mount-namespace filtering for mount tables.

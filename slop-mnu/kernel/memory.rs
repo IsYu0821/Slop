@@ -1,5 +1,5 @@
 use crate::{boot::MemoryRegion,sync::SpinLock};
-pub const PAGE_SIZE:u64=4096;pub const USABLE:u32=1;const MAX_RANGES:usize=128;const RECYCLED:usize=256;
+pub const PAGE_SIZE:u64=4096;pub const USABLE:u32=1;const MAX_RANGES:usize=128;const RECYCLED:usize=65_536;
 #[derive(Clone,Copy)]struct Range{next:u64,end:u64}const EMPTY:Range=Range{next:0,end:0};
 struct State{ranges:[Range;MAX_RANGES],len:usize,cursor:usize,free:[u64;RECYCLED],free_len:usize}
 static ALLOC:SpinLock<State>=SpinLock::new(State{ranges:[EMPTY;MAX_RANGES],len:0,cursor:0,free:[0;RECYCLED],free_len:0});

@@ -4,25 +4,24 @@ use crate::errno; use core::mem::size_of; use types::*;
 #[repr(C)] struct UtsName { sysname:[u8;65], nodename:[u8;65], release:[u8;65], version:[u8;65], machine:[u8;65], domainname:[u8;65] }
 
 static mut HOSTNAME:[u8;65]=[0;65];
-#[derive(Clone,Copy)]struct MountEntry{used:bool,ns:u64,source:[u8;128],slen:usize,target:[u8;128],tlen:usize}
-static mut MOUNTS:[MountEntry;16]=[MountEntry{used:false,ns:0,source:[0;128],slen:0,target:[0;128],tlen:0};16];
 fn hostname_init(){unsafe{HOSTNAME[..4].copy_from_slice(b"slop");}}
 fn hostname_bytes()->[u8;65]{let h=unsafe{HOSTNAME}; if h[0]==0 { let mut d=[0u8;65]; d[..4].copy_from_slice(b"slop"); d } else { h } }
 pub fn dispatch(n:u64,a:[u64;6])->i64 {
  if crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0)==1 {
-  match n { 0|1|2|3|4|5|6|8|9|10|11|12|13|14|15|16|39|60|63|158|231|218|273 => {}, _ => crate::task::exit_signal(9), }
+   match n { nr::READ|nr::WRITE|nr::EXIT|nr::RT_SIGRETURN=>{}, _=>crate::task::exit_signal(9), }
  }
  if crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0)==2 {
   let (filter,len)=crate::task::with_current_process(|p|(p.seccomp_filter,p.seccomp_filter_len)).unwrap_or((0,0));
   if filter!=0 && len>0 {
    let data=SeccompData{nr:n as i32,arch:0xc000003e,ip:0,args:a};
    let action=seccomp_eval(filter as *const SockFilter,len as usize,&data);
-   match action >> 16 {
-    0x8000|0x0000 => crate::task::exit_signal(9),
-    0x0005 => return errno::neg((action & 0xffff) as i64),
-    0x0003 => crate::task::exit_signal(31),
-    0x7fff|0x7ffc|0x7ff0|0x7fc0 => {}
-    _ => crate::task::exit_signal(9),
+    match action&0xffff0000 {
+     0x80000000|0x00000000=>crate::task::exit_signal(9),
+     0x00050000=>{let e=((action&0xffff)as i64).min(4095);return errno::neg(if e==0{errno::EPERM}else{e})},
+     0x00030000=>crate::task::exit_signal(31),
+     0x7fff0000|0x7ffc0000=>{},
+     0x7ff00000|0x7fc00000=>return errno::neg(errno::ENOSYS),
+     _ => crate::task::exit_signal(9),
    }
   }
  }
@@ -50,7 +49,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SETREGID=>sys_setregid(a[0] as u32,a[1] as u32), nr::GETGROUPS=>sys_getgroups(a[0] as i32,a[1]),
     nr::SETGROUPS=>sys_setgroups(a[0] as usize,a[1]), nr::SETRESUID=>sys_setresuid(a[0] as u32,a[1] as u32,a[2] as u32),
     nr::GETRESUID=>sys_getresuid(a[0],a[1],a[2]), nr::SETRESGID=>sys_setresgid(a[0] as u32,a[1] as u32,a[2] as u32),
-    nr::GETRESGID=>sys_getresgid(a[0],a[1],a[2]), nr::CAPGET=>0, nr::CAPSET=>0,
+    nr::GETRESGID=>sys_getresgid(a[0],a[1],a[2]), nr::CAPGET=>sys_capget(a[0],a[1]), nr::CAPSET=>sys_capset(a[0],a[1]),
     nr::UMASK=>sys_umask(a[0] as u32), nr::UNSHARE=>sys_unshare(a[0]), nr::SETNS=>0,
     nr::SECCOMP=>sys_seccomp(a[0] as u32,a[1] as u32,a[2]),
     nr::INOTIFY_INIT=>sys_inotify_init(), nr::INOTIFY_INIT1=>sys_inotify_init1(a[0]), nr::INOTIFY_ADD_WATCH=>sys_inotify_add_watch(a[0] as usize,a[1],a[2]),
@@ -162,7 +161,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>0,
     nr::UTIME=>0,
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
-    nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4]),
+    nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4],a[5]),
     nr::IO_URING_REGISTER=>sys_io_uring_register(a[0] as usize,a[1] as u32,a[2],a[3] as u32),
     nr::PIDFD_OPEN=>sys_pidfd_open(a[0] as u32,a[1]), nr::PIDFD_SEND_SIGNAL=>sys_pidfd_send_signal(a[0] as usize,a[1] as i32,a[2],a[3]),
     nr::PIDFD_GETFD=>errno::neg(errno::ENOSYS),
@@ -222,9 +221,13 @@ fn sys_clone(a:[u64;6])->i64{
  const CLONE_THREAD:u64=0x10000;const CLONE_SYSVSEM:u64=0x40000;const CLONE_SETTLS:u64=0x80000;
  const CLONE_PARENT_SETTID:u64=0x100000;const CLONE_CHILD_CLEARTID:u64=0x200000;const CLONE_CHILD_SETTID:u64=0x1000000;
  /* musl uses this private flag in place of Linux CLONE_CHILD_SETTID. */
- const CLONE_DETACHED:u64=0x400000;
- const SIGCHLD:u64=17;
- let flags=a[0]&!SIGCHLD;
+  const CLONE_DETACHED:u64=0x400000;
+  const SIGCHLD:u64=17;
+  let flags=a[0]&!SIGCHLD;
+  const CLONE_NEWUSER:u64=0x10000000;
+  const CLONE_NEWNS:u64=0x00020000;
+  const PRIVILEGED_NS:u64=0x04000000|0x08000000|0x20000000|0x40000000|0x02000000|0x00000080|CLONE_NEWNS;
+  if flags&PRIVILEGED_NS!=0&&flags&CLONE_NEWUSER==0&&!current_has_cap(CAP_SYS_ADMIN){return errno::neg(errno::EPERM)}
  if flags&CLONE_VM!=0{
   let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED|0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000;
   if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
@@ -442,10 +445,10 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
  let path=match core::str::from_utf8(&inode.name[..inode.name_len]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
  let start=crate::fd::offset_get(id);
  /* Collect the directory once so the closure cannot deadlock on ROOT. */
- let mut entries:[(u64,u32,[u8;64],usize);48]=[(0,0,[0;64],0);48];
+  let mut entries:[(u64,u32,[u8;64],usize);64]=[(0,0,[0;64],0);64];
  let mut n=0usize;
  let _=crate::vfs::readdir(path,|ino,mode,name|{
-  if n<48{
+   if n<64{
    let b=name.as_bytes();
    let l=core::cmp::min(b.len(),63);
    entries[n]=(ino,mode,{let mut a=[0u8;64];a[..l].copy_from_slice(&b[..l]);a},l);
@@ -912,34 +915,6 @@ fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
  0
 }
 
-fn apply_mounts(input:&str)->[u8;256]{
- let mut out=[0u8;256]; let mut olen=0usize;
- let m=unsafe{&*(&raw const MOUNTS)};
- // find longest target prefix
- let mut best:Option<usize>=None;
- let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
- for e in m.iter(){if !e.used || e.ns!=ns{continue} if let Ok(t)=core::str::from_utf8(&e.target[..e.tlen]){
-  if input==t || input.starts_with(t) && (input.len()==t.len() || input.as_bytes()[t.len()]==b'/'){
-   if best.map(|b|m[b].tlen<t.len()).unwrap_or(true){best=Some(m.iter().position(|x|x.used && core::str::from_utf8(&x.target[..x.tlen]).ok()==Some(t)).unwrap());}
-  }
- }}
- if let Some(i)=best{
-  let e=&m[i];
-  let t=core::str::from_utf8(&e.target[..e.tlen]).unwrap();
-  let src=core::str::from_utf8(&e.source[..e.slen]).unwrap();
-  // copy source
-  let sl=src.len().min(120); out[..sl].copy_from_slice(&src.as_bytes()[..sl]); olen=sl;
-  let rest=&input[t.len()..];
-  let rl=rest.len().min(120-olen);
-  out[olen..olen+rl].copy_from_slice(&rest.as_bytes()[..rl]); olen+=rl;
-  if olen==0{out[0]=b'/';olen=1;}
-  return out;
- }
- let il=input.len().min(255);
- out[..il].copy_from_slice(input.as_bytes()); olen=il;
- if olen==0{out[0]=b'/';olen=1;}
- out
-}
 fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let mut b=[0u8;128];
  let p=copy_path(path_ptr,&mut b)?;
@@ -956,9 +931,7 @@ fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let input_str=if ilen>0 && input[0]!=0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
- let mounted=apply_mounts(input_str);
- let mounted_str=core::str::from_utf8(&mounted[..mounted.iter().position(|&b|b==0).unwrap_or(mounted.len())]).unwrap_or(input_str);
- let n=crate::vfs::resolve(cwd_slice,mounted_str,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve(cwd_slice,input_str,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
 }
 fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
@@ -976,9 +949,7 @@ fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let input_str=if ilen>0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
- let mounted=apply_mounts(input_str);
- let mounted_str=core::str::from_utf8(&mounted[..mounted.iter().position(|&b|b==0).unwrap_or(mounted.len())]).unwrap_or(input_str);
- let n=crate::vfs::resolve_nofollow(cwd_slice,mounted_str,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve_nofollow(cwd_slice,input_str,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
 }
 fn sys_chdir(path_ptr:u64)->i64{
@@ -1198,8 +1169,7 @@ fn sys_getsid(pid:u32)->i64{
  crate::task::current_sid() as i64
 }
 fn sys_prctl(option:i32,arg2:u64,arg3:u64,arg4:u64,arg5:u64)->i64{
- let _=(arg3,arg4,arg5);
- match option{
+  match option{
   15=>{ // PR_SET_NAME
    let mut b=[0u8;16];
    if let Err(e)=crate::usercopy::copy_from_user(&mut b,arg2 as usize){return errno::neg(e)}
@@ -1210,15 +1180,16 @@ fn sys_prctl(option:i32,arg2:u64,arg3:u64,arg4:u64,arg5:u64)->i64{
    let name=crate::task::with_current_process(|p|p.name).unwrap_or([0;16]);
    if let Err(e)=crate::usercopy::copy_to_user(arg2 as usize,&name){return errno::neg(e)}
    0
-  }
-  21=>crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0) as i64, // PR_GET_SECCOMP
-  22=>{ // PR_SET_SECCOMP
-   if arg2==1{let _=crate::task::with_current_process(|p|{p.seccomp_mode=1;});0}
-   else if arg2==2{sys_seccomp(1,0,arg3)}
-   else{errno::neg(errno::EINVAL)}
-  }
-  38=>0, // PR_SET_NO_NEW_PRIVS
-  39=>0, // PR_GET_NO_NEW_PRIVS
+   }
+   21=>crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0) as i64, // PR_GET_SECCOMP
+   22=>{ // PR_SET_SECCOMP
+    if arg4!=0||arg5!=0{return errno::neg(errno::EINVAL)}
+    if arg2==1{if arg3!=0{return errno::neg(errno::EINVAL)}sys_seccomp(0,0,0)}
+    else if arg2==2{sys_seccomp(1,0,arg3)}
+    else{errno::neg(errno::EINVAL)}
+   }
+   38=>{if arg2!=1||arg3!=0||arg4!=0||arg5!=0{return errno::neg(errno::EINVAL)}if crate::task::with_current_process(|p|{p.no_new_privs=true;}).is_some(){0}else{errno::neg(errno::ESRCH)}}
+   39=>crate::task::with_current_process(|p|p.no_new_privs as i64).unwrap_or(errno::neg(errno::ESRCH)),
   8=>0,  // PR_SET_KEEPCAPS
   9=>0,  // PR_GET_KEEPCAPS
   _=>0
@@ -1508,22 +1479,27 @@ fn sys_epoll_wait(epfd:usize,events_ptr:u64,maxevents:i32,timeout:i32)->i64{
  }
 }
 
+const CAP_SETGID:u32=6;const CAP_SETUID:u32=7;const CAP_SYS_CHROOT:u32=18;const CAP_SYS_ADMIN:u32=21;
+fn current_has_cap(cap:u32)->bool{crate::task::with_current_process(|p|p.cap_eff&(1u64<<cap)!=0).unwrap_or(false)}
+fn current_has_initial_cap(cap:u32)->bool{crate::task::with_current_process(|p|p.ns_user==1&&p.cap_eff&(1u64<<cap)!=0).unwrap_or(false)}
+fn current_has_mount_cap()->bool{crate::task::with_current_process(|p|p.cap_eff&(1u64<<CAP_SYS_ADMIN)!=0&&(p.ns_user==1||p.ns_mnt!=1)).unwrap_or(false)}
+fn current_has_uts_cap()->bool{crate::task::with_current_process(|p|p.cap_eff&(1u64<<CAP_SYS_ADMIN)!=0&&(p.ns_user==1||p.ns_uts!=1)).unwrap_or(false)}
 fn sys_getuid()->i64{crate::task::with_current_process(|p|p.uid).unwrap_or(0) as i64}
 fn sys_getgid()->i64{crate::task::with_current_process(|p|p.gid).unwrap_or(0) as i64}
 fn sys_geteuid()->i64{crate::task::with_current_process(|p|p.euid).unwrap_or(0) as i64}
 fn sys_getegid()->i64{crate::task::with_current_process(|p|p.egid).unwrap_or(0) as i64}
 fn sys_setuid(uid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if p.euid==0{p.uid=uid;p.suid=uid;p.euid=uid;p.fsuid=uid;}
-  else if uid==p.uid||uid==p.suid{p.euid=uid;p.fsuid=uid;}
-  else{return Err(crate::errno::EPERM)}
+  let r=crate::task::with_current_process(|p|{
+   if p.cap_eff&(1u64<<CAP_SETUID)!=0{p.uid=uid;p.suid=uid;p.euid=uid;p.fsuid=uid;if uid!=0{p.cap_eff=0;p.cap_prm=0;}}
+   else if uid==p.uid||uid==p.suid{let old_euid=p.euid;p.euid=uid;p.fsuid=uid;if old_euid==0&&uid!=0{p.cap_eff=0;p.cap_prm=0;}}
+   else{return Err(crate::errno::EPERM)}
   Ok(())
  });
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
 }
 fn sys_setgid(gid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if p.egid==0{p.gid=gid;p.sgid=gid;p.egid=gid;p.fsgid=gid;}
+  let r=crate::task::with_current_process(|p|{
+   if p.cap_eff&(1u64<<CAP_SETGID)!=0{p.gid=gid;p.sgid=gid;p.egid=gid;p.fsgid=gid;}
   else if gid==p.gid||gid==p.sgid{p.egid=gid;p.fsgid=gid;}
   else{return Err(crate::errno::EPERM)}
   Ok(())
@@ -1531,25 +1507,34 @@ fn sys_setgid(gid:u32)->i64{
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
 }
 fn sys_setreuid(ruid:u32,euid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if ruid!=u32::MAX{
-   if p.euid==0||ruid==p.uid||ruid==p.suid{p.uid=ruid;p.suid=ruid;}else{return Err(crate::errno::EPERM)}
-  }
-  if euid!=u32::MAX{
-   if p.euid==0||euid==p.uid||euid==p.suid||euid==p.euid{p.euid=euid;p.fsuid=euid;}else{return Err(crate::errno::EPERM)}
-  }
-  Ok(())
+  let r=crate::task::with_current_process(|p|{
+   let privileged=p.cap_eff&(1u64<<CAP_SETUID)!=0;let old_euid=p.euid;
+   if ruid!=u32::MAX{
+    if !privileged&&ruid!=p.uid&&ruid!=p.suid{return Err(crate::errno::EPERM)}
+   }
+   if euid!=u32::MAX{
+    if !privileged&&euid!=p.uid&&euid!=p.suid&&euid!=p.euid{return Err(crate::errno::EPERM)}
+   }
+   if ruid!=u32::MAX{p.uid=ruid;}
+   if euid!=u32::MAX{p.euid=euid;p.fsuid=euid;}
+   if ruid!=u32::MAX||euid!=u32::MAX{p.suid=p.euid;}
+   if old_euid==0&&p.euid!=0{p.cap_eff=0;p.cap_prm=0;}
+   Ok(())
  });
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
 }
 fn sys_setregid(rgid:u32, egid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if rgid!=u32::MAX{
-   if p.egid==0||rgid==p.gid||rgid==p.sgid{p.gid=rgid;p.sgid=rgid;}else{return Err(crate::errno::EPERM)}
-  }
-  if egid!=u32::MAX{
-   if p.egid==0||egid==p.gid||egid==p.sgid||egid==p.egid{p.egid=egid;p.fsgid=egid;}else{return Err(crate::errno::EPERM)}
-  }
+  let r=crate::task::with_current_process(|p|{
+   let privileged=p.cap_eff&(1u64<<CAP_SETGID)!=0;
+   if rgid!=u32::MAX{
+    if !privileged&&rgid!=p.gid&&rgid!=p.sgid{return Err(crate::errno::EPERM)}
+   }
+   if egid!=u32::MAX{
+    if !privileged&&egid!=p.gid&&egid!=p.sgid&&egid!=p.egid{return Err(crate::errno::EPERM)}
+   }
+   if rgid!=u32::MAX{p.gid=rgid;}
+   if egid!=u32::MAX{p.egid=egid;p.fsgid=egid;}
+   if rgid!=u32::MAX||egid!=u32::MAX{p.sgid=p.egid;}
   Ok(())
  });
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
@@ -1567,8 +1552,8 @@ fn sys_getgroups(size:i32,ptr:u64)->i64{
  ng as i64
 }
 fn sys_setgroups(size:usize,ptr:u64)->i64{
- let r=crate::task::with_current_process(|p|{
-  if p.euid!=0{return Err(crate::errno::EPERM)}
+  let r=crate::task::with_current_process(|p|{
+   if p.cap_eff&(1u64<<CAP_SETGID)==0{return Err(crate::errno::EPERM)}
   if size>32{return Err(crate::errno::EINVAL)}
   let mut groups=[0u32;32];
   if size>0{
@@ -1582,13 +1567,15 @@ fn sys_setgroups(size:usize,ptr:u64)->i64{
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
 }
 fn sys_setresuid(ruid:u32,euid:u32,suid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if ruid!=u32::MAX && !(p.euid==0||ruid==p.uid||ruid==p.euid||ruid==p.suid){return Err(crate::errno::EPERM)}
-  if euid!=u32::MAX && !(p.euid==0||euid==p.uid||euid==p.euid||euid==p.suid){return Err(crate::errno::EPERM)}
-  if suid!=u32::MAX && !(p.euid==0||suid==p.uid||suid==p.euid||suid==p.suid){return Err(crate::errno::EPERM)}
-  if ruid!=u32::MAX{p.uid=ruid;}
-  if euid!=u32::MAX{p.euid=euid;p.fsuid=euid;}
-  if suid!=u32::MAX{p.suid=suid;}
+  let r=crate::task::with_current_process(|p|{
+   let privileged=p.cap_eff&(1u64<<CAP_SETUID)!=0;let old_euid=p.euid;
+   if ruid!=u32::MAX && !(privileged||ruid==p.uid||ruid==p.euid||ruid==p.suid){return Err(crate::errno::EPERM)}
+   if euid!=u32::MAX && !(privileged||euid==p.uid||euid==p.euid||euid==p.suid){return Err(crate::errno::EPERM)}
+   if suid!=u32::MAX && !(privileged||suid==p.uid||suid==p.euid||suid==p.suid){return Err(crate::errno::EPERM)}
+   if ruid!=u32::MAX{p.uid=ruid;}
+   if euid!=u32::MAX{p.euid=euid;p.fsuid=euid;}
+   if suid!=u32::MAX{p.suid=suid;}
+   if old_euid==0&&p.euid!=0{p.cap_eff=0;p.cap_prm=0;}
   Ok(())
  });
  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
@@ -1602,10 +1589,11 @@ fn sys_getresuid(ruid:u64,euid:u64,suid:u64)->i64{
  }else{errno::neg(errno::ESRCH)}
 }
 fn sys_setresgid(rgid:u32,egid:u32,sgid:u32)->i64{
- let r=crate::task::with_current_process(|p|{
-  if rgid!=u32::MAX && !(p.egid==0||rgid==p.gid||rgid==p.egid||rgid==p.sgid){return Err(crate::errno::EPERM)}
-  if egid!=u32::MAX && !(p.egid==0||egid==p.gid||egid==p.egid||egid==p.sgid){return Err(crate::errno::EPERM)}
-  if sgid!=u32::MAX && !(p.egid==0||sgid==p.gid||sgid==p.egid||sgid==p.sgid){return Err(crate::errno::EPERM)}
+  let r=crate::task::with_current_process(|p|{
+   let privileged=p.cap_eff&(1u64<<CAP_SETGID)!=0;
+   if rgid!=u32::MAX && !(privileged||rgid==p.gid||rgid==p.egid||rgid==p.sgid){return Err(crate::errno::EPERM)}
+   if egid!=u32::MAX && !(privileged||egid==p.gid||egid==p.egid||egid==p.sgid){return Err(crate::errno::EPERM)}
+   if sgid!=u32::MAX && !(privileged||sgid==p.gid||sgid==p.egid||sgid==p.sgid){return Err(crate::errno::EPERM)}
   if rgid!=u32::MAX{p.gid=rgid;}
   if egid!=u32::MAX{p.egid=egid;p.fsgid=egid;}
   if sgid!=u32::MAX{p.sgid=sgid;}
@@ -1628,10 +1616,12 @@ fn sys_umask(mask:u32)->i64{
 fn sys_unshare(flags:u64)->i64{
  const CLONE_NEWUTS:u64=0x04000000; const CLONE_NEWIPC:u64=0x08000000; const CLONE_NEWUSER:u64=0x10000000; const CLONE_NEWPID:u64=0x20000000; const CLONE_NEWNET:u64=0x40000000; const CLONE_NEWCGROUP:u64=0x02000000; const CLONE_NEWTIME:u64=0x00000080; const CLONE_NEWNS:u64=0x00020000;
  if flags & !(CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWUSER|CLONE_NEWPID|CLONE_NEWNET|CLONE_NEWCGROUP|CLONE_NEWTIME|CLONE_NEWNS)!=0{return errno::neg(errno::EINVAL)}
+ let privileged_flags=CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWPID|CLONE_NEWNET|CLONE_NEWCGROUP|CLONE_NEWTIME|CLONE_NEWNS;
+ if flags&privileged_flags!=0&&flags&CLONE_NEWUSER==0&&!current_has_cap(CAP_SYS_ADMIN){return errno::neg(errno::EPERM)}
  let r=crate::task::with_current_process(|p|{
   if flags&CLONE_NEWUTS!=0{p.ns_uts=crate::task::alloc_ns();}
   if flags&CLONE_NEWIPC!=0{p.ns_ipc=crate::task::alloc_ns();}
-  if flags&CLONE_NEWNS!=0{p.ns_mnt=crate::task::alloc_ns();}
+   if flags&CLONE_NEWNS!=0{let ns=crate::task::alloc_ns();crate::vfs::clone_mount_namespace(p.ns_mnt,ns)?;p.ns_mnt=ns;}
   if flags&CLONE_NEWPID!=0{p.ns_pid=crate::task::alloc_ns();}
   if flags&CLONE_NEWNET!=0{p.ns_net=crate::task::alloc_ns();}
   if flags&CLONE_NEWUSER!=0{p.ns_user=crate::task::alloc_ns();p.uid=0;p.gid=0;p.euid=0;p.egid=0;p.suid=0;p.sgid=0;p.cap_eff=u64::MAX;p.cap_prm=u64::MAX;}
@@ -1646,14 +1636,17 @@ fn sys_setns(fd:i32,nstype:i32)->i64{
  0
 }
 fn sys_seccomp(op:u32,flags:u32,uargs:u64)->i64{
- let _=flags;
- match op{
-  0=>{ // SECCOMP_SET_MODE_STRICT
-   let _=crate::task::with_current_process(|p|{p.seccomp_mode=1;});
-   0
-  }
-  1=>{ // SECCOMP_SET_MODE_FILTER
-   if uargs==0{return errno::neg(errno::EFAULT)}
+  match op{
+   0=>{ // SECCOMP_SET_MODE_STRICT
+    if flags!=0{return errno::neg(errno::EINVAL)}
+    match crate::task::with_current_process(|p|{if p.seccomp_mode!=0{return Err(errno::EINVAL)}p.seccomp_mode=1;Ok(())}){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+   }
+   1=>{ // SECCOMP_SET_MODE_FILTER
+    if flags!=0{return errno::neg(errno::EOPNOTSUPP)}
+    let permitted=crate::task::with_current_process(|p|p.no_new_privs||p.cap_eff&(1<<21)!=0).unwrap_or(false);
+    if !permitted{return errno::neg(errno::EPERM)}
+    if crate::task::with_current_process(|p|p.seccomp_mode==1||p.seccomp_filter!=0).unwrap_or(true){return errno::neg(errno::EOPNOTSUPP)}
+    if uargs==0{return errno::neg(errno::EFAULT)}
    let mut hdr=[0u8;16];
    if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,uargs as usize){return errno::neg(e)}
    let len=u16::from_ne_bytes(hdr[0..2].try_into().unwrap()) as usize;
@@ -1664,38 +1657,47 @@ fn sys_seccomp(op:u32,flags:u32,uargs:u64)->i64{
    let mut buf=[0u8;4096];
    if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..size],fptr as usize){let _=crate::memory::free_frame(frame);return errno::neg(e)}
    unsafe{core::slice::from_raw_parts_mut(frame as *mut u8,size).copy_from_slice(&buf[..size]);}
-   let filter=frame as *const SockFilter;
-   if !seccomp_validate(filter,len){let _=crate::memory::free_frame(frame);return errno::neg(errno::EINVAL)}
-   let r=crate::task::with_current_process(|p|{
-    if p.seccomp_filter!=0{let _=crate::memory::free_frame(p.seccomp_filter as u64);}
-    p.seccomp_filter=frame as usize;
-    p.seccomp_filter_len=len as u16;
-    p.seccomp_mode=2;
+     let filter=frame as *const SockFilter;
+     if !seccomp_validate(filter,len){let _=crate::memory::free_frame(frame);return errno::neg(errno::EINVAL)}
+     if let Err(e)=crate::process::seccomp_filter_register(frame){let _=crate::memory::free_frame(frame);return errno::neg(e)}
+    let r=crate::task::with_current_process(|p|{
+     p.seccomp_filter=frame as usize;
+     p.seccomp_filter_len=len as u16;
+     p.seccomp_mode=2;
    });
-   if r.is_none(){let _=crate::memory::free_frame(frame);return errno::neg(errno::ESRCH)}
-   0
+     if r.is_none(){let _=crate::process::seccomp_filter_release(frame);return errno::neg(errno::ESRCH)}
+    0
+   }
+   2=>{
+    if flags!=0{return errno::neg(errno::EINVAL)}if uargs==0{return errno::neg(errno::EFAULT)}
+    let mut action=[0u8;4];if let Err(e)=crate::usercopy::copy_from_user(&mut action,uargs as usize){return errno::neg(e)}
+    let available=matches!(u32::from_ne_bytes(action)&0xffff0000,0x80000000|0x00000000|0x00030000|0x00050000|0x7ffc0000|0x7fff0000);
+    if available{0}else{errno::neg(errno::EOPNOTSUPP)}
+   }
+   _=>errno::neg(errno::EINVAL),
   }
-  2=>0, // GET_ACTION_AVAIL
-  _=>errno::neg(errno::EINVAL),
- }
 }
 fn sys_inotify_init()->i64{sys_inotify_init1(0)}
 fn sys_inotify_init1(flags:u64)->i64{
- if flags&!0x800!=0{return errno::neg(errno::EINVAL)}
- let _=flags;
+  if flags&!(crate::inotify::IN_NONBLOCK|crate::inotify::IN_CLOEXEC)!=0{return errno::neg(errno::EINVAL)}
+  let _=flags;
  let id=match crate::fd::alloc_file(crate::fd::OpenKind::Inotify){Ok(d)=>d,Err(e)=>return errno::neg(e)};
  match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
 fn sys_inotify_add_watch(fd:usize,path:u64,mask:u64)->i64{
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
- let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
- let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- crate::inotify::add_watch(fdid,p,mask as u32) as i64
+  let mask=mask as u32;
+  let (out,n)=match if mask&crate::inotify::IN_DONT_FOLLOW!=0{resolve_path_ptr_nofollow(path)}else{resolve_path_ptr(path)}{Ok(v)=>v,Err(e)=>return e};
+  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+  let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+  if !matches!(crate::fd::kind(fdid),Some(crate::fd::OpenKind::Inotify)){return errno::neg(errno::EINVAL)}
+  let inode=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+  if mask&crate::inotify::IN_ONLYDIR!=0&&inode.mode&0o170000!=crate::vfs::S_IFDIR{return errno::neg(errno::ENOTDIR)}
+  match crate::inotify::add_watch(fdid,p,mask){Ok(wd)=>wd as i64,Err(e)=>errno::neg(e)}
 }
 fn sys_inotify_rm_watch(fd:usize,wd:i32)->i64{
- let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- let r=crate::inotify::rm_watch(fdid,wd);
- if r<0{errno::neg(r)}else{0}
+  let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+  if !matches!(crate::fd::kind(fdid),Some(crate::fd::OpenKind::Inotify)){return errno::neg(errno::EINVAL)}
+  match crate::inotify::rm_watch(fdid,wd){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_signalfd4(fd:i32,mask:u64,flags:u64,sizemask:u64)->i64{
  let _=(fd,mask,flags,sizemask);
@@ -1705,30 +1707,27 @@ fn sys_signalfd4(fd:i32,mask:u64,flags:u64,sizemask:u64)->i64{
 }
 
 fn sys_mount(source:u64,target:u64,fstype:u64,flags:u64,data:u64)->i64{
- let _=(flags,data);
- let mut sb=[0u8;128];let mut tb=[0u8;128];let mut fb=[0u8;32];
- let sp=match copy_path(source,&mut sb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- let tp=match copy_path(target,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- let _=copy_path(fstype,&mut fb);
- let _=crate::vfs::mkdir(tp,0o755);
- let mut m=unsafe{&mut *(&raw mut MOUNTS)};
- let slot=match m.iter().position(|e|!e.used){Some(i)=>i,None=>return errno::neg(errno::ENOMEM)};
- m[slot].used=true;
- m[slot].ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
- let sl=sp.len().min(127); m[slot].source[..sl].copy_from_slice(sp.as_bytes()); m[slot].slen=sl;
- let tl=tp.len().min(127); m[slot].target[..tl].copy_from_slice(tp.as_bytes()); m[slot].tlen=tl;
- 0
+  let _=data;
+   if !current_has_mount_cap(){return errno::neg(errno::EPERM)}
+  let mut sb=[0u8;128];let mut fb=[0u8;32];
+  let sp=if source==0{""}else{match copy_path(source,&mut sb){Ok(v)=>v,Err(e)=>return errno::neg(e)}};
+  if fstype==0{return errno::neg(errno::EINVAL)}
+  let fs=match copy_path(fstype,&mut fb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let(out,n)=match resolve_path_ptr(target){Ok(v)=>v,Err(e)=>return e};
+  let tp=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+   let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
+   if fs=="ext2"&&!current_has_initial_cap(CAP_SYS_ADMIN){return errno::neg(errno::EPERM)}
+  match crate::vfs::mount_filesystem(sp,tp,fs,flags,ns){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_umount2(target:u64,flags:u64)->i64{
- let _=flags;
- let mut tb=[0u8;128];
- let tp=match copy_path(target,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- let mut m=unsafe{&mut *(&raw mut MOUNTS)};
- let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
- if let Some(e)=m.iter_mut().find(|e|e.used && e.ns==ns && core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(tp)){e.used=false;return 0}
- errno::neg(errno::EINVAL)
+   if !current_has_mount_cap(){return errno::neg(errno::EPERM)}
+  let(out,n)=match resolve_path_ptr(target){Ok(v)=>v,Err(e)=>return e};
+  let tp=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+  let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
+  match crate::vfs::unmount_filesystem(tp,flags,ns){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_pivot_root(new_root:u64,put_old:u64)->i64{
+  if !current_has_cap(CAP_SYS_ADMIN){return errno::neg(errno::EPERM)}
  let (out,n)=match resolve_path_ptr(new_root){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if !crate::vfs::is_dir(p){return errno::neg(errno::ENOTDIR)}
@@ -1737,14 +1736,15 @@ fn sys_pivot_root(new_root:u64,put_old:u64)->i64{
  0
 }
 fn sys_chroot(path:u64)->i64{
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+  if !current_has_cap(CAP_SYS_CHROOT){return errno::neg(errno::EPERM)}
+  let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if !crate::vfs::is_dir(p){return errno::neg(errno::ENOTDIR)}
  let _=crate::task::with_current_process(|pr|{pr.set_root(p);});
  0
 }
 fn sys_sethostname(name:u64,len:u64)->i64{
- if crate::task::with_current_process(|p|p.euid).unwrap_or(1)!=0{return errno::neg(errno::EPERM)}
+  if !current_has_uts_cap(){return errno::neg(errno::EPERM)}
  if len>64{return errno::neg(errno::EINVAL)}
  let mut buf=[0u8;64];
  if let Err(e)=crate::usercopy::copy_from_user(&mut buf,name as usize){return errno::neg(e)}
@@ -1753,138 +1753,122 @@ fn sys_sethostname(name:u64,len:u64)->i64{
  0
 }
 fn sys_setdomainname(name:u64,len:u64)->i64{
- if crate::task::with_current_process(|p|p.euid).unwrap_or(1)!=0{return errno::neg(errno::EPERM)}
+  if !current_has_uts_cap(){return errno::neg(errno::EPERM)}
  let _=(name,len);
  0
 }
 
 fn sys_capget(header:u64,data:u64)->i64{
- if header==0{return errno::neg(errno::EFAULT)}
- let mut ver=[0u8;4];
- if let Err(e)=crate::usercopy::copy_from_user(&mut ver,header as usize){return errno::neg(e)}
- let version=u32::from_ne_bytes(ver);
- let _=version;
- if data!=0{
-  // cap_user_data_t: effective, permitted, inheritable (3 u32)
-  let all=u32::MAX;
-  let mut buf=[0u8;12];
-  buf[0..4].copy_from_slice(&all.to_ne_bytes());
-  buf[4..8].copy_from_slice(&all.to_ne_bytes());
-  buf[8..12].copy_from_slice(&all.to_ne_bytes());
-  if let Err(e)=crate::usercopy::copy_to_user(data as usize,&buf){return errno::neg(e)}
- }
- 0
+  if header==0{return errno::neg(errno::EFAULT)}
+  const V1:u32=0x19980330;const V2:u32=0x20071026;const V3:u32=0x20080522;
+  let mut hdr=[0u8;8];if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,header as usize){return errno::neg(e)}
+  let version=u32::from_ne_bytes(hdr[..4].try_into().unwrap());let pid=i32::from_ne_bytes(hdr[4..8].try_into().unwrap());
+  if !matches!(version,V1|V2|V3){let _=crate::usercopy::copy_to_user(header as usize,&V3.to_ne_bytes());return errno::neg(errno::EINVAL)}
+  if pid!=0&&pid as u32!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
+  if data!=0{
+   let(effective,permitted,inheritable)=crate::task::with_current_process(|p|(p.cap_eff,p.cap_prm,p.cap_inh)).unwrap_or((0,0,0));let words=if version==V1{1}else{2};
+   let mut buf=[0u8;24];
+   for i in 0..words{let shift=i*32;let off=i*12;buf[off..off+4].copy_from_slice(&((effective>>shift)as u32).to_ne_bytes());buf[off+4..off+8].copy_from_slice(&((permitted>>shift)as u32).to_ne_bytes());buf[off+8..off+12].copy_from_slice(&((inheritable>>shift)as u32).to_ne_bytes());}
+   if let Err(e)=crate::usercopy::copy_to_user(data as usize,&buf[..words*12]){return errno::neg(e)}
+  }
+  0
 }
 fn sys_capset(header:u64,data:u64)->i64{
- let _=(header,data);
- 0
+  const V1:u32=0x19980330;const V2:u32=0x20071026;const V3:u32=0x20080522;
+  if header==0||data==0{return errno::neg(errno::EFAULT)}
+  let mut hdr=[0u8;8];if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,header as usize){return errno::neg(e)}
+  let version=u32::from_ne_bytes(hdr[..4].try_into().unwrap());let pid=i32::from_ne_bytes(hdr[4..8].try_into().unwrap());
+  if !matches!(version,V1|V2|V3){let _=crate::usercopy::copy_to_user(header as usize,&V3.to_ne_bytes());return errno::neg(errno::EINVAL)}
+  if pid!=0&&pid as u32!=crate::task::current_pid(){return errno::neg(errno::EPERM)}
+  let words=if version==V1{1}else{2};let mut raw=[0u8;24];if let Err(e)=crate::usercopy::copy_from_user(&mut raw[..words*12],data as usize){return errno::neg(e)}
+  let mut effective=0u64;let mut permitted=0u64;let mut inheritable=0u64;
+  for i in 0..words{let shift=i*32;let off=i*12;effective|=(u32::from_ne_bytes(raw[off..off+4].try_into().unwrap())as u64)<<shift;permitted|=(u32::from_ne_bytes(raw[off+4..off+8].try_into().unwrap())as u64)<<shift;inheritable|=(u32::from_ne_bytes(raw[off+8..off+12].try_into().unwrap())as u64)<<shift;}
+  let r=crate::task::with_current_process(|p|{
+   if effective&!permitted!=0||permitted&!p.cap_prm!=0||inheritable&!(p.cap_inh|p.cap_prm)!=0{return Err(errno::EPERM)}
+   p.cap_eff=effective;p.cap_prm=permitted;p.cap_inh=inheritable;Ok(())
+  });
+  match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
 }
 
 fn sys_io_uring_setup(entries:u32,params:u64)->i64{
- if entries==0{return errno::neg(errno::EINVAL)}
- let id=match crate::fd::alloc_file(crate::fd::OpenKind::IoUring){Ok(d)=>d,Err(e)=>return errno::neg(e)};
- let sq=match crate::memory::alloc_frame(){Some(f)=>f,None=>{crate::fd::release(id);return errno::neg(errno::ENOMEM)}};
- let cq=match crate::memory::alloc_frame(){Some(f)=>f,None=>{let _=crate::memory::free_frame(sq);crate::fd::release(id);return errno::neg(errno::ENOMEM)}};
- let sqes=match crate::memory::alloc_frame(){Some(f)=>f,None=>{let _=crate::memory::free_frame(sq);let _=crate::memory::free_frame(cq);crate::fd::release(id);return errno::neg(errno::ENOMEM)}};
- unsafe{crate::arch::x86_64::paging::PhysAccess::table(&crate::arch::x86_64::phys::Identity,sq).fill(0);crate::arch::x86_64::paging::PhysAccess::table(&crate::arch::x86_64::phys::Identity,cq).fill(0);crate::arch::x86_64::paging::PhysAccess::table(&crate::arch::x86_64::phys::Identity,sqes).fill(0);}
- crate::fd::iouring_set(id,sq,cq,sqes);
- if params!=0{
-  let mut p=[0u8;128];
-  p[0..4].copy_from_slice(&1u32.to_ne_bytes()); // sq_entries
-  p[4..8].copy_from_slice(&1u32.to_ne_bytes()); // cq_entries
-  // sq_off at offset 40
-  p[40..44].copy_from_slice(&0u32.to_ne_bytes()); // head
-  p[44..48].copy_from_slice(&4u32.to_ne_bytes()); // tail
-  p[48..52].copy_from_slice(&0u32.to_ne_bytes()); // ring_mask
-  p[52..56].copy_from_slice(&1u32.to_ne_bytes()); // ring_entries
-  p[56..60].copy_from_slice(&0u32.to_ne_bytes()); // flags
-  p[60..64].copy_from_slice(&0u32.to_ne_bytes()); // dropped
-  p[64..68].copy_from_slice(&24u32.to_ne_bytes()); // array
-  // cq_off at offset 80
-  p[80..84].copy_from_slice(&0u32.to_ne_bytes()); // head
-  p[84..88].copy_from_slice(&4u32.to_ne_bytes()); // tail
-  p[88..92].copy_from_slice(&0u32.to_ne_bytes()); // ring_mask
-  p[92..96].copy_from_slice(&1u32.to_ne_bytes()); // ring_entries
-  p[96..100].copy_from_slice(&0u32.to_ne_bytes()); // overflow
-  p[100..104].copy_from_slice(&20u32.to_ne_bytes()); // cqes
-  let _=crate::usercopy::copy_to_user(params as usize,&p);
- }
- match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+  const MAX_ENTRIES:u32=64;const PARAMS_SIZE:usize=120;
+  if params==0{return errno::neg(errno::EFAULT)}
+  if entries==0||entries>MAX_ENTRIES{return errno::neg(errno::EINVAL)}
+  let count=match entries.checked_next_power_of_two(){Some(v)if v<=MAX_ENTRIES=>v,_=>return errno::neg(errno::EINVAL)};
+  let mut input=[0u8;PARAMS_SIZE];if let Err(e)=crate::usercopy::copy_from_user(&mut input,params as usize){return errno::neg(e)}
+  let setup_flags=u32::from_ne_bytes(input[8..12].try_into().unwrap());
+  let thread_cpu=u32::from_ne_bytes(input[12..16].try_into().unwrap());let thread_idle=u32::from_ne_bytes(input[16..20].try_into().unwrap());let wq_fd=u32::from_ne_bytes(input[24..28].try_into().unwrap());
+  if setup_flags!=0||thread_cpu!=0||thread_idle!=0||wq_fd!=0||input[28..40].iter().any(|b|*b!=0){return errno::neg(errno::EOPNOTSUPP)}
+  let id=match crate::fd::alloc_file(crate::fd::OpenKind::IoUring){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+  let mut frames=[0u64;3];
+  for i in 0..frames.len(){match crate::memory::alloc_frame(){Some(frame)=>frames[i]=frame,None=>{for frame in frames.iter().copied().filter(|p|*p!=0){let _=crate::memory::free_frame(frame);}crate::fd::release(id);return errno::neg(errno::ENOMEM)}}}
+  let sq=unsafe{crate::arch::x86_64::phys::Identity.bytes(frames[0],4096)};
+  let cq=unsafe{crate::arch::x86_64::phys::Identity.bytes(frames[1],4096)};
+  let sqes=unsafe{crate::arch::x86_64::phys::Identity.bytes(frames[2],4096)};
+  sq.fill(0);cq.fill(0);sqes.fill(0);
+  sq[8..12].copy_from_slice(&(count-1).to_ne_bytes());sq[12..16].copy_from_slice(&count.to_ne_bytes());
+  for i in 0..count as usize{let off=24+i*4;sq[off..off+4].copy_from_slice(&(i as u32).to_ne_bytes());}
+  cq[8..12].copy_from_slice(&(count-1).to_ne_bytes());cq[12..16].copy_from_slice(&count.to_ne_bytes());
+  crate::fd::iouring_set(id,frames[0],frames[1],frames[2],count);
+  let mut output=[0u8;PARAMS_SIZE];
+  output[0..4].copy_from_slice(&count.to_ne_bytes());output[4..8].copy_from_slice(&count.to_ne_bytes());
+  // SQ offsets: head, tail, mask, entries, flags, dropped, array.
+  output[40..44].copy_from_slice(&0u32.to_ne_bytes());output[44..48].copy_from_slice(&4u32.to_ne_bytes());output[48..52].copy_from_slice(&8u32.to_ne_bytes());output[52..56].copy_from_slice(&12u32.to_ne_bytes());output[56..60].copy_from_slice(&16u32.to_ne_bytes());output[60..64].copy_from_slice(&20u32.to_ne_bytes());output[64..68].copy_from_slice(&24u32.to_ne_bytes());
+  // CQ offsets: head, tail, mask, entries, overflow, CQEs.
+  output[80..84].copy_from_slice(&0u32.to_ne_bytes());output[84..88].copy_from_slice(&4u32.to_ne_bytes());output[88..92].copy_from_slice(&8u32.to_ne_bytes());output[92..96].copy_from_slice(&12u32.to_ne_bytes());output[96..100].copy_from_slice(&16u32.to_ne_bytes());output[100..104].copy_from_slice(&20u32.to_ne_bytes());
+  if let Err(e)=crate::usercopy::copy_to_user(params as usize,&output){crate::fd::iouring_clear(id);for frame in frames{let _=crate::memory::free_frame(frame);}crate::fd::release(id);return errno::neg(e)}
+  match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::iouring_clear(id);for frame in frames{let _=crate::memory::free_frame(frame);}crate::fd::release(id);errno::neg(e)},None=>{crate::fd::iouring_clear(id);for frame in frames{let _=crate::memory::free_frame(frame);}crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
-fn sys_io_uring_enter(fd:usize,to_submit:u32,min_complete:u32,flags:u32,sig:u64)->i64{
- let _=(min_complete,flags,sig);
- let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
- let sq_frame=crate::fd::iouring_sq_ring(id);
- let cq_frame=crate::fd::iouring_cq_ring(id);
- let sqes_frame=crate::fd::iouring_sqes(id);
- if sq_frame==0 || cq_frame==0 || sqes_frame==0{return errno::neg(errno::EINVAL)}
- let sq=unsafe{crate::arch::x86_64::phys::Identity.bytes(sq_frame,4096)};
- let cq=unsafe{crate::arch::x86_64::phys::Identity.bytes(cq_frame,4096)};
- let sqes=unsafe{crate::arch::x86_64::phys::Identity.bytes(sqes_frame,4096)};
- let sq_head_off=0usize;let sq_tail_off=4usize;let sq_mask_off=8usize;let sq_entries_off=12usize;let sq_array_off=24usize;
- let cq_head_off=0usize;let cq_tail_off=4usize;let cq_mask_off=8usize;let cq_entries_off=12usize;let cq_cqes_off=20usize;
- let mut sq_head=u32::from_ne_bytes(sq[sq_head_off..sq_head_off+4].try_into().unwrap());
- let sq_tail=u32::from_ne_bytes(sq[sq_tail_off..sq_tail_off+4].try_into().unwrap());
- let sq_mask=u32::from_ne_bytes(sq[sq_mask_off..sq_mask_off+4].try_into().unwrap());
- let sq_entries=u32::from_ne_bytes(sq[sq_entries_off..sq_entries_off+4].try_into().unwrap()).max(1);
- let mut cq_head=u32::from_ne_bytes(cq[cq_head_off..cq_head_off+4].try_into().unwrap());
- let mut cq_tail=u32::from_ne_bytes(cq[cq_tail_off..cq_tail_off+4].try_into().unwrap());
- let cq_mask=u32::from_ne_bytes(cq[cq_mask_off..cq_mask_off+4].try_into().unwrap());
- let mut processed=0u32;
- let limit=to_submit.min(sq_entries).min(16);
- while processed < limit && sq_head != sq_tail {
-  let idx_off=sq_array_off + ((sq_head & sq_mask) as usize)*4;
-  let sqe_idx=u32::from_ne_bytes(sq[idx_off..idx_off+4].try_into().unwrap()) as usize;
-  if sqe_idx*64+64 > 4096 { break; }
-  let sqe=&sqes[sqe_idx*64..sqe_idx*64+64];
-  let opcode=sqe[0];
-  let fd=i32::from_ne_bytes(sqe[4..8].try_into().unwrap());
-  let off=u64::from_ne_bytes(sqe[8..16].try_into().unwrap());
-  let addr=u64::from_ne_bytes(sqe[16..24].try_into().unwrap());
-  let len=u32::from_ne_bytes(sqe[24..28].try_into().unwrap()) as usize;
-  let user_data=u64::from_ne_bytes(sqe[32..40].try_into().unwrap());
-  let mut res=0i32;
-  match opcode {
-   0 => { res=0; }
-   22 => {
-     if fd>=0 {
-      let mut buf=[0u8;512];
-      let n=core::cmp::min(len,buf.len());
-      let r=crate::fd::read_at(fd as u32,off,&mut buf[..n]);
-      match r{Ok(g)=>{res=g as i32; if addr!=0 && g>0 { let _=crate::usercopy::copy_to_user(addr as usize,&buf[..g]);}},Err(e)=>res=-(e as i32)}
-     } else { res=crate::errno::EBADF as i32 * -1; }
-   }
-   23 => {
-     if fd>=0 {
-      let mut buf=[0u8;512];
-      let n=core::cmp::min(len,buf.len());
-      if addr!=0 { let _=crate::usercopy::copy_from_user(&mut buf[..n],addr as usize); }
-      let r=crate::fd::write_at(fd as u32,off,&buf[..n]);
-      match r{Ok(g)=>res=g as i32,Err(e)=>res=-(e as i32)}
-     } else { res=crate::errno::EBADF as i32 * -1; }
-   }
-   _ => { res=-(crate::errno::ENOSYS as i32); }
-  }
-  let cq_idx=(cq_tail & cq_mask) as usize;
-  let cqe_off=cq_cqes_off + cq_idx*16;
-  cq[cqe_off..cqe_off+8].copy_from_slice(&user_data.to_ne_bytes());
-  cq[cqe_off+8..cqe_off+12].copy_from_slice(&res.to_ne_bytes());
-  cq[cqe_off+12..cqe_off+16].copy_from_slice(&0u32.to_ne_bytes());
-  cq_tail=cq_tail.wrapping_add(1);
-  sq_head=sq_head.wrapping_add(1);
-  processed+=1;
+fn io_uring_rw(fd:i32,offset:u64,address:u64,len:usize,read:bool)->i32{
+ if fd<0{return -(errno::EBADF as i32)}if len>65_536{return -(errno::EINVAL as i32)}if len>0&&address==0{return -(errno::EFAULT as i32)}
+ let id=match crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten(){Some(id)=>id,None=>return -(errno::EBADF as i32)};
+ let mut done=0usize;let mut buffer=[0u8;512];
+ while done<len{
+  let count=core::cmp::min(buffer.len(),len-done);let off=match offset.checked_add(done as u64){Some(v)=>v,None=>return if done==0{-(errno::EINVAL as i32)}else{done as i32}};
+  let result=if read{crate::fd::read_at(id,off,&mut buffer[..count])}else{
+   let pointer=match (address as usize).checked_add(done){Some(v)=>v,None=>return if done==0{-(errno::EFAULT as i32)}else{done as i32}};
+   if let Err(e)=crate::usercopy::copy_from_user(&mut buffer[..count],pointer){return if done==0{-(e as i32)}else{done as i32}}
+   crate::fd::write_at(id,off,&buffer[..count])
+  };
+  let n=match result{Ok(n)=>n,Err(e)=>return if done==0{-(e as i32)}else{done as i32}};if n>count{return if done==0{-(errno::EIO as i32)}else{done as i32}}
+  if n==0{break}
+  if read{let pointer=match (address as usize).checked_add(done){Some(v)=>v,None=>return if done==0{-(errno::EFAULT as i32)}else{done as i32}};if let Err(e)=crate::usercopy::copy_to_user(pointer,&buffer[..n]){return if done==0{-(e as i32)}else{done as i32}}}
+  done+=n;
  }
- sq[sq_head_off..sq_head_off+4].copy_from_slice(&sq_head.to_ne_bytes());
- cq[cq_tail_off..cq_tail_off+4].copy_from_slice(&cq_tail.to_ne_bytes());
- let _=cq_head;
- processed as i64
+ done as i32
+}
+fn sys_io_uring_enter(fd:usize,to_submit:u32,min_complete:u32,flags:u32,sig:u64,sigsetsize:u64)->i64{
+  if flags!=0{return errno::neg(errno::EOPNOTSUPP)}if sig!=0||sigsetsize!=0{return errno::neg(errno::EINVAL)}if min_complete!=0{return errno::neg(errno::EOPNOTSUPP)}
+  let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+  if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
+  let entries=crate::fd::iouring_entries(id);if entries==0||entries>64||!entries.is_power_of_two(){return errno::neg(errno::EINVAL)}
+  let sq_frame=crate::fd::iouring_sq_ring(id);let cq_frame=crate::fd::iouring_cq_ring(id);let sqes_frame=crate::fd::iouring_sqes(id);
+  if sq_frame==0||cq_frame==0||sqes_frame==0{return errno::neg(errno::EINVAL)}
+  let sq=unsafe{crate::arch::x86_64::phys::Identity.bytes(sq_frame,4096)};let cq=unsafe{crate::arch::x86_64::phys::Identity.bytes(cq_frame,4096)};let sqes=unsafe{crate::arch::x86_64::phys::Identity.bytes(sqes_frame,4096)};
+  let mut sq_head=crate::fd::iouring_sq_head(id);let sq_tail=u32::from_ne_bytes(sq[4..8].try_into().unwrap());let pending=sq_tail.wrapping_sub(sq_head);
+  if pending>entries{return errno::neg(errno::EINVAL)}
+  let mut cq_tail=crate::fd::iouring_cq_tail(id);let cq_head=u32::from_ne_bytes(cq[..4].try_into().unwrap());let occupied=cq_tail.wrapping_sub(cq_head);
+  if occupied>entries{return errno::neg(errno::EINVAL)}
+  let space=entries-occupied;if space==0&&to_submit!=0{return errno::neg(errno::EAGAIN)}
+  let count=to_submit.min(pending).min(space).min(16);let mask=entries-1;let mut processed=0u32;
+  while processed<count{
+   let array_off=24+((sq_head&mask)as usize)*4;let sqe_index=u32::from_ne_bytes(sq[array_off..array_off+4].try_into().unwrap());
+   let(index_valid,sqe_index)=(sqe_index<entries,sqe_index as usize);
+   let(mut user_data,mut result)=(0u64,0i32);
+   if index_valid{
+    let off=sqe_index*64;let sqe=&sqes[off..off+64];let opcode=sqe[0];let file_fd=i32::from_ne_bytes(sqe[4..8].try_into().unwrap());let file_off=u64::from_ne_bytes(sqe[8..16].try_into().unwrap());let address=u64::from_ne_bytes(sqe[16..24].try_into().unwrap());let len=u32::from_ne_bytes(sqe[24..28].try_into().unwrap())as usize;user_data=u64::from_ne_bytes(sqe[32..40].try_into().unwrap());
+    result=match opcode{0=>0,22=>io_uring_rw(file_fd,file_off,address,len,true),23=>io_uring_rw(file_fd,file_off,address,len,false),_=>-(errno::ENOSYS as i32)};
+   }else{result=-(errno::EINVAL as i32)}
+   let cqe_off=20+((cq_tail&mask)as usize)*16;cq[cqe_off..cqe_off+8].copy_from_slice(&user_data.to_ne_bytes());cq[cqe_off+8..cqe_off+12].copy_from_slice(&result.to_ne_bytes());cq[cqe_off+12..cqe_off+16].copy_from_slice(&0u32.to_ne_bytes());
+   sq_head=sq_head.wrapping_add(1);cq_tail=cq_tail.wrapping_add(1);processed+=1;
+  }
+  sq[..4].copy_from_slice(&sq_head.to_ne_bytes());cq[4..8].copy_from_slice(&cq_tail.to_ne_bytes());crate::fd::iouring_set_sq_head(id,sq_head);crate::fd::iouring_set_cq_tail(id,cq_tail);processed as i64
 }
 fn sys_io_uring_register(fd:usize,opcode:u32,arg:u64,nr_args:u32)->i64{
- let _=(opcode,arg,nr_args);
- let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
- 0
+  let _=(opcode,arg,nr_args);
+  let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+  if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
+  errno::neg(errno::EOPNOTSUPP)
 }
 
 fn sys_setsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,_optlen:u64)->i64{
@@ -2102,9 +2086,10 @@ fn seccomp_eval(filter:*const SockFilter,len:usize,data:&SeccompData)->u32{
      match mode {
       0x00 => { x=insn.k; }
       0x20 => { x=seccomp_load_abs(data,insn.k as usize,4); }
-      0x40 => { x=seccomp_load_abs(data,(insn.k as usize).wrapping_add(x as usize),4); }
-      0x60 => { let idx=(insn.k as usize)&15; x=mem[idx]; }
-      0xa0 => { // MSH: x = (data byte at k & 0xf)<<2
+       0x40 => { x=seccomp_load_abs(data,(insn.k as usize).wrapping_add(x as usize),4); }
+       0x60 => { let idx=(insn.k as usize)&15; x=mem[idx]; }
+       0x80 => { x=64; }
+       0xa0 => { // MSH: x = (data byte at k & 0xf)<<2
        let b=seccomp_load_abs(data,insn.k as usize,1) as u8;
        x=((b & 0x0f) as u32)<<2;
       }
@@ -2129,8 +2114,8 @@ fn seccomp_eval(filter:*const SockFilter,len:usize,data:&SeccompData)->u32{
       0x90 => a=if src==0{0}else{a%src},
       0x40 => a |= src,
       0x50 => a &= src,
-      0x60 => a <<= src & 31,
-      0x70 => a >>= src & 31,
+       0x60 => a=if src>=32{0}else{a<<src},
+       0x70 => a=if src>=32{0}else{a>>src},
       0x80 => a = (!a).wrapping_add(1), // NEG (two's complement)
       0xa0 => a ^= src,
       _ => { return 0x80000000; }
@@ -2141,7 +2126,7 @@ fn seccomp_eval(filter:*const SockFilter,len:usize,data:&SeccompData)->u32{
      let op=insn.code & 0xf0;
      let src=if insn.code & 0x08 !=0 {x}else{insn.k};
      match op {
-      0x00 => { pc += insn.k as usize; }
+       0x00 => { pc += insn.k as usize+1; }
       0x10 => { if a==src { pc += insn.jt as usize + 1 } else { pc += insn.jf as usize + 1 } }
       0x20 => { if a>src { pc += insn.jt as usize + 1 } else { pc += insn.jf as usize + 1 } }
       0x30 => { if a>=src { pc += insn.jt as usize + 1 } else { pc += insn.jf as usize + 1 } }
@@ -2151,16 +2136,16 @@ fn seccomp_eval(filter:*const SockFilter,len:usize,data:&SeccompData)->u32{
      if op==0x00 { continue; }
      // for conditional we already advanced pc
      continue;
-   }
-   6 => { // RET
-     let v=if insn.code & 0x08 !=0 {x}else{insn.k};
+    }
+    6 => { // RET
+      let v=if insn.code==0x16{a}else{insn.k};
      return v;
    }
    7 => { // MISC
-     match insn.code {
-      0x00 => { x=a; } // TAX
-      0x04 => { a=x; } // TXA? Actually MISC TXA = 0x80? 
-      _ => { return 0x80000000; }
+      match insn.code {
+       0x07=>{x=a;}
+       0x87=>{a=x;}
+       _=>{return 0x80000000;}
      }
      pc+=1;
    }
@@ -2172,36 +2157,31 @@ fn seccomp_eval(filter:*const SockFilter,len:usize,data:&SeccompData)->u32{
 
 fn seccomp_validate(filter:*const SockFilter,len:usize)->bool{
  if filter.is_null() || len==0 || len>512 {return false}
- // last must be RET
  let last=unsafe{filter.add(len-1).read()};
- if last.code & 0x07 != 6 {return false}
+ if last.code!=0x06&&last.code!=0x16{return false}
  for i in 0..len {
   let insn=unsafe{filter.add(i).read()};
-  let class=insn.code & 0x07;
+  if insn.code&0xff00!=0{return false}
+  let class=insn.code&0x07;
   match class {
-   0|1 => {
-     let mode=insn.code & 0xe0;
-     if mode==0x60 || mode==0x70 { // MEM
-       if (insn.k as usize) >=16 {return false}
-     }
-     if mode==0xa0 && class==1 { // MSH on LDX
-       // ok
-     }
-   }
-   2|3 => {
-     if (insn.k as usize) >=16 {return false}
-   }
+   0=>match insn.code{0x00|0x20|0x40|0x80=>{},0x60 if insn.k<16=>{},_=>return false},
+   1=>match insn.code{0x01|0x21|0x41|0x81=>{},0x61 if insn.k<16=>{},0xb1=>{},_=>return false},
+   2|3=>if insn.code!=class||insn.k>=16{return false},
+   4=>{let op=insn.code&0xf0;let src_x=insn.code&0x08!=0;if !matches!(op,0x00|0x10|0x20|0x30|0x40|0x50|0x60|0x70|0x80|0x90|0xa0)||op==0x80&&src_x{return false}},
    5 => {
-     let op=insn.code & 0xf0;
-     if op==0x00 {
-       if i + (insn.k as usize) + 1 > len {return false}
-     } else {
-       let t=i + (insn.jt as usize) + 1;
-       let f=i + (insn.jf as usize) + 1;
-       if t>len || f>len {return false}
-     }
+      let op=insn.code & 0xf0;
+      if op==0x00 {
+        if insn.code!=0x05||i+(insn.k as usize)+1>=len{return false}
+      } else {
+        if !matches!(op,0x10|0x20|0x30|0x40){return false}
+        let t=i + (insn.jt as usize) + 1;
+        let f=i + (insn.jf as usize) + 1;
+        if t>=len||f>=len{return false}
+      }
    }
-   _ => {}
+   6=>if insn.code!=0x06&&insn.code!=0x16{return false},
+   7=>if insn.code!=0x07&&insn.code!=0x87{return false},
+   _=>return false,
   }
  }
  true

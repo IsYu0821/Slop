@@ -2,12 +2,19 @@
 //! dup and fork share descriptions, mirroring the Unix file-description model.
 use crate::{errno,sync::SpinLock,vfs};
 pub const MAX_FDS:usize=32;const MAX_OPEN:usize=64;
+#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+pub struct ResourceStats{pub descriptors:usize,pub open_descriptions:usize,pub open_references:usize}
 #[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8),EventFd(u64,u8),Epoll,TimerFd(u64,u64),CharDevice(u64),BlockDevice(u64),Inotify,SignalFd(u64),Netlink,IoUring,PidFd(u32)}
 #[derive(Clone,Copy)]struct OpenFile{refs:u32,offset:u64,kind:OpenKind}
 static OPEN:SpinLock<[Option<OpenFile>;MAX_OPEN]>=SpinLock::new([const{None};MAX_OPEN]);
 static mut IOURING_SQ_RING:[u64;MAX_OPEN]=[0;MAX_OPEN];
 static mut IOURING_CQ_RING:[u64;MAX_OPEN]=[0;MAX_OPEN];
 static mut IOURING_SQES:[u64;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_ENTRIES:[u32;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_SQ_HEAD:[u32;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_CQ_TAIL:[u32;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_MAP_REFS:[u32;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_CLOSING:[bool;MAX_OPEN]=[false;MAX_OPEN];
 
 const FREE_FD:i32=-1;
 pub struct FdTable{slots:[i32;MAX_FDS]}
@@ -18,20 +25,49 @@ impl FdTable{
  pub fn install_from(&mut self,min:usize,id:u32)->Result<i32,i64>{let fd=(min..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[fd]=id as i32;Ok(fd as i32)}
  pub fn install_pair(&mut self,first:u32,second:u32)->Result<(i32,i32),i64>{let a=(0..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[a]=first as i32;let b=match (a+1..MAX_FDS).find(|&i|self.slots[i]<0){Some(b)=>b,None=>{self.slots[a]=FREE_FD;return Err(errno::EMFILE)}};self.slots[b]=second as i32;Ok((a as i32,b as i32))}
  pub fn replace(&mut self,fd:usize,id:u32)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}if self.slots[fd]>=0{release(self.slots[fd]as u32)}self.slots[fd]=id as i32;Ok(())}
- pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;release(s as u32);Ok(())}
- pub fn clone_incref(&self)->Self{let mut t=Self{slots:self.slots};for &s in t.slots.iter(){if s>=0{incref(s as u32)}}t}
- pub fn close_all(&mut self){for s in self.slots.iter_mut(){if *s>=0{release(*s as u32);*s=FREE_FD}}}
+  pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;release(s as u32);Ok(())}
+  pub fn clone_incref(&self)->Self{let mut t=Self{slots:self.slots};for &s in t.slots.iter(){if s>=0{incref(s as u32)}}t}
+  pub fn descriptor_count(&self)->usize{self.slots.iter().filter(|&&s|s>=0).count()}
+  pub fn open_description_count(&self)->usize{
+   let mut ids=[FREE_FD;MAX_FDS];let mut count=0;
+   for &slot in &self.slots{if slot<0||ids[..count].contains(&slot){continue}ids[count]=slot;count+=1;}
+   count
+  }
+  pub fn close_all(&mut self)->usize{let mut closed=0;for s in self.slots.iter_mut(){if *s>=0{release(*s as u32);*s=FREE_FD;closed+=1}}closed}
 }
-impl Drop for FdTable{fn drop(&mut self){self.close_all()}}
+impl Drop for FdTable{fn drop(&mut self){let _=self.close_all();}}
+
+pub fn resource_stats()->ResourceStats{
+ let t=OPEN.lock();
+ let mut stats=ResourceStats::default();
+ for file in t.iter().flatten(){stats.open_descriptions+=1;stats.open_references+=file.refs as usize;}
+ stats
+}
+
+pub fn resource_self_test()->bool{
+ let before=resource_stats();
+ let table=match FdTable::stdio(){Ok(t)=>t,Err(_)=>return false};
+ if table.descriptor_count()!=3||table.open_description_count()!=3{return false}
+ let after_create=resource_stats();
+ if after_create.open_descriptions!=before.open_descriptions+3||after_create.open_references!=before.open_references+3{return false}
+ let clone=table.clone_incref();
+ if clone.descriptor_count()!=3||clone.open_description_count()!=3{return false}
+ let after_clone=resource_stats();
+ if after_clone.open_descriptions!=after_create.open_descriptions||after_clone.open_references!=after_create.open_references+3{return false}
+ drop(clone);
+ if resource_stats()!=after_create{return false}
+ drop(table);
+ resource_stats()==before
+}
 
 pub fn alloc_file(kind:OpenKind)->Result<u32,i64>{
- let mut t=OPEN.lock();let id=t.iter().position(|s|s.is_none()).ok_or(errno::EMFILE)?;
+ let mut t=OPEN.lock();let id=t.iter().enumerate().position(|(i,s)|s.is_none()&&!unsafe{IOURING_CLOSING[i]}).ok_or(errno::EMFILE)?;
  t[id]=Some(OpenFile{refs:1,offset:0,kind});drop(t);
  match kind{OpenKind::PipeRead(p)=>crate::pipe::add_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::add_writer(p),_=>{}}
  Ok(id as u32)
 }
 pub fn incref(id:u32){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.refs+=1}}
-pub fn release(id:u32){let kind={let mut t=OPEN.lock();match t[id as usize].as_mut(){None=>return,Some(f)=>{f.refs-=1;if f.refs>0{return}let k=f.kind;t[id as usize]=None;k}}};match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),_=>{}}}
+pub fn release(id:u32){let kind={let mut t=OPEN.lock();match t.get_mut(id as usize).and_then(Option::as_mut){None=>return,Some(f)=>{f.refs-=1;if f.refs>0{return}let k=f.kind;t[id as usize]=None;k}}};match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),_=>{}}}
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
 /* Directory-walk cursor used by getdents64. */
 pub fn offset_get(id:u32)->u64{OPEN.lock()[id as usize].map(|f|f.offset).unwrap_or(0)}
@@ -215,7 +251,23 @@ pub fn timerfd_get(id:u32)->Option<(u64,u64)>{
  match kind(id){Some(OpenKind::TimerFd(e,i))=>Some((e,i)),_=>None}
 }
 
-pub fn iouring_set(id:u32,sq:u64,cq:u64,sqes:u64){let i=id as usize;unsafe{IOURING_SQ_RING[i]=sq;IOURING_CQ_RING[i]=cq;IOURING_SQES[i]=sqes;}}
-pub fn iouring_sq_ring(id:u32)->u64{unsafe{IOURING_SQ_RING[id as usize]}}
-pub fn iouring_cq_ring(id:u32)->u64{unsafe{IOURING_CQ_RING[id as usize]}}
-pub fn iouring_sqes(id:u32)->u64{unsafe{IOURING_SQES[id as usize]}}
+pub fn iouring_set(id:u32,sq:u64,cq:u64,sqes:u64,entries:u32){let i=id as usize;if i>=MAX_OPEN{return}unsafe{IOURING_SQ_RING[i]=sq;IOURING_CQ_RING[i]=cq;IOURING_SQES[i]=sqes;IOURING_ENTRIES[i]=entries;IOURING_SQ_HEAD[i]=0;IOURING_CQ_TAIL[i]=0;IOURING_MAP_REFS[i]=0;IOURING_CLOSING[i]=false;}}
+pub fn iouring_clear(id:u32){let i=id as usize;if i>=MAX_OPEN{return}unsafe{IOURING_SQ_RING[i]=0;IOURING_CQ_RING[i]=0;IOURING_SQES[i]=0;IOURING_ENTRIES[i]=0;IOURING_SQ_HEAD[i]=0;IOURING_CQ_TAIL[i]=0;IOURING_MAP_REFS[i]=0;IOURING_CLOSING[i]=false;}}
+pub fn iouring_sq_ring(id:u32)->u64{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_SQ_RING[i]}}
+pub fn iouring_cq_ring(id:u32)->u64{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_CQ_RING[i]}}
+pub fn iouring_sqes(id:u32)->u64{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_SQES[i]}}
+pub fn iouring_entries(id:u32)->u32{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_ENTRIES[i]}}
+pub fn iouring_sq_head(id:u32)->u32{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_SQ_HEAD[i]}}
+pub fn iouring_set_sq_head(id:u32,value:u32){let i=id as usize;if i<MAX_OPEN{unsafe{IOURING_SQ_HEAD[i]=value;}}}
+pub fn iouring_cq_tail(id:u32)->u32{let i=id as usize;if i>=MAX_OPEN{return 0}unsafe{IOURING_CQ_TAIL[i]}}
+pub fn iouring_set_cq_tail(id:u32,value:u32){let i=id as usize;if i<MAX_OPEN{unsafe{IOURING_CQ_TAIL[i]=value;}}}
+pub fn iouring_mapping_acquire(id:u32)->Result<(),i64>{let i=id as usize;if i>=MAX_OPEN{return Err(errno::EBADF)}unsafe{if IOURING_ENTRIES[i]==0||IOURING_CLOSING[i]{return Err(errno::EINVAL)}IOURING_MAP_REFS[i]=IOURING_MAP_REFS[i].checked_add(1).ok_or(errno::EOVERFLOW)?;}Ok(())}
+pub fn iouring_mapping_release(frame:u64){
+ let mut free=[0u64;3];let mut reclaim=false;
+ unsafe{for i in 0..MAX_OPEN{if frame!=IOURING_SQ_RING[i]&&frame!=IOURING_CQ_RING[i]&&frame!=IOURING_SQES[i]{continue}if IOURING_MAP_REFS[i]>0{IOURING_MAP_REFS[i]-=1}if IOURING_MAP_REFS[i]==0&&IOURING_CLOSING[i]{free=[IOURING_SQ_RING[i],IOURING_CQ_RING[i],IOURING_SQES[i]];IOURING_SQ_RING[i]=0;IOURING_CQ_RING[i]=0;IOURING_SQES[i]=0;IOURING_ENTRIES[i]=0;IOURING_SQ_HEAD[i]=0;IOURING_CQ_TAIL[i]=0;IOURING_CLOSING[i]=false;reclaim=true}break}}
+ if reclaim{for pa in free{if pa!=0{let _=crate::memory::free_frame(pa);}}}
+}
+fn iouring_close(id:u32){
+ let i=id as usize;if i>=MAX_OPEN{return}let frames;unsafe{if IOURING_ENTRIES[i]==0{return}if IOURING_MAP_REFS[i]!=0{IOURING_CLOSING[i]=true;return}frames=[IOURING_SQ_RING[i],IOURING_CQ_RING[i],IOURING_SQES[i]];IOURING_SQ_RING[i]=0;IOURING_CQ_RING[i]=0;IOURING_SQES[i]=0;IOURING_ENTRIES[i]=0;IOURING_SQ_HEAD[i]=0;IOURING_CQ_TAIL[i]=0;IOURING_CLOSING[i]=false;}
+ for pa in frames{if pa!=0{let _=crate::memory::free_frame(pa);}}
+}

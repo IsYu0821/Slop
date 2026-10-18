@@ -56,6 +56,10 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);
     driver::init(); task::init(rsp0);
+    if !fd::resource_self_test(){println!("fd resource-accounting self-test failed");arch::halt()}
+    println!("resources: fd accounting self-test passed");
+    if !vm::resource_self_test(){println!("mmap ledger self-test failed");arch::halt()}
+    println!("resources: mmap ledger self-test passed");
     if let Err(e)=task::scheduler_self_test(){println!("scheduler self-test failed: {}",e);arch::halt()}
     if bi.initrd_base==0 || bi.initrd_size==0 { println!("no embedded Linux ELF"); arch::halt(); }
     let initramfs=unsafe { core::slice::from_raw_parts(bi.initrd_base as *const u8,bi.initrd_size as usize) };
@@ -69,6 +73,8 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let _=crate::vfs::mkdir("/var",0o755);
     let _=crate::vfs::mkdir("/var/tmp",0o777);
     let _=crate::vfs::mkdir("/mnt",0o755);
+    if !vfs::mount_self_test(){println!("vfs mount/namespace self-test failed");arch::halt()}
+    println!("vfs: tmpfs mount and namespace self-test passed");
     let image=match vfs::image("/init"){Ok(v)=>v,Err(e)=>{println!("VFS /init lookup failed errno={}",e);arch::halt()}};
     let loaded=match unsafe { exec_runtime::load_static(image) }{Ok(v)=>v,Err(e)=>{println!("ELF commit failed: {}",e);arch::halt()}};
     println!("queueing Linux ELF rip={:#x} rsp={:#x} cr3={:#x}",loaded.entry,loaded.rsp,loaded.cr3);
