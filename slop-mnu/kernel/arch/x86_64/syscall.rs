@@ -27,6 +27,12 @@ pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a
 #[unsafe(no_mangle)]pub extern "sysv64" fn bad_sysret(rip:u64,rsp:u64)->!{crate::println!("rejected SYSRET rip={:#x} rsp={:#x}",rip,rsp);crate::arch::halt()}
 
 pub unsafe fn set_kernel_stack(value:u64){unsafe{SYSCALL_KERNEL_RSP=value}}
+/* Returns (signal_number, handler) for the first pending signal, or (0, 0). */
+#[unsafe(no_mangle)]pub extern "sysv64" fn signal_pending_check()->u64{
+ let sig=match crate::signal::pending(){Some(s)=>s,None=>return 0};
+ let h=crate::signal::action_get(sig as i32).ok().map(|a|a.handler).unwrap_or(0);
+ (sig as u64)<<32|h
+}
 #[unsafe(no_mangle)]pub static mut EXEC_PENDING:u8=0;
 #[unsafe(no_mangle)]pub static mut EXEC_RIP:u64=0;
 pub unsafe fn commit_exec_return(rip:u64,rsp:u64){unsafe{EXEC_RIP=rip;SYSCALL_USER_RSP=rsp;EXEC_PENDING=1;}}

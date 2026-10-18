@@ -15,6 +15,10 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETUID|nr::GETGID|nr::GETEUID|nr::GETEGID=>0, nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
     nr::SET_TID_ADDRESS=>sys_set_tid_address(a[0]),
     nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
+    nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
+    nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
+    nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
+    nr::RT_SIGRETURN=>sys_rt_sigreturn(),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
     nr::DUP2=>fd_result(crate::fd::dup2(a[0] as usize,a[1] as usize)), nr::DUP3=>sys_dup3(a[0] as usize,a[1] as usize,a[2]),
     nr::FCNTL=>sys_fcntl(a[0] as usize,a[1],a[2]),
@@ -82,6 +86,16 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
   Err(e)=>return errno::neg(e),
  }}
 }
+fn sys_kill(pid:u32,sig:i32)->i64{match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}}
+fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
+ if act==0{let a=match crate::signal::action_get(sig){Ok(v)=>v,Err(e)=>return errno::neg(e)};if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&a as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
+ else{let mut a=crate::signal::Action{handler:0,mask:0,flags:0};let b=unsafe{core::slice::from_raw_parts_mut((&mut a as*mut crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_from_user(b,act as usize){return errno::neg(e)}if let Err(e)=crate::signal::action_set(sig,a){return errno::neg(e)}if old!=0{let d=match crate::signal::action_get(sig){Ok(v)=>v,Err(_)=>crate::signal::Action{handler:0,mask:0,flags:0}};let bytes=unsafe{core::slice::from_raw_parts((&d as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
+}
+fn sys_rt_sigprocmask(how:u64,set:u64,old:u64)->i64{
+ let prev=match crate::signal::mask_op(how,set){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&prev as*const u64).cast::<u8>(),8)};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0
+}
+fn sys_rt_sigreturn()->i64{0}
 fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
