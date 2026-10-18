@@ -1,3 +1,11 @@
+## 0.57.0 - 2026-10-18
+- Added per-open-file status flags: `O_NONBLOCK` for opens, pipes and sockets, live-`O_APPEND` writes, and `FD_CLOEXEC` cleared on `execve`.
+- Implemented the descriptor-control surface of `fcntl` (`F_DUPFD`, `F_DUPFD_CLOEXEC`, `F_GETFD`/`F_SETFD`, `F_GETFL`/`F_SETFL`, `F_GETLK`) and flag handling in `open`/`openat`, `socket`/`accept4`, and `dup3`.
+- Added `flock(2)` advisory locks with blocking and `LOCK_NB` contention, wake-on-release, and per-open-file sharing.
+- Routed `sendto`/`recvfrom`/`sendmsg`/`recvmsg` through `MSG_DONTWAIT`.
+- Fixed a latent fork→exec→wait kernel stack overflow by doubling kernel stacks to 64 KiB and adding a syscall-entry stack guard.
+- Expanded native/guest differential tests with flock contention, nonblocking pipe and fcntl flag round trips, append-after-lseek content, and close-on-exec across `execve`.
+
 ## 0.56.0 - 2026-10-18
 - Replaced placeholder `/proc` data with truthful per-process cmdline, environ, status, stat, statm and maps, including `/proc/<pid>` introspection.
 - Added dynamic `/proc/self/fd` enumeration and readlink targets for pipes, sockets, devices, inodes and anon inodes; generalized readlink/readlinkat over all proc links.

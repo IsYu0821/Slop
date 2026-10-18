@@ -25,6 +25,7 @@ pub mod device;
 pub mod ext2;
 pub mod inotify;
 pub mod fd;
+pub mod flock;
 pub mod futex;
 pub mod vm;
 pub mod wait_queue;

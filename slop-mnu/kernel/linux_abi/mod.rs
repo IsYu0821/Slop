@@ -71,6 +71,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
     nr::DUP2=>fd_result(crate::fd::dup2(a[0] as usize,a[1] as usize)), nr::DUP3=>sys_dup3(a[0] as usize,a[1] as usize,a[2]),
     nr::FCNTL=>sys_fcntl(a[0] as usize,a[1],a[2]),
+    nr::FLOCK=>sys_flock(a[0] as usize,a[1]),
     nr::SET_ROBUST_LIST=>if a[1]==24 {0}else{errno::neg(errno::EINVAL)}, nr::PRLIMIT64=>sys_prlimit(a),
     nr::CLOCK_GETTIME=>sys_clock_gettime(a[0],a[1]), nr::NANOSLEEP=>sys_nanosleep(a[0],a[1]),
     nr::GETRANDOM=>sys_getrandom(a[0],a[1],a[2]),
@@ -288,31 +289,51 @@ fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
 fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
-fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{if flags&!0x80000!=0||oldfd==newfd{return errno::neg(errno::EINVAL)}fd_result(crate::fd::dup2(oldfd,newfd))}
+fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{
+ if flags&!0x80000!=0||oldfd==newfd{return errno::neg(errno::EINVAL)}
+ match crate::fd::dup2(oldfd,newfd){
+  Ok(fd)=>{if flags&0x80000!=0{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(newfd,true));}fd as i64}
+  Err(e)=>errno::neg(e),
+ }
+}
 fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
+ let O_ACCMODE:u32=3;
  match cmd{
   0=>fd_result(crate::fd::dup_from(fd,arg as usize)), // F_DUPFD
-  1=>0, // F_GETFD
-  2=>0, // F_SETFD
-  3=>0, // F_GETFL
-  4=>0, // F_SETFL
-  5=>0, // F_GETLK
+  1=>match crate::task::with_current_process(|p|p.fds.get_close_exec(fd)){Some(Some(v))=>if v{1}else{0},_=>errno::neg(errno::EBADF)}, // F_GETFD
+  2=>match crate::task::with_current_process(|p|p.fds.set_close_exec(fd,arg&1!=0)){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::EBADF)}, // F_SETFD
+  3=>match fd_id(fd as u64){Some(id)=>i64::from(O_ACCMODE|crate::fd::flags(id)),None=>errno::neg(errno::EBADF)}, // F_GETFL
+  4=>match fd_id(fd as u64){
+   Some(id)=>{
+    let a=(arg as u32)&(crate::fd::O_APPEND|crate::fd::O_NONBLOCK);
+    crate::fd::flags_set(id,a,(crate::fd::O_APPEND|crate::fd::O_NONBLOCK)&!a);
+    0
+   }
+   None=>errno::neg(errno::EBADF)
+  }, // F_SETFL
+  5=>{ // F_GETLK: no POSIX record locks exist, report unlocked
+   if arg!=0{let unlocked=2i16;if let Err(e)=crate::usercopy::copy_to_user(arg as usize,&unlocked.to_ne_bytes()){return errno::neg(e)}}
+   0
+  }
   6=>0, // F_SETLK
   7=>0, // F_SETLKW
-  9=>fd_result(crate::fd::dup_from(fd,0)), // F_SETPIPE_SZ? no, but ok
+  9=>fd_result(crate::fd::dup_from(fd,0)), // F_SETPIPE_SZ (unimplemented; reserve a slot low)
   10=>4096, // F_GETPIPE_SZ
-  1024|1025|1026=>0, // F_DUPFD_CLOEXEC etc
+  1030=>{ // F_DUPFD_CLOEXEC
+   match crate::fd::dup_from(fd,arg as usize){
+    Ok(newfd)=>{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(newfd as usize,true));newfd as i64}
+    Err(e)=>errno::neg(e),
+   }
+  }
   _=>0
  }
 }
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const O_CREAT:u64=0o100;
- if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
+ const AT_FDCWD:i64=-100; if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
  let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
- if flags&O_CREAT!=0{return match crate::fd::create_open(p,0o644){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
- match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
+ open_common(p,flags,0o644)
 }
 fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0x100!=0{return errno::neg(errno::EINVAL)}let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
@@ -339,7 +360,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
- let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);});
+ let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
  crate::println!("execve: committed {} rip={:#x} rsp={:#x}",path,loaded.entry,loaded.rsp);0
@@ -357,6 +378,16 @@ fn sys_clock_gettime(clock:u64,ptr:u64)->i64{
 }
 fn sys_nanosleep(req:u64,rem:u64)->i64{let mut ts=Timespec::default();let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};if let Err(e)=crate::usercopy::copy_from_user(b,req as usize){return errno::neg(e)}if ts.tv_sec<0||ts.tv_nsec<0||ts.tv_nsec>=1_000_000_000{return errno::neg(errno::EINVAL)}let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);crate::task::sleep_until(crate::time::ticks_after_ns(ns));if rem!=0{let zero=Timespec::default();let _=copy_obj(rem,&zero);}0}
 fn sys_getrandom(ptr:u64,len:u64,flags:u64)->i64{if flags&!3!=0{return errno::neg(errno::EINVAL)}if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;64];while done<len as usize{let n=core::cmp::min(buf.len(),len as usize-done);crate::time::fill_random(&mut buf[..n]);if let Err(e)=crate::usercopy::copy_to_user(ptr as usize+done,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
+fn sys_flock(fd:usize,op:u64)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let ino=match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>n.ino,
+  Some(crate::fd::OpenKind::BlockDevice(_))|Some(crate::fd::OpenKind::CharDevice(_))=>fd as u64+1,
+  None=>return errno::neg(errno::EBADF),
+  _=>return 0, // pipes, sockets and anon descriptions accept flock as a no-op
+ };
+ match crate::flock::flock(id,ino,op){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_getcwd(ptr:u64,len:u64)->i64{
  if len==0{return errno::neg(errno::EINVAL)}
  let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
@@ -723,7 +754,16 @@ fn sys_socket(domain:i32,ty:i32,_proto:i32)->i64{
  }else{
   match crate::fd::alloc_file(crate::fd::OpenKind::Socket(id)){Ok(d)=>d,Err(e)=>{if domain==2{if ty as u32&0xf==crate::socket::SOCK_DGRAM{crate::net::udp_close(id)}else{crate::net::tcp_close(id)}}else{crate::socket::close(id)};return errno::neg(e)}}
  };
- match crate::task::with_current_process(|p|p.fds.install(desc)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(desc);errno::neg(e)},None=>{crate::fd::release(desc);errno::neg(errno::ESRCH)}}
+ let ty_flags=ty as u32;
+ match crate::task::with_current_process(|p|p.fds.install(desc)){
+  Some(Ok(fd))=>{
+   if ty_flags&crate::socket::SOCK_NONBLOCK!=0{crate::fd::flags_set(desc,crate::fd::O_NONBLOCK,0);}
+   if ty_flags&crate::socket::SOCK_CLOEXEC!=0{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(fd as usize,true));}
+   fd as i64
+  }
+  Some(Err(e))=>{crate::fd::release(desc);errno::neg(e)}
+  None=>{crate::fd::release(desc);errno::neg(errno::ESRCH)}
+ }
 }
 fn sys_socketpair(domain:i32,ty:i32,_proto:i32,sv:u64)->i64{
  if domain!=1||(ty as u32!=crate::socket::SOCK_STREAM&&ty as u32!=crate::socket::SOCK_DGRAM){return errno::neg(errno::EAFNOSUPPORT)}
@@ -763,14 +803,18 @@ fn sys_listen(fd:usize,_backlog:i32)->i64{
  if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
  match crate::socket::listen(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
-fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{
+fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{accept_impl(fd,addr,addrlen,0)}
+fn accept_impl(fd:usize,addr:u64,addrlen:u64,extra:u32)->i64{
  if netlink_fd(fd){return errno::neg(errno::EOPNOTSUPP);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
- let server=match crate::socket::accept(sock,false){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||extra&crate::socket::SOCK_NONBLOCK!=0;
+ let server=match crate::socket::accept(sock,nonblock){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(server)){Ok(d)=>d,Err(e)=>{crate::socket::close(server);return errno::neg(e)}};
+ if extra&crate::socket::SOCK_NONBLOCK!=0{crate::fd::flags_set(desc,crate::fd::O_NONBLOCK,0);}
  match crate::task::with_current_process(|p|p.fds.install(desc)){
   Some(Ok(newfd))=>{
+   if extra&crate::socket::SOCK_CLOEXEC!=0{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(newfd as usize,true));}
    if addr!=0&&addrlen!=0{
     /* Report the peer's bound path as the accepted address. */
     let p=crate::socket::path_of(server).unwrap_or([0;108]);
@@ -802,6 +846,7 @@ fn sys_connect(fd:usize,addr:u64,len:u64)->i64{
  match crate::socket::connect(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
+ let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||_flags&0x40!=0;
  if netlink_fd(fd){let _=(buf,addr,addrlen);return len as i64;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
@@ -824,11 +869,12 @@ fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
  while done<len{
   let n=core::cmp::min(chunk.len(),len-done);
   if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut chunk[..n],buf as usize+done)}{return if done==0{errno::neg(e)}else{done as i64}}
-  match crate::socket::send(sock,&chunk[..n]){Ok(g)=>{done+=g;if g<n{return done as i64}},Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+  match crate::socket::send(sock,&chunk[..n],nonblock){Ok(g)=>{done+=g;if g<n{return done as i64}},Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
  }
  done as i64
 }
 fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
+ let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||_flags&0x40!=0;
  if len==0{return 0}
  if netlink_fd(fd){return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
@@ -852,7 +898,7 @@ fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64
  let mut chunk=[0u8;512];let mut done=0usize;
  while done<len{
   let n=core::cmp::min(chunk.len(),len-done);
-  let got=match crate::socket::recv(sock,&mut chunk[..n]){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
+  let got=match crate::socket::recv(sock,&mut chunk[..n],nonblock){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
   if got==0{break}
   if let Err(e)=unsafe{crate::usercopy::copy_to_user(buf as usize+done,&chunk[..got])}{return if done==0{errno::neg(e)}else{done as i64}}
   done+=got;
@@ -1203,12 +1249,25 @@ fn sys_sysinfo(ptr:u64)->i64{
  0
 }
 
+fn open_common(p:&str,flags:u64,mode:u64)->i64{
+ const O_CREAT:u64=0o100;const O_CLOEXEC:u64=0o2000000;const O_APPEND:u64=0o2000;const O_NONBLOCK:u64=0o4000;
+ let mut status=0u32;
+ if flags&O_APPEND!=0{status|=crate::fd::O_APPEND}
+ if flags&O_NONBLOCK!=0{status|=crate::fd::O_NONBLOCK}
+ let opened=if flags&O_CREAT!=0{crate::fd::create_open_flags(p,if mode==0{0o644}else{mode as u32},status)}else{crate::fd::open_flags(p,status)};
+ match opened{
+  Ok(fd)=>{
+   if flags&0o1000!=0{let _=crate::vfs::truncate_path(p,0);}
+   if flags&O_CLOEXEC!=0{let _=crate::task::with_current_process(|proc|proc.fds.set_close_exec(fd as usize,true));}
+   fd as i64
+  }
+  Err(e)=>errno::neg(e),
+ }
+}
 fn sys_open(path_ptr:u64,flags:u64,mode:u64)->i64{
- const O_CREAT:u64=0o100;
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
- if flags&O_CREAT!=0{return match crate::fd::create_open(p,if mode==0{0o644}else{mode as u32}){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
- match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
+ open_common(p,flags,mode)
 }
 fn sys_creat(path_ptr:u64,mode:u64)->i64{sys_open(path_ptr,0o100|0o1,if mode==0{0o644}else{mode})}
 fn sys_fsync(fd:usize)->i64{let _=fd;0}
@@ -1918,6 +1977,7 @@ fn parse_msghdr_iov(msg:u64)->Result<(u64,u64,u64,usize,i32),i64>{
  Ok((name,namelen,iov,iovlen as usize,flags as i32))
 }
 fn sys_sendmsg(fd:usize,msg:u64,_flags:i32)->i64{
+ let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||(_flags as u64)&0x40!=0;
  if netlink_fd(fd){
   let (iov,iovlen)=match parse_msghdr_iov(msg){Ok(v)=>(v.2,v.3),Err(e)=>return errno::neg(e)};
   let mut total=0usize;
@@ -1958,9 +2018,10 @@ fn sys_sendmsg(fd:usize,msg:u64,_flags:i32)->i64{
   }
  }
  // unix
- match crate::socket::send(sock,&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)}
+ match crate::socket::send(sock,&buf[..total],nonblock){Ok(n)=>n as i64,Err(e)=>errno::neg(e)}
 }
 fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
+ let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||(_flags as u64)&0x40!=0;
  if netlink_fd(fd){return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  let (name,_namelen,iov,iovlen,_flags)=match parse_msghdr_iov(msg){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -1977,7 +2038,7 @@ fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
   if tcp{match crate::net::tcp_recv(sock-crate::socket::INET_TCP_BASE,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)}}
   else{match crate::net::udp_recv(sock-crate::socket::INET_UDP_BASE,&mut buf[..n]){Ok((g,_,_))=>g,Err(e)=>return errno::neg(e)}}
  }else{
-  match crate::socket::recv(sock,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)}
+  match crate::socket::recv(sock,&mut buf[..n],nonblock){Ok(g)=>g,Err(e)=>return errno::neg(e)}
  };
  // write iov
  let mut off=0usize;
@@ -2005,7 +2066,7 @@ fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
 }
 fn sys_accept4(fd:usize,addr:u64,addrlen:u64,flags:i32)->i64{
  if flags & !0x80800 !=0{return errno::neg(errno::EINVAL)}
- sys_accept(fd,addr,addrlen)
+ accept_impl(fd,addr,addrlen,flags as u32)
 }
 
 static MEMFD_COUNTER:core::sync::atomic::AtomicU64=core::sync::atomic::AtomicU64::new(1);

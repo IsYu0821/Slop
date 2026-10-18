@@ -3,7 +3,7 @@ pub const READ:u64=0; pub const OPEN:u64=2; pub const CREAT:u64=85; pub const FS
 pub const LSEEK:u64=8; pub const MMAP:u64=9; pub const MPROTECT:u64=10; pub const MUNMAP:u64=11;
 pub const BRK:u64=12; pub const PIPE:u64=22; pub const SCHED_YIELD:u64=24; pub const DUP2:u64=33; pub const NANOSLEEP:u64=35;
 pub const GETPID:u64=39; pub const CLONE:u64=56; pub const EXECVE:u64=59; pub const EXIT:u64=60; pub const WAIT4:u64=61; pub const KILL:u64=62; pub const UNAME:u64=63;
-pub const FCNTL:u64=72; pub const GETCWD:u64=79;
+pub const FCNTL:u64=72; pub const GETCWD:u64=79; pub const FLOCK:u64=73;
 pub const GETUID:u64=102; pub const GETGID:u64=104; pub const GETEUID:u64=107; pub const GETEGID:u64=108;
 pub const GETPPID:u64=110; pub const ARCH_PRCTL:u64=158; pub const GETTID:u64=186;
 pub const FUTEX:u64=202; pub const CLOCK_GETTIME:u64=228; pub const EXIT_GROUP:u64=231;

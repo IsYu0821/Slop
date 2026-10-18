@@ -2,7 +2,7 @@
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
 use crate::process::Process;
 use crate::sync::IrqSpinLock;
-const MAX_TASKS:usize=8;const STACK_SIZE:usize=32768;
+const MAX_TASKS:usize=8;const STACK_SIZE:usize=65536;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub active:usize,pub zombies:usize,pub runnable:usize,pub sleeping:usize,pub unused:usize}
 #[repr(align(16))]struct Stack([u8;STACK_SIZE]);
@@ -142,6 +142,15 @@ pub fn exit(code:i32)->!{
  crate::println!("task {} exited {}",current_pid(),code);with_current_process(|proc|{crate::println!("task exited status={}",code);proc.teardown_exit(code,0)});finish(code,0)}
 /* Kills the current task as if terminated by sig; wait status reports the signal. */
 pub fn exit_signal(sig:i32)->!{crate::println!("task {} terminated by signal {}",current_pid(),sig);with_current_process(|proc|proc.teardown_exit(128+sig,sig as u64));finish(128+sig,sig as u8)}
+pub fn stack_guard(){
+ let r:u64;unsafe{core::arch::asm!("mov {}, rsp",out(reg)r,options(nostack,preserves_flags));}
+ let top={let s=SCHED.lock();s.tasks[s.current].kernel_stack_top};
+ let base=unsafe{core::ptr::addr_of!(STACKS)as u64};
+ if top>=base+STACK_SIZE as u64&&top<=base+(MAX_TASKS*(STACK_SIZE+64))as u64&&r+1024<top.saturating_sub(STACK_SIZE as u64){
+  crate::println!("fatal: kernel stack overflow pid={} rsp={:#x} top={:#x}",current_pid(),r,top);
+  crate::arch::halt();
+ }
+}
 pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
 fn schedule(blocked:bool){let(old_ptr,next)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}
  /* The user RSP is process-wide state in the syscall path; park the outgoing

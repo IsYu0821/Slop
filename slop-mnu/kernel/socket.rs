@@ -88,6 +88,8 @@ pub fn connect(id:u8,path:&str)->Result<(),i64>{
 /* Takes the first pending request, creating a connected pair for it.
    Blocks while the queue is empty, mirroring a listening socket with no
    connection yet; the caller passes false for non-blocking sockets. */
+pub const SOCK_NONBLOCK:u32=0o4000;
+pub const SOCK_CLOEXEC:u32=0o2000000;
 pub fn accept(listener:u8,nonblocking:bool)->Result<u8,i64>{
  if !valid(listener){return Err(errno::EBADF)}
  loop{
@@ -131,7 +133,7 @@ pub fn socketpair()->Result<(u8,u8),i64>{
  }
  Ok((a,b))
 }
-pub fn send(id:u8,data:&[u8])->Result<usize,i64>{
+pub fn send(id:u8,data:&[u8],nonblock:bool)->Result<usize,i64>{
  if let Some(tcp)=inet_kind(id){
   return if tcp{crate::net::tcp_send(id-INET_TCP_BASE,data)}else{crate::net::udp_send(id-INET_UDP_BASE,None,data)};
  }
@@ -148,7 +150,7 @@ pub fn send(id:u8,data:&[u8])->Result<usize,i64>{
     for i in 0..n{p.buf[(base+i)%CAPACITY]=data[done+i];}
     p.len+=n;done+=n;p.readq.wake_all();
     false
-   }else{p.writeq.register().is_ok()}
+   }else if nonblock{return if done>0{Ok(done)}else{Err(errno::EAGAIN)}}else{p.writeq.register().is_ok()}
   };
   if done==data.len(){break}
   if !registered{return Err(errno::EAGAIN)}
@@ -156,7 +158,7 @@ pub fn send(id:u8,data:&[u8])->Result<usize,i64>{
  }
  Ok(done)
 }
-pub fn recv(id:u8,dst:&mut[u8])->Result<usize,i64>{
+pub fn recv(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
  if let Some(tcp)=inet_kind(id){
   return if tcp{crate::net::tcp_recv(id-INET_TCP_BASE,dst)}else{crate::net::udp_recv(id-INET_UDP_BASE,dst).map(|(n,_,_)|n)};
  }
@@ -171,6 +173,7 @@ pub fn recv(id:u8,dst:&mut[u8])->Result<usize,i64>{
     return Ok(n);
    }
    if s.peer_closed{return Ok(0)}
+   if nonblock{return Err(errno::EAGAIN)}
    s.readq.register().is_ok()
   };
   if !registered{return Err(errno::EAGAIN)}

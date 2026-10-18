@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/file.h>
 #include <time.h>
 #include <stdint.h>
 
@@ -54,7 +55,11 @@ static int fail(const char *what) {
     return 1;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "cloexec-child") == 0) {
+        if (fcntl(9, F_GETFD) == -1 && errno == EBADF) _exit(42);
+        _exit(1);
+    }
     setvbuf(stdout, NULL, _IONBF, 0);
     printf("DIFF_OK\n");
 
@@ -483,6 +488,114 @@ int main(void) {
         if (munmap(m, 12288) != 0) return fail("mincore munmap");
         if (munmap(p, 8192) != 0) return fail("populate munmap");
         printf("DIFF_MINCORE_OK\n");
+    }
+
+    /* flock: exclusive lock excludes a second open, unlocks wake waiters. */
+    {
+        int fd = open("/tmp/slop-flock", O_CREAT | O_RDWR, 0644);
+        if (fd < 0) return fail("flock open");
+        if (flock(fd, LOCK_EX | LOCK_NB) != 0) return fail("flock acquire");
+        pid_t pid = fork();
+        if (pid < 0) return fail("flock fork");
+        if (pid == 0) {
+            int f2 = open("/tmp/slop-flock", O_RDWR);
+            if (f2 < 0) _exit(1);
+            errno = 0;
+            if (flock(f2, LOCK_EX | LOCK_NB) != -1 || errno != EWOULDBLOCK) _exit(2);
+            errno = 0;
+            if (flock(f2, LOCK_SH | LOCK_NB) != -1 || errno != EWOULDBLOCK) _exit(3);
+            _exit(0);
+        }
+        int st = 0;
+        if (waitpid(pid, &st, 0) != pid || !WIFEXITED(st) || WEXITSTATUS(st) != 0)
+            return fail("flock excluded");
+        if (flock(fd, LOCK_UN) != 0) return fail("flock unlock");
+        pid = fork();
+        if (pid < 0) return fail("flock fork2");
+        if (pid == 0) {
+            int f2 = open("/tmp/slop-flock", O_RDWR);
+            if (f2 < 0) _exit(1);
+            if (flock(f2, LOCK_EX | LOCK_NB) != 0) _exit(2);
+            _exit(0);
+        }
+        st = 0;
+        if (waitpid(pid, &st, 0) != pid || !WIFEXITED(st) || WEXITSTATUS(st) != 0)
+            return fail("flock reacquire");
+        if (flock(fd, LOCK_SH | LOCK_NB) != 0) return fail("flock shared");
+        close(fd);
+        unlink("/tmp/slop-flock");
+        printf("DIFF_FLOCK_OK\n");
+    }
+
+    /* O_NONBLOCK, F_GETFL/F_SETFL, F_GETFD/F_SETFD. */
+    {
+        int pfd[2];
+        if (pipe2(pfd, O_NONBLOCK | O_CLOEXEC) != 0) return fail("pipe2 nonblock");
+        if ((fcntl(pfd[1], F_GETFL) & O_NONBLOCK) == 0) return fail("getfl nonblock");
+        char c = 0;
+        errno = 0;
+        if (read(pfd[0], &c, 1) != -1 || errno != EAGAIN) return fail("nonblock eagain");
+        if ((fcntl(pfd[0], F_GETFL) & O_NONBLOCK) == 0) return fail("read end nonblock");
+        if (fcntl(pfd[0], F_SETFL, 0) != 0) return fail("setfl clear");
+        if (fcntl(pfd[0], F_GETFL) & O_NONBLOCK) return fail("still nonblocking");
+        if ((fcntl(pfd[0], F_GETFD) & FD_CLOEXEC) != FD_CLOEXEC) return fail("getfd cloexec");
+        if (fcntl(pfd[0], F_SETFD, 0) != 0) return fail("setfd clear");
+        if (fcntl(pfd[0], F_GETFD) & FD_CLOEXEC) return fail("still cloexec");
+        if (write(pfd[1], "x", 1) != 1) return fail("pipe write");
+        if (read(pfd[0], &c, 1) != 1 || c != 'x') return fail("pipe read back");
+        close(pfd[0]);
+        close(pfd[1]);
+        printf("DIFF_NONBLOCK_OK\n");
+    }
+
+    /* O_APPEND writes land at end even after lseek. */
+    {
+        int fd = open("/tmp/slop-append", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        if (fd < 0) return fail("append create");
+        if (write(fd, "one", 3) != 3) return fail("append write1");
+        close(fd);
+        fd = open("/tmp/slop-append", O_WRONLY | O_APPEND);
+        if (fd < 0) return fail("append reopen");
+        if ((fcntl(fd, F_GETFL) & O_APPEND) == 0) return fail("getfl append");
+        if (write(fd, "two", 3) != 3) return fail("append write2");
+        if (lseek(fd, 0, SEEK_SET) != 0) return fail("append seek");
+        if (write(fd, "three", 5) != 5) return fail("append write3");
+        close(fd);
+        fd = open("/tmp/slop-append", O_RDONLY);
+        if (fd < 0) return fail("append read open");
+        char buf[32];
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n != 11 || memcmp(buf, "onetwothree", 11) != 0) return fail("append content");
+        close(fd);
+        unlink("/tmp/slop-append");
+        printf("DIFF_APPEND_OK\n");
+    }
+
+    /* FD_CLOEXEC descriptors must vanish across execve. */
+    {
+        char self[512];
+        ssize_t sn = readlink("/proc/self/exe", self, sizeof self - 1);
+        if (sn <= 0 || (size_t)sn >= sizeof self - 1) return fail("exe readlink");
+        self[sn] = 0;
+        int fd = open("/tmp/slop-cloexec", O_CREAT | O_RDWR, 0644);
+        if (fd < 0) return fail("cloexec open");
+        if (dup2(fd, 9) != 9) return fail("cloexec dup2");
+        if (fcntl(9, F_SETFD, FD_CLOEXEC) != 0) return fail("cloexec setfd");
+        pid_t pid = fork();
+        if (pid < 0) return fail("cloexec fork");
+        if (pid == 0) {
+            char *nargv[] = { self, "cloexec-child", NULL };
+            execv(self, nargv);
+            _exit(97);
+        }
+        int st = 0;
+        if (waitpid(pid, &st, 0) != pid || !WIFEXITED(st) || WEXITSTATUS(st) != 42)
+            return fail("cloexec exec");
+        if (fcntl(9, F_GETFD) < 0) return fail("parent fd kept");
+        close(9);
+        close(fd);
+        unlink("/tmp/slop-cloexec");
+        printf("DIFF_CLOEXEC_OK\n");
     }
 
     int memfd = memfd_create("diff", 0);

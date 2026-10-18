@@ -761,6 +761,14 @@ pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
  let node=m.nodes[..m.len].iter().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
  read_inode_data(node,off,dst)
 }
+/* Current live size for an inode; Inode values held by open files are
+   snapshots whose size field goes stale after another description writes. */
+pub fn inode_size(ino:u64)->Option<u64>{
+ if let Some(fs_id)=tmpfs_fs_id(ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==ino)?;return Some(node.size)}
+ let m=ROOT.lock();
+ let node=m.nodes[..m.len].iter().find(|n|n.ino==ino)?;
+ Some(node.size)
+}
 pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){return Err(errno::EROFS)}
  if let Some(fs_id)=tmpfs_fs_id(inode.ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;let wrote=tmpfs_write_inode(node,off,src)?;drop(registry);if wrote>0{if let Ok(path)=core::str::from_utf8(&inode.name[..inode.name_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}return Ok(wrote)}
