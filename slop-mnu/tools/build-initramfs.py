@@ -2,7 +2,7 @@
 from pathlib import Path
 import struct
 out=bytearray(b'NSAR0001')
-entries=[('/bin',b'',0o040755),('/etc',b'',0o040755),('/init',Path('build/minimal-linux.elf').read_bytes(),0o100755),('/bin/hello',Path('build/hello-linux.elf').read_bytes(),0o100755),('/bin/hello-c',Path('build/hello-c.elf').read_bytes(),0o100755),('/bin/hello-posix',Path('build/hello-posix.elf').read_bytes(),0o100755),('/bin/hello-signal',Path('build/hello-signal.elf').read_bytes(),0o100755),('/bin/hello-file',Path('build/hello-file.elf').read_bytes(),0o100755),('/etc/motd',b'Slop/MNU initramfs\n',0o100444)]
+entries=[('/bin',b'',0o040755),('/etc',b'',0o040755),('/init',Path('build/minimal-linux.elf').read_bytes(),0o100755),('/bin/hello',Path('build/hello-linux.elf').read_bytes(),0o100755),('/bin/hello-c',Path('build/hello-c.elf').read_bytes(),0o100755),('/bin/hello-posix',Path('build/hello-posix.elf').read_bytes(),0o100755),('/bin/hello-signal',Path('build/hello-signal.elf').read_bytes(),0o100755),('/bin/hello-file',Path('build/hello-file.elf').read_bytes(),0o100755),('/bin/hello-syscall',Path('build/hello-syscall.elf').read_bytes(),0o100755),('/etc/motd',b'Slop/MNU initramfs\n',0o100444)]
 out += struct.pack('<I',len(entries))
 for name,data,mode in entries:
     b=name.encode(); out += struct.pack('<HHI',len(b),mode,len(data)); out += b; out += bytes((-len(out))&7); out += data; out += bytes((-len(out))&7)

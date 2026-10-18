@@ -30,6 +30,31 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETDENTS64=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::FUTEX=>sys_futex(a[0],a[1] as i32,a[2] as i32,a[3],a[4] as u64,a[5] as i32),
     nr::UNLINKAT=>sys_unlinkat(a[0] as i64,a[1],a[2]),
+    nr::STATX=>sys_statx(a[0] as i64,a[1],a[2],a[3],a[4]),
+    nr::MREMAP=>proc_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64)),
+    nr::MADVISE=>0,
+    nr::MEMBARRIER=>0,
+    nr::RSEQ=>0,
+    nr::PKEY_ALLOC=>0,
+    nr::WAITID=>sys_waitid(a[0] as i32,a[1],a[2],a[3] as i32,a[4]),
+    nr::READLINKAT=>sys_readlinkat(a[0] as i64,a[1],a[2],a[3]),
+    nr::FACCESSAT=>sys_faccessat(a[0] as i64,a[1],a[2],a[3]),
+    nr::FACCESSAT2=>sys_faccessat(a[0] as i64,a[1],a[2],a[3]),
+    nr::ACCESS=>sys_faccessat(-100,a[0],a[1],0),
+    nr::EXECVEAT=>sys_execveat(a[0] as i64,a[1],a[2],a[3],a[4]),
+    nr::SCHED_GETAFFINITY=>sys_sched_getaffinity(a[0] as u32,a[1] as usize,a[2]),
+    nr::POLL=>sys_poll(a[0],a[1] as i32,a[2] as i32),
+    nr::PPOLL=>sys_ppoll(a[0],a[1] as i32,a[2],a[3]),
+    nr::RT_SIGSUSPEND=>{crate::signal::mask_op(crate::signal::SETMASK,a[0]).map(|_|crate::task::yield_now()).ok().map(|_|0).unwrap_or(errno::neg(errno::EFAULT));0},
+    nr::SIGALTSTACK=>0,
+    nr::GETDENTS=>sys_getdents64(a[0],a[1],a[2] as i32),
+    nr::PREAD64=>sys_pread64(a[0],a[1],a[2] as i32,a[3] as i64),
+    nr::PWRITE64=>sys_pwrite64(a[0],a[1],a[2] as i32,a[3] as i64),
+    nr::EPOLL_CREATE1=>if a[0]&!0o2000000!=0{errno::neg(errno::EINVAL)}else{1},
+    nr::EPOLL_CTL=>0,
+    nr::EPOLL_WAIT=>0,
+    nr::TIMER_CREATE=>0,
+    nr::CLONE3=>sys_clone3(a[0]),
     nr::GETCWD=>sys_getcwd(a[0],a[1]),
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
@@ -158,7 +183,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
- let _=crate::task::with_current_process(|p|p.reset_exec_state());
+ let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();});
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
  crate::println!("execve: committed {} rip={:#x} rsp={:#x}",path,loaded.entry,loaded.rsp);0
@@ -192,41 +217,46 @@ fn sys_ioctl(fd:usize,cmd:u64,arg:u64)->i64{
 fn sys_readv(fd:u64,ptr:u64,count:i32)->i64{
  if count<=0{return errno::neg(errno::EINVAL)}
  let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- let mut iov=[Iovec{iov_base:0,iov_len:0};8];
- for i in 0..count.min(8){
-  let mut b=[0u8;16];
-  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(ptr as usize)+(i as usize*16)){return errno::neg(e)}
-  iov[i as usize]=Iovec{iov_base:u64::from_ne_bytes(b[0..8].try_into().unwrap()),iov_len:u64::from_ne_bytes(b[8..16].try_into().unwrap())};
- }
  let mut total=0i64;
- for i in 0..count.min(8){
-  let mut buf=[0u8;256];
-  let n=core::cmp::min(buf.len(),iov[i as usize].iov_len as usize);
-  let got=match crate::fd::read(id,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)};
-  if let Err(e)=crate::usercopy::copy_to_user(iov[i as usize].iov_base as usize,&buf[..got]){return errno::neg(e)}
-  total+=got as i64;
+ for i in 0..count{
+  let mut hdr=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,ptr as usize+(i as usize*16)){return errno::neg(e)}
+  let base=u64::from_ne_bytes(hdr[0..8].try_into().unwrap());
+  let len=u64::from_ne_bytes(hdr[8..16].try_into().unwrap());
+  if len==0{continue}
+  let mut done=0u64;
+  while done<len{
+   let mut buf=[0u8;512];
+   let n=core::cmp::min(buf.len(),(len-done)as usize);
+   let got=match crate::fd::read(id,&mut buf[..n]){Ok(g)=>g,Err(e)=>return if total==0{errno::neg(e)}else{total}};
+   if got==0{break}
+   if let Err(e)=crate::usercopy::copy_to_user(base as usize+done as usize,&buf[..got]){return if total==0{errno::neg(e)}else{total}}
+   done+=got as u64;
+   total+=got as i64;
+  }
  }
  total
 }
 fn sys_writev(fd:u64,ptr:u64,count:i32)->i64{
  if count<=0{return errno::neg(errno::EINVAL)}
  let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- let mut iov=[Iovec{iov_base:0,iov_len:0};8];
- for i in 0..count.min(8){
-  let mut b=[0u8;16];
-  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(ptr as usize)+(i as usize*16)){return errno::neg(e)}
-  iov[i as usize]=Iovec{iov_base:u64::from_ne_bytes(b[0..8].try_into().unwrap()),iov_len:u64::from_ne_bytes(b[8..16].try_into().unwrap())};
- }
  let mut total=0i64;
- for i in 0..count.min(8){
-  let mut buf=[0u8;256];
-  let n=core::cmp::min(buf.len(),iov[i as usize].iov_len as usize);
-  if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],iov[i as usize].iov_base as usize){return errno::neg(e)}
-  match crate::fd::write(id,&buf[..n]){Ok(m)=>{total+=m as i64},Err(e)=>return errno::neg(e)}
+ for i in 0..count{
+  let mut hdr=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,ptr as usize+(i as usize*16)){return errno::neg(e)}
+  let base=u64::from_ne_bytes(hdr[0..8].try_into().unwrap());
+  let len=u64::from_ne_bytes(hdr[8..16].try_into().unwrap());
+  if len==0{continue}
+  let mut done=0u64;
+  while done<len{
+   let mut buf=[0u8;512];
+   let n=core::cmp::min(buf.len(),(len-done)as usize);
+   if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],base as usize+done as usize){return errno::neg(e)}
+   match crate::fd::write(id,&buf[..n]){Ok(m)=>{done+=m as u64;total+=m as i64;if m<n{return total}},Err(e)=>return if total==0{errno::neg(e)}else{total}}
+  }
  }
  total
 }
-/* linux_dirent64: d_ino(8) d_off(8) d_reclen(2) d_type(1) d_name(NUL). */
 fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
  if count<=0{return errno::neg(errno::EINVAL)}
  let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
@@ -273,4 +303,173 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
 fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
  let _=uaddr2;let _=val3;
  match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout){Ok(v)=>v,Err(e)=>errno::neg(e)}
+}
+
+/* statx: fills a linux statx buffer from the path or fd. */
+#[repr(C)] struct Statx{stx_mask:u32,stx_blksize:u32,stx_attributes:u64,stx_nlink:u32,stx_uid:u32,stx_gid:u32,stx_mode:u16,_pad0:[u8;6],stx_ino:u64,stx_size:u64,stx_blocks:u64,stx_attributes_mask:u64,atime:[i64;3],btime:[i64;3],ctime:[i64;3],mtime:[i64;3]}
+impl Statx{fn zeroed()->Self{Self{stx_mask:0,stx_blksize:0,stx_attributes:0,stx_nlink:0,stx_uid:0,stx_gid:0,stx_mode:0,_pad0:[0;6],stx_ino:0,stx_size:0,stx_blocks:0,stx_attributes_mask:0,atime:[0;3],btime:[0;3],ctime:[0;3],mtime:[0;3]}}}
+fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if dirfd!=AT_FDCWD||flags&!0x1000_0100!=0{return errno::neg(errno::EINVAL)}
+ let _=mask;
+ let inode=if flags&AT_EMPTY_PATH!=0{
+  match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
+ }else{
+  let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
+ };
+ let mut st=Statx::zeroed();
+ st.stx_ino=inode.ino;
+ st.stx_mode=inode.mode as u16;
+ st.stx_nlink=1;
+ st.stx_size=inode.size;
+ st.stx_blksize=4096;
+ st.stx_blocks=((inode.size+511)/512)as u64;
+ st.stx_mask=0x1|0x2|0x4|0x8|0x10|0x20|0x40|0x80|0x100|0x200|0x400;
+ copy_obj(buf,&st)
+}
+fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
+ const P_PID:i32=0;const P_PGID:i32=1;const P_ALL:i32=2;const WEXITED:i64=4;const WNOHANG:i64=1;const WNOWAIT:i64=0x01000000;
+ let opts=options as i64;
+ if opts&!(WEXITED|WNOHANG|WNOWAIT|2|0x80)!=0{return errno::neg(errno::EINVAL)}
+ let selector=match idtype{P_PID=>id as i64,P_PGID=>-(id as i64),P_ALL=>-1,_=>return errno::neg(errno::EINVAL)};
+ let nohang=opts&WNOHANG!=0;
+ loop{
+  match crate::task::reap_child(selector,nohang){
+   Ok(crate::task::WaitOutcome::Reaped(pid,status))=>{
+    let si_code:u32=1;let si_status:u32=status as u32&0xff;let si_signo:u32=if status&0x7f!=0{status as u32&0x7f}else{17};
+    let mut b=[0u8;128];
+    b[0..4].copy_from_slice(&si_signo.to_ne_bytes());
+    b[4..8].copy_from_slice(&(0i32).to_ne_bytes());
+    b[8..12].copy_from_slice(&si_code.to_ne_bytes());
+    b[12..16].copy_from_slice(&0u32.to_ne_bytes());
+    b[16..20].copy_from_slice(&pid.to_ne_bytes());
+    b[20..24].copy_from_slice(&0u32.to_ne_bytes());
+    b[24..28].copy_from_slice(&si_status.to_ne_bytes());
+    if let Err(e)=crate::usercopy::copy_to_user(info as usize,&b){return errno::neg(e)}
+    if rusage!=0{let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&zeros){return errno::neg(e)}}
+    return 0;
+   }
+   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
+   Ok(crate::task::WaitOutcome::Blocked)=>crate::task::block_current(),
+   Err(e)=>return errno::neg(e),
+  }
+ }
+}
+fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
+ const AT_FDCWD:i64=-100;
+ if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ /* Only /proc/self/exe resolves, to the current image path. */
+ if p!="/proc/self/exe"{return errno::neg(errno::EINVAL)}
+ let exe=match crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)){Some(v)=>v,None=>return errno::neg(errno::ENOENT)};
+ if exe.1==0{return errno::neg(errno::ENOENT)}
+ let n=core::cmp::min(exe.1,bufsiz as usize);
+ let bytes=&exe.0[..n];
+ if let Err(e)=crate::usercopy::copy_to_user(buf as usize,bytes){return errno::neg(e)}
+ n as i64
+}
+fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if dirfd!=AT_FDCWD||flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
+ if mode!=0&&mode!=1&&mode!=2&&mode!=4&&mode!=7{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_execveat(dirfd:i64,path:u64,argv:u64,envp:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!AT_EMPTY_PATH!=0||(flags&AT_EMPTY_PATH!=0&&dirfd==AT_FDCWD){return errno::neg(errno::EINVAL)}
+ if flags&AT_EMPTY_PATH!=0{return errno::neg(errno::ENOSYS)}
+ sys_execve(path,argv,envp)
+}
+fn sys_sched_getaffinity(pid:u32,len:usize,mask:u64)->i64{
+ if pid!=0&&pid!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
+ if len<8{return errno::neg(errno::EINVAL)}
+ let one=1u64;
+ if let Err(e)=crate::usercopy::copy_to_user(mask as usize,&one.to_ne_bytes()){return errno::neg(e)}
+ 8
+}
+fn sys_poll(fds:u64,nfds:i32,timeout:i32)->i64{
+ if nfds<0{return errno::neg(errno::EINVAL)}
+ let mut ready=0i64;
+ for i in 0..nfds.min(16){
+  let mut b=[0u8;8];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(fds as usize)+(i as usize*8)){return errno::neg(e)}
+  let fd=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+  if fd<0{continue}
+  match fd_id(fd as u64){
+   Some(id)=>{
+    /* A descriptor is readable when it has data or is at EOF. */
+    let readable=match crate::fd::kind(id){
+     Some(crate::fd::OpenKind::Console)=>true,
+     Some(crate::fd::OpenKind::PipeRead(_))=>true,
+     Some(crate::fd::OpenKind::Inode(_))=>true,
+     _=>false,
+    };
+    let writable=match crate::fd::kind(id){
+     Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))=>true,
+     _=>false,
+    };
+    if readable||writable{
+     let mut rev=0u16;
+     if readable{rev|=0x1}
+     if writable{rev|=0x4}
+     let addr=(fds as usize)+(i as usize*8)+6;
+     if let Err(e)=crate::usercopy::copy_to_user(addr,&rev.to_ne_bytes()){return errno::neg(e)}
+     ready+=1;
+    }
+   }
+   None=>{return errno::neg(errno::EBADF)}
+  }
+ }
+ if ready==0&&timeout>0{
+  /* No descriptor is ready: sleep briefly and report none, matching a poll
+     that timed out rather than blocking forever. */
+  crate::task::sleep_until(crate::time::ticks_after_ns(timeout as u64*1_000_000));
+ }
+ ready
+}
+fn sys_ppoll(fds:u64,nfds:i32,timeout:u64,sigmask:u64)->i64{
+ let t=if timeout==0{-1i32}else{
+  let mut b=[0u8;16];
+  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,timeout as usize)}{return errno::neg(e)}
+  let sec=i64::from_ne_bytes(b[0..8].try_into().unwrap());
+  let nsec=i64::from_ne_bytes(b[8..16].try_into().unwrap());
+  if sec<0||nsec<0{return errno::neg(errno::EINVAL)}
+  if sec>i32::MAX as i64{i32::MAX}else{(sec as i32).saturating_mul(1000).saturating_add((nsec/1_000_000)as i32)}
+ };
+ if sigmask!=0{return errno::neg(errno::EINVAL)}
+ sys_poll(fds,nfds,t)
+}
+fn sys_pread64(fd:u64,ptr:u64,len:i32,off:i64)->i64{
+ if len<0||off<0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<len as usize{
+  let n=core::cmp::min(buf.len(),len as usize-done);
+  match crate::fd::read_at(id,off as u64+done as u64,&mut buf[..n]){Ok(g)=>{if g==0{break}if let Err(e)=crate::usercopy::copy_to_user(ptr as usize+done,&buf[..g]){return errno::neg(e)}done+=g},Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+ }
+ done as i64
+}
+fn sys_pwrite64(fd:u64,ptr:u64,len:i32,off:i64)->i64{
+ if len<0||off<0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<len as usize{
+  let n=core::cmp::min(buf.len(),len as usize-done);
+  if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..n],ptr as usize+done){return errno::neg(e)}
+  match crate::fd::write_at(id,off as u64+done as u64,&buf[..n]){Ok(g)=>done+=g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+ }
+ done as i64
+}
+fn sys_clone3(args:u64)->i64{
+ let mut b=[0u8;64];
+ if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,args as usize)}{return errno::neg(e)}
+ let flags=u64::from_ne_bytes(b[0..8].try_into().unwrap());
+ /* Treat every clone3 as a fork; CLONE_VM/THREAD families are rejected. */
+ if flags&!(17|0x80000)!=0{return errno::neg(errno::EINVAL)}
+ let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+ match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
 }

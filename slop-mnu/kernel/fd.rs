@@ -32,6 +32,21 @@ pub fn release(id:u32){let kind={let mut t=OPEN.lock();match t[id as usize].as_m
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
 /* Directory-walk cursor used by getdents64. */
 pub fn offset_get(id:u32)->u64{OPEN.lock()[id as usize].map(|f|f.offset).unwrap_or(0)}
+/* Positional variants used by pread64/pwrite64; they ignore the file offset. */
+pub fn read_at(id:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
+ match OPEN.lock()[id as usize].ok_or(errno::EBADF)?.kind{
+  OpenKind::Inode(n)=>vfs::read_off(n,off,dst),
+  OpenKind::PipeRead(p)=>crate::pipe::read(p,dst),
+  _=>Err(errno::EBADF),
+ }
+}
+pub fn write_at(id:u32,off:u64,src:&[u8])->Result<usize,i64>{
+ match OPEN.lock()[id as usize].ok_or(errno::EBADF)?.kind{
+  OpenKind::Inode(n)=>vfs::write_off(n,off,src),
+  OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),
+  _=>Err(errno::EBADF),
+ }
+}
 pub fn offset_set(id:u32,v:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=v}}
 
 pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}

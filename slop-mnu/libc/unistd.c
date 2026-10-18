@@ -25,6 +25,18 @@
 #define SYS_NANOSLEEP 35
 #define SYS_UNLINKAT 263
 #define SYS_GETDENTS64 217
+#define SYS_READV 19
+#define SYS_WRITEV 20
+#define SYS_PREAD64 17
+#define SYS_PWRITE64 18
+#define SYS_ACCESS 21
+#define SYS_FACCESSAT 269
+#define SYS_FACCESSAT2 439
+#define SYS_READLINKAT 267
+#define SYS_MUNMAP 11
+#define SYS_MREMAP 25
+#define SYS_MADVISE 28
+#define SYS_MEMBARRIER 324
 #define AT_FDCWD_C -100
 
 /* POSIX wrapper convention: report -1 and stash the raw errno value. */
@@ -85,6 +97,52 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 
 pid_t waitpid(pid_t pid, int *status, int options) {
     return (pid_t)sys_fail(__slop_syscall6(SYS_WAIT4, pid, (long)status, options, 0, 0, 0));
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt) {
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_READV, fd, (long)iov, iovcnt, 0, 0, 0));
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_WRITEV, fd, (long)iov, iovcnt, 0, 0, 0));
+}
+
+ssize_t pread64(int fd, void *buf, size_t count, long offset) {
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_PREAD64, fd, (long)buf, count, offset, 0, 0));
+}
+
+ssize_t pwrite64(int fd, const void *buf, size_t count, long offset) {
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_PWRITE64, fd, (long)buf, count, offset, 0, 0));
+}
+
+int access(const char *path, int mode) {
+    return (int)sys_fail(__slop_syscall6(SYS_ACCESS, (long)path, mode, 0, 0, 0, 0));
+}
+
+int faccessat(int dirfd, const char *path, int mode, int flags) {
+    return (int)sys_fail(__slop_syscall6(SYS_FACCESSAT2, dirfd, (long)path, mode, flags, 0, 0));
+}
+
+long readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz) {
+    return sys_fail(__slop_syscall6(SYS_READLINKAT, dirfd, (long)path, (long)buf, bufsiz, 0, 0));
+}
+
+void *mremap(void *old_address, size_t old_size, size_t new_size, int flags) {
+    long r = sys_fail(__slop_syscall6(SYS_MREMAP, (long)old_address, old_size, new_size, flags, 0, 0));
+    if (r < 0) return (void *)-1;
+    return (void *)r;
+}
+
+int munmap(void *addr, size_t len) {
+    return (int)sys_fail(__slop_syscall6(SYS_MUNMAP, (long)addr, len, 0, 0, 0, 0));
+}
+
+int madvise(void *addr, size_t len, int advice) {
+    return (int)sys_fail(__slop_syscall6(SYS_MADVISE, (long)addr, len, advice, 0, 0, 0));
+}
+
+int membarrier(int cmd, int flags) {
+    return (int)sys_fail(__slop_syscall6(SYS_MEMBARRIER, cmd, flags, 0, 0, 0, 0));
 }
 
 int unlink(const char *path) {

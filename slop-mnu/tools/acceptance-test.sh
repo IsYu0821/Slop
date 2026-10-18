@@ -38,6 +38,9 @@ for text in \
   'execve: committed /bin/hello-file' \
   'file: main entered' \
   'file: create, write, read, unlink, getdents64 and futex passed' \
+  'execve: committed /bin/hello-syscall' \
+  'syscalls: main entered' \
+  'syscalls: iov, positional io, access, readlink and mremap passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then

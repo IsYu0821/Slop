@@ -13,6 +13,25 @@ fn align8(v:usize)->Result<usize>{v.checked_add(7).map(|x|x&!7).ok_or(errno::EIN
 pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,name,name_len:nl};p=align8(p+size)?;}m.len=count;m.mounted=true;Ok(count)}
 pub fn lookup(path:&str)->Result<Inode>{if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::ENOENT)}let m=ROOT.lock();if !m.mounted{return Err(errno::ENOENT)}m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)}
 pub fn read(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{if off>=inode.size{return Ok(0)}let n=core::cmp::min(dst.len(),(inode.size-off)as usize);let src=unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)};dst[..n].copy_from_slice(src);Ok(n)}
+/* Positional reads resolve the node by ino so a grown size is visible. */
+pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
+ let m=ROOT.lock();
+ let node=m.nodes[..m.len].iter().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
+ if off>=node.size{return Ok(0)}
+ let n=core::cmp::min(dst.len(),(node.size-off)as usize);
+ let src=unsafe{core::slice::from_raw_parts(node.data.add(off as usize),n)};
+ dst[..n].copy_from_slice(src);
+ Ok(n)
+}
+pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
+ let mut m=ROOT.lock();
+ let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
+ let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+ if end>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
+ unsafe{core::slice::from_raw_parts_mut(m.nodes[idx].data.add(off as usize),src.len()).copy_from_slice(src)}
+ if end>m.nodes[idx].size{m.nodes[idx].size=end;}
+ Ok(src.len())
+}
 pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  let mut m=ROOT.lock();let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
  let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;

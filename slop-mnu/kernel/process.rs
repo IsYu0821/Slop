@@ -9,15 +9,16 @@ pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
  pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,
- pub pending:u64,pub sigmask:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,
+ pub pending:u64,pub sigmask:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-  Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:crate::signal::handlers_dfl(),sigframe:0})
+  Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
  pub fn set_clear_child_tid(&mut self,v:u64){self.clear_child_tid=v}
+ pub fn set_exe_path(&mut self,p:&str){let b=p.as_bytes();let n=core::cmp::min(b.len(),64);self.exe_path[..n].copy_from_slice(&b[..n]);self.exe_len=n;}
  pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;self.handlers=crate::signal::handlers_dfl();self.sigframe=0;}
  fn pte_flags(prot:u64)->Result<u64,i64>{if prot&!7!=0{return Err(crate::errno::EINVAL)}Ok(USER|if prot&2!=0{WRITABLE}else{0}|if prot&4==0{NX}else{0})}
  fn vm_flags(prot:u64)->Result<VmFlags,i64>{let mut f=VmFlags::USER;let _=Self::pte_flags(prot)?;if prot&1!=0{f.0|=VmFlags::READ.0}if prot&2!=0{f.0|=VmFlags::WRITE.0}if prot&4!=0{f.0|=VmFlags::EXEC.0}f.0|=VmFlags::ANON.0;Ok(f)}
@@ -27,6 +28,26 @@ impl Process{
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
  pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};if self.vm.insert(old_page,len,flags).is_err(){return old}if self.map_zeroed(old_page as u64,len as u64,3).is_err(){let _=self.vm.remove(old_page,len);return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;if len==0{return Err(crate::errno::EINVAL)}if flags&MAP_ANON==0||fd!=-1||offset!=0{return Err(crate::errno::ENODEV)}if flags&!(MAP_FIXED|MAP_ANON|0x02)!=0{return Err(crate::errno::EINVAL)}let vf=Self::vm_flags(prot)?;let size=Self::up(len as u64)?;let start=if flags&MAP_FIXED!=0{if addr&4095!=0{return Err(crate::errno::EINVAL)}self.vm.insert(addr,size,vf)?;addr}else{self.vm.allocate(size,vf)?};if let Err(e)=self.map_zeroed(start as u64,size as u64,prot){let _=self.vm.remove(start,size);return Err(e)}Ok(start)}
+  /* Grows or shrinks an anonymous mapping: allocate the new range, copy the
+     live bytes across, then release the old range. */
+  pub fn mremap(&mut self,old:usize,old_size:usize,new_size:usize,flags:u64)->Result<usize,i64>{
+   const MREMAP_MAYMOVE:u64=1;
+   if old%4096!=0||old_size==0||new_size==0{return Err(crate::errno::EINVAL)}
+   if flags&!MREMAP_MAYMOVE!=0{return Err(crate::errno::EINVAL)}
+   let vf=Self::vm_flags(3)?;
+   let dst=self.vm.allocate(new_size,vf)?;
+   if self.map_zeroed(dst as u64,new_size as u64,3).is_err(){let _=self.vm.remove(dst,new_size);return Err(crate::errno::ENOMEM)}
+   let mut chunk=[0u8;512];
+   let mut done=0usize;
+   while done<core::cmp::min(old_size,new_size){
+    let n=core::cmp::min(chunk.len(),core::cmp::min(old_size,new_size)-done);
+    if let Err(e)=crate::usercopy::copy_from_user(&mut chunk[..n],old+done){let _=self.munmap(old,old_size);return Err(e)}
+    if let Err(e)=crate::usercopy::copy_to_user(dst+done,&chunk[..n]){let _=self.munmap(old,old_size);return Err(e)}
+    done+=n;
+   }
+   let _=self.munmap(old,old_size);
+   Ok(dst)
+  }
  pub fn munmap(&mut self,addr:usize,len:usize)->Result<(),i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;self.unmap_pages(addr as u64,size as u64)?;self.vm.remove(addr,size)}
  pub fn mprotect(&mut self,addr:usize,len:usize,prot:u64)->Result<(),i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;let f=Self::vm_flags(prot)?;let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let mut va=addr as u64;let end=va+size as u64;while va<end{root.protect_page(&phys,va,flags)?;va+=PAGE}self.vm.protect(addr,size,f)}
  pub fn mapped_for_test(&self,addr:u64,write:bool)->bool{self.root().query(&Identity,addr).map(|(_,f)|f&PRESENT!=0&&f&USER!=0&&(!write||f&WRITABLE!=0)).unwrap_or(false)}
@@ -37,7 +58,7 @@ impl Process{
   for &slot in &slots{if let Err(e)=copy_slot(&self.root(),&access,&child,slot){for &done in &slots{let _=child.destroy_private_slot(&access,done);}let _=crate::memory::free_frame(child.pml4);return Err(e)}}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0})}
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
  pub fn abandon(&mut self){let access=Identity;let root=self.root();for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */

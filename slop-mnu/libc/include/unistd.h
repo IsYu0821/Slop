@@ -33,6 +33,31 @@ int execve(const char *path, char *const argv[], char *const envp[]);
 void _exit(int status) __attribute__((noreturn));
 int unlink(const char *path);
 int getdents64(int fd, struct dirent64 *buf, size_t count);
+
+struct iovec {
+    void *iov_base;
+    size_t iov_len;
+};
+
+#define R_OK 4
+#define W_OK 2
+#define X_OK 1
+#define F_OK 0
+
+#define MREMAP_MAYMOVE 1
+
+#define MADV_NORMAL 0
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt);
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
+ssize_t pread64(int fd, void *buf, size_t count, long offset);
+ssize_t pwrite64(int fd, const void *buf, size_t count, long offset);
+int access(const char *path, int mode);
+int faccessat(int dirfd, const char *path, int mode, int flags);
+long readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
+void *mremap(void *old_address, size_t old_size, size_t new_size, int flags);
+int madvise(void *addr, size_t len, int advice);
+int membarrier(int cmd, int flags);
 int nanosleep(const struct timespec *req, struct timespec *rem);
 
 #endif

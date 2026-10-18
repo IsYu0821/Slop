@@ -94,5 +94,11 @@ int main(int argc, char **argv, char **envp) {
         return 1;
     }
     puts("file: create, write, read, unlink, getdents64 and futex passed");
-    return 0;
+    {
+        char *av[] = {"hello-syscall", "from-file", 0};
+        char *ev[] = {"SLOP_MNU_SYSCALL=1", 0};
+        execve("/bin/hello-syscall", av, ev);
+    }
+    puts("file: failed: execve /bin/hello-syscall");
+    return 1;
 }
