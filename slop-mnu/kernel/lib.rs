@@ -13,6 +13,7 @@ pub mod exec_runtime;
 pub mod linux_abi;
 pub mod memory;
 pub mod pipe;
+pub mod socket;
 pub mod process;
 pub mod signal;
 pub mod sync;

@@ -2,7 +2,7 @@
 //! dup and fork share descriptions, mirroring the Unix file-description model.
 use crate::{errno,sync::SpinLock,vfs};
 pub const MAX_FDS:usize=32;const MAX_OPEN:usize=64;
-#[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8)}
+#[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8)}
 #[derive(Clone,Copy)]struct OpenFile{refs:u32,offset:u64,kind:OpenKind}
 static OPEN:SpinLock<[Option<OpenFile>;MAX_OPEN]>=SpinLock::new([const{None};MAX_OPEN]);
 
@@ -37,6 +37,7 @@ pub fn read_at(id:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  match OPEN.lock()[id as usize].ok_or(errno::EBADF)?.kind{
   OpenKind::Inode(n)=>vfs::read_off(n,off,dst),
   OpenKind::PipeRead(p)=>crate::pipe::read(p,dst),
+  OpenKind::Socket(s)=>crate::socket::recv(s,dst),
   _=>Err(errno::EBADF),
  }
 }
@@ -44,6 +45,7 @@ pub fn write_at(id:u32,off:u64,src:&[u8])->Result<usize,i64>{
  match OPEN.lock()[id as usize].ok_or(errno::EBADF)?.kind{
   OpenKind::Inode(n)=>vfs::write_off(n,off,src),
   OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),
+  OpenKind::Socket(s)=>{crate::socket::send(s,src)},
   _=>Err(errno::EBADF),
  }
 }
@@ -52,13 +54,19 @@ pub fn offset_set(id:u32,v:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut()
 pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 /* O_CREAT path: creates the node when missing, then opens it. */
 pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
-pub fn close(fd:usize)->Result<(),i64>{crate::task::with_current_process(|p|p.fds.close(fd)).unwrap_or(Err(errno::ESRCH))}
+pub fn close(fd:usize)->Result<(),i64>{
+ let kind=crate::task::with_current_process(|p|p.fds.get(fd)).flatten().map(|id|crate::fd::kind(id));
+ crate::task::with_current_process(|p|p.fds.close(fd)).unwrap_or(Err(errno::ESRCH))?;
+ if let Some(Some(crate::fd::OpenKind::Socket(s)))=kind{crate::socket::close(s);}
+ Ok(())
+}
 pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
  match kind{
   OpenKind::Console=>Ok(0),
   OpenKind::Inode(n)=>{let got=vfs::read(n,offset,dst)?;if got>0{if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}}Ok(got)},
   OpenKind::PipeRead(p)=>crate::pipe::read(p,dst),
+  OpenKind::Socket(s)=>crate::socket::recv(s,dst),
   OpenKind::PipeWrite(_)=>Err(errno::EBADF),
  }
 }
@@ -67,6 +75,7 @@ pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
  match kind{
   OpenKind::Console=>{crate::console::write_bytes(src);Ok(src.len())},
   OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),
+  OpenKind::Socket(s)=>{crate::socket::send(s,src)},
   OpenKind::Inode(n)=>{
    let got=vfs::write(n,offset,src)?;
    if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}
@@ -77,7 +86,7 @@ pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
 }
 pub fn seek(id:u32,off:i64,whence:u64)->Result<u64,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
- let size=match kind{OpenKind::Inode(n)=>n.size,OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)=>return Err(errno::ESPIPE)};
+ let size=match kind{OpenKind::Inode(n)=>n.size,OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)|OpenKind::Socket(_)=>return Err(errno::ESPIPE)};
  let base=match whence{0=>0,1=>offset,2=>size,_=>return Err(errno::EINVAL)};let next=if off>=0{base.checked_add(off as u64)}else{base.checked_sub(off.unsigned_abs())}.ok_or(errno::EINVAL)?;
  if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=next}Ok(next)
 }

@@ -46,6 +46,9 @@ for text in \
   'execve: committed /bin/hello-thread' \
   'thread: main entered' \
   'thread: create, join and mutex passed' \
+  'execve: committed /bin/hello-socket' \
+  'sock: main entered' \
+  'sock: socketpair and stream listen/connect/accept passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
