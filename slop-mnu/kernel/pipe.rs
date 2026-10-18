@@ -34,7 +34,7 @@ pub fn write(id:u8,src:&[u8])->Result<usize,i64>{
  let mut done=0usize;
  while done<src.len(){
   let registered={let mut p=PIPES[id as usize].lock();
-   if p.readers==0{return if done>0{Ok(done)}else{Err(crate::errno::EPIPE)}}
+   if p.readers==0{let _=crate::signal::send_self(crate::signal::SIGPIPE);return if done>0{Ok(done)}else{Err(crate::errno::EPIPE)}}
    if p.len<CAPACITY{let n=core::cmp::min(CAPACITY-p.len,src.len()-done);copy_into(&mut p,&src[done..],n);p.len+=n;done+=n;p.readq.wake_all();false}else{p.writeq.register().is_ok()}};
   if done==src.len(){break}
   if !registered{return Err(crate::errno::EAGAIN)}

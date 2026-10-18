@@ -22,6 +22,7 @@
 #define SYS_OPENAT 257
 #define SYS_EXIT_GROUP 231
 #define SYS_PIPE2 293
+#define SYS_NANOSLEEP 35
 
 /* POSIX wrapper convention: report -1 and stash the raw errno value. */
 static long sys_fail(long r) {
@@ -83,24 +84,13 @@ pid_t waitpid(pid_t pid, int *status, int options) {
     return (pid_t)sys_fail(__slop_syscall6(SYS_WAIT4, pid, (long)status, options, 0, 0, 0));
 }
 
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+    return (int)sys_fail(__slop_syscall6(SYS_NANOSLEEP, (long)req, (long)rem, 0, 0, 0, 0));
+}
+
 void _exit(int status) {
     __slop_syscall6(SYS_EXIT_GROUP, status, 0, 0, 0, 0, 0);
     for (;;) {
     }
 }
 
-int kill(pid_t pid, int sig) {
-    return (int)sys_fail(__slop_syscall6(SYS_KILL, (long)pid, sig, 0, 0, 0, 0));
-}
-
-int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGACTION, sig, (long)act, (long)oldact, 0, 0, 0));
-}
-
-int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGPROCMASK, how, (long)set, (long)oldset, 0, 0, 0));
-}
-
-int sigreturn(void) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGRETURN, 0, 0, 0, 0, 0, 0));
-}

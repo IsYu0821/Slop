@@ -36,25 +36,27 @@ syscall_entry:
     push 56(%rsp)
     call syscall_dispatch_raw
     add $8, %rsp
+    /* Park the dispatcher result in the saved-RAX slot so signal delivery and
+       rt_sigreturn can restore the interrupted syscall return value. */
+    mov %rax, 96(%rsp)
     cmpb $0, EXEC_PENDING(%rip)
     je .Lcheck_signal
     mov EXEC_RIP(%rip), %rdx
     mov %rdx, 104(%rsp)
     movb $0, EXEC_PENDING(%rip)
 .Lcheck_signal:
-    /* Signal delivery is not yet wired into the syscall exit path. */
-    jmp .Lcheck_sysret
-    /* If a signal is pending, build a sigframe and enter the handler. */
-    call signal_pending_check
+    /* If a signal is pending, build a sigframe on the user stack and rewrite
+       the register frame so SYSRET enters the user handler. The saved frame
+       sits at an 8-mod-16 offset, so pad once to keep the SysV ABI stack
+       16-byte aligned for the callee. */
+    mov SYSCALL_FRAME(%rip), %rdi
+    test %rdi, %rdi
+    jz .Lcheck_sysret
+    push %rax
+    call signal_setup_frame
+    pop %rax
     test %rax, %rax
     jz .Lcheck_sysret
-    /* signal_pending_check returned the signal number in %rax, handler in %rdx. */
-    mov %rax, %rdi
-    mov %rdx, %rsi
-    mov SYSCALL_USER_RSP(%rip), %rdx
-    mov 112(%rsp), %rcx
-    mov 104(%rsp), %r8
-    call signal_deliver_asm
 .Lcheck_sysret:
     /* SYSRET requires canonical lower-half addresses. The checks run while the
        user register frame is still on the kernel stack so RDX stays untouched. */
@@ -76,8 +78,17 @@ syscall_entry:
     pop %rdx
     pop %rsi
     pop %rdi
-    /* RAX returns the dispatcher result; the saved user RAX is dropped. */
+    /* The saved-RAX slot is now on top: rt_sigreturn restores it, a normal
+       return delivers the dispatcher result parked there. */
+    cmpb $0, SIGRET_PENDING(%rip)
+    je .Ldrop_rax
+    movb $0, SIGRET_PENDING(%rip)
+    pop %rax
+    jmp .Lfinish_sysret
+.Ldrop_rax:
+    mov (%rsp), %rax
     add $8, %rsp
+.Lfinish_sysret:
     pop %rcx
     pop %r11
     mov SYSCALL_USER_RSP(%rip), %rsp

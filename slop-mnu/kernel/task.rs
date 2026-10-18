@@ -45,9 +45,18 @@ pub fn sleep_until(tick:u64){let mut s=SCHED.lock();let current=s.current;if s.t
 fn wake_sleepers(now:u64){let mut s=SCHED.lock();for t in &mut s.tasks{if t.state==State::Sleeping&&t.wake_pending{t.wake_pending=false;t.state=State::Runnable}else if t.state==State::Sleeping&&t.wake_tick<=now{t.state=State::Runnable;}}}
 pub fn block_current(){let mut s=SCHED.lock();let current=s.current;if s.tasks[current].wake_pending{s.tasks[current].wake_pending=false;return}s.tasks[current].state=State::Sleeping;s.tasks[current].wake_tick=u64::MAX;drop(s);schedule(true)}
 pub fn wake_pid(pid:u32)->bool{let mut s=SCHED.lock();if let Some(t)=s.tasks.iter_mut().find(|t|t.pid==pid&&t.state!=State::Unused&&t.state!=State::Zombie){if t.state==State::Sleeping{t.state=State::Runnable}else{t.wake_pending=true}true}else{false}}
-fn finish(code:i32,signal:u8)->!{{let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;s.tasks[current].term_signal=signal;let parent=s.tasks[current].ppid;drop(s);if parent!=0{let _=wake_pid(parent);}}loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
+/* Marks sig pending on the task owning pid and wakes it if blocked. */
+pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
+ let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+ PROCS.lock()[slot].as_mut().ok_or(crate::errno::ESRCH)?.pending|=crate::signal::bit(sig);
+ wake_pid(pid);
+ Ok(())
+}
+fn finish(code:i32,signal:u8)->!{{let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;s.tasks[current].term_signal=signal;let parent=s.tasks[current].ppid;drop(s);if parent!=0{let _=signal_pid(parent,crate::signal::SIGCHLD);}}loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
 pub fn finish_current(code:i32)->!{finish(code,0)}
 pub fn exit(code:i32)->!{crate::println!("task {} exited {}",current_pid(),code);with_current_process(|proc|{crate::println!("task exited status={}",code);proc.teardown_exit(code,0)});finish(code,0)}
+/* Kills the current task as if terminated by sig; wait status reports the signal. */
+pub fn exit_signal(sig:i32)->!{crate::println!("task {} terminated by signal {}",current_pid(),sig);with_current_process(|proc|proc.teardown_exit(128+sig,sig as u64));finish(128+sig,sig as u8)}
 pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
 fn schedule(blocked:bool){let(old_ptr,next)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{s.tasks[old].state=State::Running;return}s.tasks[next].state=State::Running;s.current=next;(&mut s.tasks[old].rsp as*mut u64,s.tasks[next])};PID.store(next.pid,Ordering::Relaxed);unsafe{apply_arch_state(next);switch_context(old_ptr,next.rsp)}}
 

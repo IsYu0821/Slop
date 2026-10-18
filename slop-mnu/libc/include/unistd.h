@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+struct timespec { long tv_sec; long tv_nsec; };
 typedef long ssize_t;
 typedef int pid_t;
 
@@ -16,5 +17,6 @@ pid_t getpid(void);
 pid_t getppid(void);
 int execve(const char *path, char *const argv[], char *const envp[]);
 void _exit(int status) __attribute__((noreturn));
+int nanosleep(const struct timespec *req, struct timespec *rem);
 
 #endif

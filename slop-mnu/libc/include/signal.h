@@ -2,6 +2,7 @@
 #define _SLOP_SIGNAL_H
 
 typedef unsigned long sigset_t;
+typedef int sig_atomic_t;
 
 #define SIGHUP 1
 #define SIGINT 2
@@ -39,16 +40,27 @@ typedef unsigned long sigset_t;
 #define SIG_UNBLOCK 1
 #define SIG_SETMASK 2
 
+/* User-visible layout follows glibc/musl; the kernel ABI struct differs. */
 struct sigaction {
     void (*sa_handler)(int);
     sigset_t sa_mask;
-    int sa_flags;
+    unsigned long sa_flags;
     void (*sa_restorer)(void);
 };
+
+/* Linux x86-64 kernel_sigaction passed verbatim to rt_sigaction. */
+struct kernel_sigaction {
+    void (*handler)(int);
+    unsigned long flags;
+    void (*restorer)(void);
+    sigset_t mask;
+};
+
+/* Return trampoline installed as sa_restorer; invokes rt_sigreturn. */
+void __slop_sigrestore(void);
 
 int kill(int pid, int sig);
 int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact);
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
-int sigreturn(void);
 
 #endif
