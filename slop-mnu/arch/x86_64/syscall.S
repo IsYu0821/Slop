@@ -37,10 +37,24 @@ syscall_entry:
     call syscall_dispatch_raw
     add $8, %rsp
     cmpb $0, EXEC_PENDING(%rip)
-    je .Lcheck_sysret
+    je .Lcheck_signal
     mov EXEC_RIP(%rip), %rdx
     mov %rdx, 104(%rsp)
     movb $0, EXEC_PENDING(%rip)
+.Lcheck_signal:
+    /* Signal delivery is not yet wired into the syscall exit path. */
+    jmp .Lcheck_sysret
+    /* If a signal is pending, build a sigframe and enter the handler. */
+    call signal_pending_check
+    test %rax, %rax
+    jz .Lcheck_sysret
+    /* signal_pending_check returned the signal number in %rax, handler in %rdx. */
+    mov %rax, %rdi
+    mov %rdx, %rsi
+    mov SYSCALL_USER_RSP(%rip), %rdx
+    mov 112(%rsp), %rcx
+    mov 104(%rsp), %r8
+    call signal_deliver_asm
 .Lcheck_sysret:
     /* SYSRET requires canonical lower-half addresses. The checks run while the
        user register frame is still on the kernel stack so RDX stays untouched. */

@@ -14,6 +14,7 @@ pub mod linux_abi;
 pub mod memory;
 pub mod pipe;
 pub mod process;
+pub mod signal;
 pub mod sync;
 pub mod task;
 pub mod time;

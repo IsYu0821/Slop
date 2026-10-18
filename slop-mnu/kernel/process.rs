@@ -9,15 +9,16 @@ pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
  pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,
+ pub pending:u64,pub sigmask:u64,pub handlers:[crate::signal::Action;64],
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-  Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?})
+  Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,handlers:[crate::signal::Action{handler:crate::signal::SIG_DFL,mask:0,flags:0,restorer:0};64]})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
  pub fn set_clear_child_tid(&mut self,v:u64){self.clear_child_tid=v}
- pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;}
+ pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;self.handlers=[crate::signal::Action{handler:crate::signal::SIG_DFL,mask:0,flags:0,restorer:0};64];}
  fn pte_flags(prot:u64)->Result<u64,i64>{if prot&!7!=0{return Err(crate::errno::EINVAL)}Ok(USER|if prot&2!=0{WRITABLE}else{0}|if prot&4==0{NX}else{0})}
  fn vm_flags(prot:u64)->Result<VmFlags,i64>{let mut f=VmFlags::USER;let _=Self::pte_flags(prot)?;if prot&1!=0{f.0|=VmFlags::READ.0}if prot&2!=0{f.0|=VmFlags::WRITE.0}if prot&4!=0{f.0|=VmFlags::EXEC.0}f.0|=VmFlags::ANON.0;Ok(f)}
  fn map_zeroed(&self,start:u64,len:u64,prot:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let end=start.checked_add(len).ok_or(crate::errno::ENOMEM)?;let mut va=start;while va<end{let pa=match crate::memory::alloc_frame(){Some(v)=>v,None=>{self.rollback(start,va);return Err(crate::errno::ENOMEM)}};unsafe{phys.table(pa).fill(0)}if let Err(e)=root.map_page(&phys,va,pa,flags){let _=crate::memory::free_frame(pa);self.rollback(start,va);return Err(e)}va+=PAGE;}Ok(())}
@@ -36,7 +37,7 @@ impl Process{
   for &slot in &slots{if let Err(e)=copy_slot(&self.root(),&access,&child,slot){for &done in &slots{let _=child.destroy_private_slot(&access,done);}let _=crate::memory::free_frame(child.pml4);return Err(e)}}
   Ok(child.pml4)
  }
- pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref()})}
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
  pub fn abandon(&mut self){let access=Identity;let root=self.root();for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */

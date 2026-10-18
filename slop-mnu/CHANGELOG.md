@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.0 - 2026-10-18
+- Added a Linux signal ABI foundation: `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn` syscalls in `kernel/signal.rs`.
+- Added per-process pending and blocked signal masks to `Process`; `fork` preserves them, `execve` resets them.
+- Added `libc/signal.c` with `kill`, `sigaction`, `sigprocmask` and `sigreturn` wrappers plus a `libc/include/signal.h` header.
+- Added `signal_pending_check` before `SYSRET` in `arch/x86_64/syscall.S` and a `signal_deliver_asm` trampoline in `arch/x86_64/user.S`.
+- Signal delivery is gated on a pending mask check; full handler-frame delivery lands in the next milestone.
+
 ## 0.27.0 - 2026-10-17
 - Added a per-process address-space and descriptor owner (`kernel/process.rs`) with deep-copy `fork` of the private PML4 slots and child resume at the saved syscall return with `rax=0`.
 - Added blocking pipes (`kernel/pipe.rs`) with 4 KiB ring buffers, EOF on last writer close and `EPIPE` on last reader close.
