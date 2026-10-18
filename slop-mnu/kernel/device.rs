@@ -75,7 +75,6 @@ pub fn init_devtmpfs(){
 }
 
 pub fn blk_read(major:u32,minor:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
- crate::println!("blk_read major={} minor={} off={} dst={}",major,minor,off,dst.len());
  let _=(major,minor);
  if !crate::driver::virtio_blk::ready(){return Err(errno::ENODEV)}
  let cap=crate::driver::virtio_blk::capacity()*512;
@@ -85,7 +84,7 @@ pub fn blk_read(major:u32,minor:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  let mut pos=off%512;
  while done<dst.len() && off as usize+done < cap as usize{
   let mut buf=[0u8;512];
-  if crate::driver::virtio_blk::read_sector(sector,&mut buf).is_err(){return if done==0{Err(errno::EIO)}else{Ok(done)}}
+  if crate::driver::virtio_blk::read_sector(sector,&mut buf).is_err(){crate::println!("blk_read sector fail");return if done==0{Err(errno::EIO)}else{Ok(done)}}
   let avail=512-pos as usize;
   let n=core::cmp::min(avail,dst.len()-done);
   dst[done..done+n].copy_from_slice(&buf[pos as usize..pos as usize+n]);

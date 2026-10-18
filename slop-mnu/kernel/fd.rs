@@ -5,6 +5,9 @@ pub const MAX_FDS:usize=32;const MAX_OPEN:usize=64;
 #[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8),EventFd(u64,u8),Epoll,TimerFd(u64,u64),CharDevice(u64),BlockDevice(u64),Inotify,SignalFd(u64),Netlink,IoUring,PidFd(u32)}
 #[derive(Clone,Copy)]struct OpenFile{refs:u32,offset:u64,kind:OpenKind}
 static OPEN:SpinLock<[Option<OpenFile>;MAX_OPEN]>=SpinLock::new([const{None};MAX_OPEN]);
+static mut IOURING_SQ_RING:[u64;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_CQ_RING:[u64;MAX_OPEN]=[0;MAX_OPEN];
+static mut IOURING_SQES:[u64;MAX_OPEN]=[0;MAX_OPEN];
 
 const FREE_FD:i32=-1;
 pub struct FdTable{slots:[i32;MAX_FDS]}
@@ -51,7 +54,7 @@ pub fn write_at(id:u32,off:u64,src:&[u8])->Result<usize,i64>{
 }
 pub fn offset_set(id:u32,v:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=v}}
 
-pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let kind=if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)};let id=alloc_file(kind)?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
+pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;crate::println!("fd open {} mode={:#o} rdev={}",path,inode.mode,inode.rdev);crate::println!("fd open path={} mode={:#o} rdev={}",path,inode.mode,inode.rdev);let kind=if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)};let id=alloc_file(kind)?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 /* O_CREAT path: creates the node when missing, then opens it. */
 pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file(if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)})?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 pub fn close(fd:usize)->Result<(),i64>{
@@ -64,7 +67,7 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
  match kind{
   OpenKind::Console=>Ok(0),
-  OpenKind::Inode(n)=>{let got=vfs::read(n,offset,dst)?;if got>0{if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}}Ok(got)},
+  OpenKind::Inode(n)=>{crate::println!("fd read inode mode={:#o} rdev={}",n.mode,n.rdev); let got=vfs::read(n,offset,dst)?;if got>0{if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}}Ok(got)},
   OpenKind::PipeRead(p)=>crate::pipe::read(p,dst),
   OpenKind::Socket(s)=>crate::socket::recv(s,dst),
   OpenKind::EventFd(c,sem)=>{
@@ -191,3 +194,8 @@ pub fn timerfd_set(id:u32,exp:u64,ivl:u64){
 pub fn timerfd_get(id:u32)->Option<(u64,u64)>{
  match kind(id){Some(OpenKind::TimerFd(e,i))=>Some((e,i)),_=>None}
 }
+
+pub fn iouring_set(id:u32,sq:u64,cq:u64,sqes:u64){let i=id as usize;unsafe{IOURING_SQ_RING[i]=sq;IOURING_CQ_RING[i]=cq;IOURING_SQES[i]=sqes;}}
+pub fn iouring_sq_ring(id:u32)->u64{unsafe{IOURING_SQ_RING[id as usize]}}
+pub fn iouring_cq_ring(id:u32)->u64{unsafe{IOURING_CQ_RING[id as usize]}}
+pub fn iouring_sqes(id:u32)->u64{unsafe{IOURING_SQES[id as usize]}}

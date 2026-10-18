@@ -10,17 +10,22 @@ const EMPTY:Task=Task{pid:0,ppid:0,pgid:0,sid:0,state:State::Unused,rsp:0,kernel
 struct Scheduler{tasks:[Task;MAX_TASKS],current:usize,next_pid:u32}
 static SCHED:IrqSpinLock<Scheduler>=IrqSpinLock::new(Scheduler{tasks:[EMPTY;MAX_TASKS],current:0,next_pid:2});
 static NEXT_NS:AtomicU64=AtomicU64::new(2);
+static mut UTS_NAMESPACES:[[u8;65];16]=[[0;65];16];
+fn uts_init(){unsafe{UTS_NAMESPACES[1][..4].copy_from_slice(b"slop");}}
 /* One Process per user task slot; kernel-only tasks leave their entry empty. */
 static PROCS:IrqSpinLock<[Option<Process>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
 static mut STACKS:[Stack;MAX_TASKS]=[const{Stack([0;STACK_SIZE])};MAX_TASKS];
 static NEED_RESCHED:AtomicBool=AtomicBool::new(false);static PID:AtomicU32=AtomicU32::new(1);
 unsafe extern "sysv64"{fn switch_context(old:*mut u64,new:u64);}
-pub fn init(bootstrap_stack_top:u64){let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
+pub fn init(bootstrap_stack_top:u64){uts_init();let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
 pub fn current_pid()->u32{PID.load(Ordering::Relaxed)}
 pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
 pub fn current_pgid()->u32{let s=SCHED.lock();s.tasks[s.current].pgid}
 pub fn current_sid()->u32{let s=SCHED.lock();s.tasks[s.current].sid}
 pub fn alloc_ns()->u64{NEXT_NS.fetch_add(1,Ordering::Relaxed)}
+pub fn uts_hostname(ns:u64)->[u8;65]{let idx=(ns as usize)%16;unsafe{if UTS_NAMESPACES[idx][0]==0 && idx==1 {let mut d=[0u8;65];d[..4].copy_from_slice(b"slop");d}else{UTS_NAMESPACES[idx]}}}
+pub fn set_uts_hostname(ns:u64,name:&[u8]){let idx=(ns as usize)%16;unsafe{UTS_NAMESPACES[idx]=[0;65];let n=name.len().min(64);UTS_NAMESPACES[idx][..n].copy_from_slice(&name[..n]);}}
+pub fn alloc_uts_ns(src:u64)->u64{let id=alloc_ns();let idx=(id as usize)%16;let srcidx=(src as usize)%16;unsafe{UTS_NAMESPACES[idx]=UTS_NAMESPACES[srcidx];}id}
 pub fn sched_pids()->[u32;8]{let s=SCHED.lock();let mut p=[0;8];for i in 0..8{p[i]=s.tasks[i].pid};p}
 pub fn current_kernel_stack_top()->u64{let s=SCHED.lock();s.tasks[s.current].kernel_stack_top}
 /* Locks are never nested the other way around: the scheduler guard is released
@@ -43,7 +48,7 @@ extern "sysv64" fn user_thread_trampoline()->!{let slot=SCHED.lock().current;let
 pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u64,tls:u64,ctid:u64,ns_flags:u64)->Result<u32,i64>{
  let (cr3,bootstrap,image_slot,stack_slot,mmap_slot,fds,brk,handlers)=match with_current_process(|p|(p.cr3,p.bootstrap_cr3,p.image_slot,p.stack_slot,p.mmap_slot,p.fds.clone_incref(),p.brk,p.handlers)){
   Some(v)=>v,None=>return Err(crate::errno::ESRCH)};
- let mut child=Process{cr3,bootstrap_cr3:bootstrap,image_slot,stack_slot,mmap_slot,vm:crate::vm::Map::new(),brk,clear_child_tid:ctid,fds,pending:0,sigmask:0,handlers,sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,umask:0,groups:[0;32],ngroups:0};
+ let mut child=Process{cr3,bootstrap_cr3:bootstrap,image_slot,stack_slot,mmap_slot,vm:crate::vm::Map::new(),brk,clear_child_tid:ctid,fds,pending:0,sigmask:0,handlers,sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,umask:0,groups:[0;32],ngroups:0};
  apply_ns_flags(&mut child,ns_flags);
  let mut frame=frame;frame.rsp=child_stack;
  let mut s=SCHED.lock();
@@ -93,7 +98,7 @@ pub fn setsid()->Result<u32,i64>{
 }
 fn apply_ns_flags(p:&mut Process,flags:u64){
  const CLONE_NEWUTS:u64=0x04000000; const CLONE_NEWIPC:u64=0x08000000; const CLONE_NEWUSER:u64=0x10000000; const CLONE_NEWPID:u64=0x20000000; const CLONE_NEWNET:u64=0x40000000; const CLONE_NEWCGROUP:u64=0x02000000; const CLONE_NEWTIME:u64=0x00000080; const CLONE_NEWNS:u64=0x00020000;
- if flags&CLONE_NEWUTS!=0{p.ns_uts=alloc_ns();}
+ if flags&CLONE_NEWUTS!=0{p.ns_uts=alloc_uts_ns(p.ns_uts);}
  if flags&CLONE_NEWIPC!=0{p.ns_ipc=alloc_ns();}
  if flags&CLONE_NEWNS!=0{p.ns_mnt=alloc_ns();}
  if flags&CLONE_NEWPID!=0{p.ns_pid=alloc_ns();}

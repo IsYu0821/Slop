@@ -1,3 +1,23 @@
+## 0.51.0 - 2026-10-18
+- Added per-namespace UTS hostname state.
+- Improved sethostname propagation across namespaces.
+- Delivered inotify events for filesystem changes.
+
+## 0.50.0 - 2026-10-18
+- Added read-only ext2 support on virtio-blk.
+- Added /mnt integration and ext2 file reads.
+- Parsed ext2 superblocks, group descriptors, inodes and directories.
+
+## 0.49.0 - 2026-10-18
+- Added io_uring ring allocation and parameter reporting.
+- Added synchronous NOP, read and write submission processing.
+- Added completion queue entry posting.
+
+## 0.48.0 - 2026-10-18
+- Added classic BPF evaluation for seccomp filters.
+- Supported seccomp allow, errno, trap and kill actions.
+- Validated and stored user-supplied filter programs.
+
 ## 0.47.0 - 2026-10-18
 - Added per-process hostname state and sethostname support.
 - Added seccomp strict-mode enforcement.

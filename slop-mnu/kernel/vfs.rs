@@ -12,6 +12,9 @@ fn u32le(b:&[u8],o:usize)->Result<u32>{let x=b.get(o..o+4).ok_or(errno::EINVAL)?
 fn align8(v:usize)->Result<usize>{v.checked_add(7).map(|x|x&!7).ok_or(errno::EINVAL)}
 pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],npages:1,name,name_len:nl};p=align8(p+size)?;}m.len=count;m.mounted=true;Ok(count)}
 pub fn read(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
+ if inode.rdev>0 && inode.mode&0o020000==0 && inode.mode&0o060000==0 && inode.npages==0 {
+  return crate::ext2::read(inode.rdev as u32,off,dst)
+ }
  if inode.npages==0 { if off>=inode.size{return Ok(0)} let n=core::cmp::min(dst.len(),(inode.size-off)as usize); let src=unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)}; dst[..n].copy_from_slice(src); return Ok(n) }
  if off>=inode.size{return Ok(0)}
  let mut done=0usize;
@@ -113,6 +116,13 @@ pub fn readdir(path:&str,mut cb:impl FnMut(u64,u32,&str))->Result<usize>{
  }
  if path=="/proc/self/fd"{
   cb(0x9100,S_IFLNK,"0"); cb(0x9101,S_IFLNK,"1"); cb(0x9102,S_IFLNK,"2"); return Ok(3)
+ }
+ if path=="/mnt" && crate::ext2::ready(){
+  return crate::ext2::readdir("/",cb).map_err(|e|e)
+ }
+ if path.starts_with("/mnt/") && crate::ext2::ready(){
+  let sub=&path[5..];
+  return crate::ext2::readdir(sub,cb).map_err(|e|e)
  }
  if path=="/proc/self/ns"{
   cb(0x9200,S_IFLNK,"uts"); cb(0x9201,S_IFLNK,"ipc"); cb(0x9202,S_IFLNK,"mnt"); cb(0x9203,S_IFLNK,"pid"); cb(0x9204,S_IFLNK,"net"); cb(0x9205,S_IFLNK,"user"); cb(0x9206,S_IFLNK,"cgroup"); cb(0x9207,S_IFLNK,"time"); return Ok(8)
@@ -467,12 +477,23 @@ pub fn lookup(path:&str)->Result<Inode>{
  if path=="/sys"||path=="/sys/class"||path=="/sys/class/net"||path=="/sys/block"||path=="/sys/devices"||path=="/sys/kernel"||path=="/sys/fs"||is_sys_file(path){
   return sys_lookup(path)
  }
+ if path=="/mnt"{
+  let mut name=[0u8;NAME_MAX+1]; name[..4].copy_from_slice(b"/mnt"); return Ok(Inode{ino:0xb000,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:4})
+ }
+ if path.starts_with("/mnt/") && crate::ext2::ready(){
+  let n=crate::ext2::lookup(&path[5..]);
+  if let Ok(ref node)=n { crate::println!("vfs lookup ext2 {} mode={:#o} rdev={}",path,node.mode,node.rdev); }
+  return n
+ }
  let m=ROOT.lock();
  if !m.mounted{return Err(errno::ENOENT)}
  m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)
 }
 pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){ if off>=inode.size{return Ok(0)}; let n=core::cmp::min(dst.len(),(inode.size-off)as usize); dst[..n].copy_from_slice(unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)}); return Ok(n) }
+ if inode.rdev>0 && inode.mode&0o020000==0 && inode.mode&0o060000==0 && inode.npages==0 {
+  return crate::ext2::read(inode.rdev as u32,off,dst)
+ }
  let m=ROOT.lock();
  let node=m.nodes[..m.len].iter().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
  if node.npages==0 { if off>=node.size{return Ok(0)} let n=core::cmp::min(dst.len(),(node.size-off)as usize); let src=unsafe{core::slice::from_raw_parts(node.data.add(off as usize),n)}; dst[..n].copy_from_slice(src); return Ok(n) }
