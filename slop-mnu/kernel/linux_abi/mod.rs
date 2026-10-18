@@ -66,6 +66,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::SOCKETPAIR=>sys_socketpair(a[0] as i32,a[1] as i32,a[2] as i32,a[3]),
     nr::SHUTDOWN=>sys_shutdown(a[0] as usize,a[1] as i32),
     nr::GETSOCKNAME=>sys_getsockname(a[0] as usize,a[1],a[2]),
+    nr::GETPEERNAME=>sys_getpeername(a[0] as usize,a[1],a[2]),
     nr::GETCWD=>sys_getcwd(a[0],a[1]),
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
@@ -530,10 +531,36 @@ fn sockaddr_path(addr:u64,len:u64)->Result<([u8;108],usize),i64>{
  if core::str::from_utf8(&b[..end]).is_err(){return Err(errno::EINVAL)}
  Ok((b,end))
 }
+fn sockaddr_in_of(addr:u64,len:u64)->Result<(u32,u16),i64>{
+ if len<8{return Err(errno::EINVAL)}
+ let mut b=[0u8;8];
+ if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,addr as usize)}{return Err(e)}
+ if u16::from_ne_bytes([b[0],b[1]])!=2{return Err(errno::EAFNOSUPPORT)}
+ Ok((u32::from_be_bytes([b[4],b[5],b[6],b[7]]),u16::from_be_bytes([b[2],b[3]])))
+}
+fn write_sockaddr_in(addr:u64,addrlen:u64,ip:u32,port:u16)->Result<(),i64>{
+ if addr==0{return Ok(())}
+ let want={let mut b=[0u8;4];if crate::usercopy::copy_from_user(&mut b,addrlen as usize).is_ok(){u32::from_ne_bytes(b)as usize}else{0}};
+ let mut sa=[0u8;16];
+ sa[0..2].copy_from_slice(&2u16.to_ne_bytes());
+ sa[2..4].copy_from_slice(&port.to_be_bytes());
+ sa[4..8].copy_from_slice(&ip.to_be_bytes());
+ let report=core::cmp::min(want.max(8),16);
+ crate::usercopy::copy_to_user(addr as usize,&sa[..report])?;
+ if addrlen!=0{let l=16u32;crate::usercopy::copy_to_user(addrlen as usize,&l.to_ne_bytes())?;}
+ Ok(())
+}
 fn sys_socket(domain:i32,ty:i32,_proto:i32)->i64{
- if domain!=1{return errno::neg(errno::EAFNOSUPPORT)}
- let sock=match crate::socket::socket(ty as u32){Ok(s)=>s,Err(e)=>return errno::neg(e)};
- let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(sock)){Ok(d)=>d,Err(e)=>{crate::socket::close(sock);return errno::neg(e)}};
+ let id=match domain{
+  1=>match crate::socket::socket(ty as u32&0xf){Ok(s)=>s,Err(e)=>return errno::neg(e)},
+  2=>match ty as u32&0xf{
+   crate::socket::SOCK_DGRAM=>match crate::net::udp_open(){Ok(i)=>crate::socket::INET_UDP_BASE+i,Err(e)=>return errno::neg(e)},
+   crate::socket::SOCK_STREAM=>match crate::net::tcp_open(){Ok(i)=>crate::socket::INET_TCP_BASE+i,Err(e)=>return errno::neg(e)},
+   _=>return errno::neg(errno::EINVAL),
+  },
+  _=>return errno::neg(errno::EAFNOSUPPORT),
+ };
+ let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(id)){Ok(d)=>d,Err(e)=>{crate::socket::close(id);return errno::neg(e)}};
  match crate::task::with_current_process(|p|p.fds.install(desc)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(desc);errno::neg(e)},None=>{crate::fd::release(desc);errno::neg(errno::ESRCH)}}
 }
 fn sys_socketpair(domain:i32,ty:i32,_proto:i32,sv:u64)->i64{
@@ -555,16 +582,23 @@ fn sock_fd(fd:usize)->Result<u8,i64>{
 }
 fn sys_bind(fd:usize,addr:u64,len:u64)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  let (ip,port)=match sockaddr_in_of(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let r=if tcp{crate::net::tcp_bind(sock-crate::socket::INET_TCP_BASE,ip,port)}else{crate::net::udp_bind(sock-crate::socket::INET_UDP_BASE,ip,port)};
+  return match r{Ok(())=>0,Err(e)=>errno::neg(e)};
+ }
  let (pb,pl)=match sockaddr_path(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let path=match core::str::from_utf8(&pb[..pl]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::socket::bind(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_listen(fd:usize,_backlog:i32)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>{return errno::neg(e)}};
+ if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
  match crate::socket::listen(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
  let server=match crate::socket::accept(sock,false){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(server)){Ok(d)=>d,Err(e)=>{crate::socket::close(server);return errno::neg(e)}};
  match crate::task::with_current_process(|p|p.fds.install(desc)){
@@ -589,12 +623,33 @@ fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{
 }
 fn sys_connect(fd:usize,addr:u64,len:u64)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  let (ip,port)=match sockaddr_in_of(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let r=if tcp{crate::net::tcp_connect(sock-crate::socket::INET_TCP_BASE,ip,port)}else{crate::net::udp_connect(sock-crate::socket::INET_UDP_BASE,ip,port)};
+  return match r{Ok(())=>0,Err(e)=>errno::neg(e)};
+ }
  let (pb,pl)=match sockaddr_path(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let path=match core::str::from_utf8(&pb[..pl]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::socket::connect(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
-fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,_addr:u64,_addrlen:u64)->i64{
+fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  if tcp{
+   let mut chunk=[0u8;512];let mut done=0usize;
+   while done<len{
+    let n=core::cmp::min(chunk.len(),len-done);
+    if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut chunk[..n],buf as usize+done)}{return if done==0{errno::neg(e)}else{done as i64}}
+    match crate::net::tcp_send(sock-crate::socket::INET_TCP_BASE,&chunk[..n]){Ok(g)=>{done+=g;if g<n{return done as i64}},Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+   }
+   return done as i64;
+  }
+  let to=if addr!=0{Some(match sockaddr_in_of(addr,addrlen){Ok(v)=>v,Err(e)=>return errno::neg(e)})}else{None};
+  if len>1472{return errno::neg(errno::EMSGSIZE)}
+  let mut chunk=[0u8;1472];
+  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut chunk[..len],buf as usize)}{return errno::neg(e)}
+  return match crate::net::udp_send(sock-crate::socket::INET_UDP_BASE,to,&chunk[..len]){Ok(g)=>g as i64,Err(e)=>errno::neg(e)};
+ }
  let mut chunk=[0u8;512];let mut done=0usize;
  while done<len{
   let n=core::cmp::min(chunk.len(),len-done);
@@ -603,9 +658,26 @@ fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,_addr:u64,_addrlen:u64)->i64
  }
  done as i64
 }
-fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,_addr:u64,_addrlen:u64)->i64{
+fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
  if len==0{return 0}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  let n=core::cmp::min(len,1472);
+  let mut chunk=[0u8;1472];
+  if tcp{
+   let got=match crate::net::tcp_recv(sock-crate::socket::INET_TCP_BASE,&mut chunk[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)};
+   if got==0{return 0}
+   if let Err(e)=unsafe{crate::usercopy::copy_to_user(buf as usize,&chunk[..got])}{return errno::neg(e)}
+   if let Ok((ip,port))=crate::net::tcp_peername(sock-crate::socket::INET_TCP_BASE){
+    if let Err(e)=write_sockaddr_in(addr,addrlen,ip,port){return errno::neg(e)}
+   }
+   return got as i64;
+  }
+  let(got,ip,port)=match crate::net::udp_recv(sock-crate::socket::INET_UDP_BASE,&mut chunk[..n]){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  if let Err(e)=unsafe{crate::usercopy::copy_to_user(buf as usize,&chunk[..got])}{return errno::neg(e)}
+  if let Err(e)=write_sockaddr_in(addr,addrlen,ip,port){return errno::neg(e)}
+  return got as i64;
+ }
  let mut chunk=[0u8;512];let mut done=0usize;
  while done<len{
   let n=core::cmp::min(chunk.len(),len-done);
@@ -616,12 +688,34 @@ fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,_addr:u64,_addrlen:u64)->i
  }
  done as i64
 }
-fn sys_shutdown(fd:usize,_how:i32)->i64{
+fn sys_shutdown(fd:usize,how:i32)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  if tcp{return match crate::net::tcp_shutdown(sock-crate::socket::INET_TCP_BASE,how){Ok(())=>0,Err(e)=>errno::neg(e)}}
+  return 0;
+ }
  match crate::socket::shutdown(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_getpeername(fd:usize,addr:u64,addrlen:u64)->i64{
+ let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  let peer=if tcp{crate::net::tcp_peername(sock-crate::socket::INET_TCP_BASE)}else{crate::net::udp_peername(sock-crate::socket::INET_UDP_BASE)};
+  return match peer{
+   Ok((ip,port))=>match write_sockaddr_in(addr,addrlen,ip,port){Ok(())=>0,Err(e)=>errno::neg(e)},
+   Err(e)=>errno::neg(e),
+  };
+ }
+ errno::neg(errno::ENOTCONN)
 }
 fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  let local=if tcp{crate::net::tcp_local(sock-crate::socket::INET_TCP_BASE)}else{crate::net::udp_local(sock-crate::socket::INET_UDP_BASE)};
+  return match local{
+   Ok((ip,port))=>match write_sockaddr_in(addr,addrlen,ip,port){Ok(())=>0,Err(e)=>errno::neg(e)},
+   Err(e)=>errno::neg(e),
+  };
+ }
  let p=crate::socket::path_of(sock).unwrap_or([0;108]);
  let n=crate::socket::path_len_of(sock);
  let mut sa=[0u8;110];

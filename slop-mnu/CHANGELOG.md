@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.0 - 2026-10-18
+- Added a CAM PCI scanner with multi-function and 64-bit BAR support plus x86-64 port-I/O primitives.
+- Added a legacy virtio-net driver: split rings, RX recycling, synchronous TX completion, and the mandatory 10-byte legacy header.
+- Added an Ethernet/ARP/IPv4/ICMP/UDP stack and a minimal TCP client (go-back-N, RTO, FIN shutdown) in `kernel/net.rs`.
+- Wired `AF_INET` into the socket layer and Linux ABI: `socket`, `bind`, `connect`, `sendto`, `recvfrom`, `getsockname`, `getpeername`, `shutdown`, with `sockaddr_in` translation.
+- Switched the acceptance guest to `virtio-net-pci` with QEMU user networking and added `tools/net-echo.py`, a dual UDP/TCP host echo server.
+- Added `/bin/hello-net` (musl) exercising UDP and TCP echo round trips, chained after `/bin/hello-socket`.
+
 ## 0.28.0 - 2026-10-18
 - Added a Linux signal ABI foundation: `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn` syscalls in `kernel/signal.rs`.
 - Added per-process pending and blocked signal masks to `Process`; `fork` preserves them, `execve` resets them.

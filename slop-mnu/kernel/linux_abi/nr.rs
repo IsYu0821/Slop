@@ -17,4 +17,4 @@ pub const EPOLL_CREATE1:u64=291; pub const EPOLL_CTL:u64=233; pub const EPOLL_WA
 pub const PKEY_ALLOC:u64=330; pub const TIMER_CREATE:u64=222; pub const GETDENTS:u64=78; pub const PREAD64:u64=17; pub const PWRITE64:u64=18;
 pub const READV:u64=19; pub const WRITEV:u64=20; pub const GETDENTS64:u64=217; pub const UNLINKAT:u64=263;
 pub const SOCKET:u64=41; pub const CONNECT:u64=42; pub const ACCEPT:u64=43; pub const SENDTO:u64=44; pub const RECVFROM:u64=45;
-pub const SHUTDOWN:u64=48; pub const BIND:u64=49; pub const LISTEN:u64=50; pub const GETSOCKNAME:u64=51; pub const SOCKETPAIR:u64=53; pub const FORK:u64=57;
+pub const SHUTDOWN:u64=48; pub const BIND:u64=49; pub const LISTEN:u64=50; pub const GETSOCKNAME:u64=51; pub const GETPEERNAME:u64=52; pub const SOCKETPAIR:u64=53; pub const FORK:u64=57;

@@ -2,4 +2,6 @@ pub const EPERM:i64=1; pub const ENOENT:i64=2; pub const ESRCH:i64=3; pub const 
 pub const EISDIR:i64=21; pub const ENOTTY:i64=25; pub const ERANGE:i64=34; pub const ENOTDIR:i64=20; pub const ETIMEDOUT:i64=110; pub const ENOSPC:i64=28;
 pub const ENOTCONN:i64=107; pub const EADDRINUSE:i64=98; pub const ECONNREFUSED:i64=111; pub const ECONNABORTED:i64=103;
 pub const EAFNOSUPPORT:i64=97; pub const ENOTSOCK:i64=88; pub const ESOCKTNOSUPPORT:i64=94; pub const EOPNOTSUPP:i64=95; pub const EISCONN:i64=106;
+pub const EIO:i64=5; pub const EMSGSIZE:i64=90; pub const EDESTADDRREQ:i64=89; pub const EADDRNOTAVAIL:i64=99;
+pub const ENETDOWN:i64=100; pub const ENETUNREACH:i64=101; pub const ECONNRESET:i64=104; pub const EHOSTUNREACH:i64=113;
 #[inline] pub const fn neg(e:i64)->i64{-e}

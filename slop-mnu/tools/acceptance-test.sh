@@ -10,6 +10,19 @@ if ! ./tools/build-uefi.sh; then
   printf 'acceptance: build failed\n' >&2
   exit 1
 fi
+rm -f build/net-echo.ready
+python3 tools/net-echo.py >build/net-echo.log 2>&1 &
+ECHO_PID=$!
+trap '[ -n "${ECHO_PID:-}" ] && kill "$ECHO_PID" 2>/dev/null' EXIT
+waited=0
+while [ ! -f build/net-echo.ready ] && [ "$waited" -lt 50 ]; do
+  sleep 0.1
+  waited=$((waited+1))
+done
+if [ ! -f build/net-echo.ready ]; then
+  printf 'acceptance: net-echo server did not become ready\n' >&2
+  exit 1
+fi
 set +e
 timeout "$TIMEOUT" ./tools/run-qemu.sh >"$LOG" 2>&1
 status=$?
@@ -49,6 +62,9 @@ for text in \
   'execve: committed /bin/hello-socket' \
   'sock: main entered' \
   'sock: socketpair and stream listen/connect/accept passed' \
+  'execve: committed /bin/hello-net' \
+  'net: main entered' \
+  'net: udp and tcp echo passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then

@@ -126,6 +126,7 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
 pub extern "sysv64" fn apic_timer_rust() {
     TICKS.fetch_add(1, Ordering::Relaxed);
     crate::task::on_timer_tick();
+    crate::net::poll();
     unsafe { write(0xb0,0) }
 }
 

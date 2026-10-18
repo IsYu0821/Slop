@@ -2,7 +2,12 @@
 //! Each endpoint owns a ring buffer its peer writes into; read and write
 //! block on wait queues exactly like pipes, with EOF when the peer closes.
 use crate::{errno,sync::SpinLock,wait_queue::WaitQueue};
-pub const MAX_SOCKETS:usize=16;pub const CAPACITY:usize=4096;pub const PATH_MAX:usize=108;
+pub const MAX_SOCKETS:usize=16;
+/* AF_INET endpoints are dispatched by id range: 16..48 hand off to net.rs. */
+pub const INET_UDP_BASE:u8=16;pub const INET_TCP_BASE:u8=32;
+pub fn inet_kind(id:u8)->Option<bool>{
+ if id>=INET_TCP_BASE{Some(true)}else if id>=INET_UDP_BASE{Some(false)}else{None}
+}pub const CAPACITY:usize=4096;pub const PATH_MAX:usize=108;
 pub const SOCK_STREAM:u32=1;pub const SOCK_DGRAM:u32=2;
 #[derive(Clone,Copy,PartialEq)]pub enum SockState{Unbound,Listening,Connected}
 #[derive(Clone,Copy,PartialEq)]pub enum SockKind{Stream,Dgram}
@@ -127,6 +132,9 @@ pub fn socketpair()->Result<(u8,u8),i64>{
  Ok((a,b))
 }
 pub fn send(id:u8,data:&[u8])->Result<usize,i64>{
+ if let Some(tcp)=inet_kind(id){
+  return if tcp{crate::net::tcp_send(id-INET_TCP_BASE,data)}else{crate::net::udp_send(id-INET_UDP_BASE,None,data)};
+ }
  if !valid(id){return Err(errno::EBADF)}
  let peer=match SOCKS[id as usize].lock().peer{Some(p)=>p,None=>return Err(errno::ENOTCONN)};
   let mut done=0usize;
@@ -149,6 +157,9 @@ pub fn send(id:u8,data:&[u8])->Result<usize,i64>{
  Ok(done)
 }
 pub fn recv(id:u8,dst:&mut[u8])->Result<usize,i64>{
+ if let Some(tcp)=inet_kind(id){
+  return if tcp{crate::net::tcp_recv(id-INET_TCP_BASE,dst)}else{crate::net::udp_recv(id-INET_UDP_BASE,dst).map(|(n,_,_)|n)};
+ }
  if dst.is_empty(){return Ok(0)}
  loop{
   let registered={
@@ -168,6 +179,9 @@ pub fn recv(id:u8,dst:&mut[u8])->Result<usize,i64>{
 }
 /* Half-closes: the peer observes EOF while this end may still read. */
 pub fn shutdown(id:u8)->Result<(),i64>{
+ if let Some(tcp)=inet_kind(id){
+  return if tcp{crate::net::tcp_shutdown(id-INET_TCP_BASE,1)}else{Ok(())};
+ }
  if !valid(id){return Err(errno::EBADF)}
  let peer=SOCKS[id as usize].lock().peer;
  SOCKS[id as usize].lock().peer_closed=true;
@@ -179,6 +193,10 @@ pub fn shutdown(id:u8)->Result<(),i64>{
  Ok(())
 }
 pub fn close(id:u8){
+ if let Some(tcp)=inet_kind(id){
+  if tcp{crate::net::tcp_close(id-INET_TCP_BASE)}else{crate::net::udp_close(id-INET_UDP_BASE)};
+  return;
+ }
  if !valid(id){return}
  let mut s=SOCKS[id as usize].lock();
  if !s.used{return}
