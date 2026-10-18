@@ -55,12 +55,6 @@ impl Process{
   if frame==0{let _=self.vm.remove(start,size);return Err(crate::errno::EINVAL)}
   let pte=Self::pte_flags(prot)?;
   if let Err(e)=self.root().map_page(&crate::arch::x86_64::phys::Identity,start as u64,frame,pte){let _=self.vm.remove(start,size);return Err(e)}
- }else if iouring{
-  let id=self.fds.get(fd as usize).ok_or(crate::errno::EBADF)?;
-  let frame=match offset as u64 {0=>crate::fd::iouring_sq_ring(id),0x8000000=>crate::fd::iouring_cq_ring(id),0x10000000=>crate::fd::iouring_sqes(id),_=>0};
-  if frame==0{let _=self.vm.remove(start,size);return Err(crate::errno::EINVAL)}
-  let pte=Self::pte_flags(prot)?;
-  if let Err(e)=self.root().map_page(&crate::arch::x86_64::phys::Identity,start as u64,frame,pte){let _=self.vm.remove(start,size);return Err(e)}
  }else if anon{
   if let Err(e)=self.map_zeroed(start as u64,size as u64,prot){let _=self.vm.remove(start,size);return Err(e)}
  }else{

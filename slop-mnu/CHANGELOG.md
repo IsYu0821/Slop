@@ -1,3 +1,8 @@
+## 0.52.0 - 2026-10-18
+- Added per-namespace UTS hostname state.
+- Added mount-namespace filtering for mount tables.
+- Improved mount-aware path resolution.
+
 ## 0.51.0 - 2026-10-18
 - Added per-namespace UTS hostname state.
 - Improved sethostname propagation across namespaces.

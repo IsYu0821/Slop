@@ -482,7 +482,6 @@ pub fn lookup(path:&str)->Result<Inode>{
  }
  if path.starts_with("/mnt/") && crate::ext2::ready(){
   let n=crate::ext2::lookup(&path[5..]);
-  if let Ok(ref node)=n { crate::println!("vfs lookup ext2 {} mode={:#o} rdev={}",path,node.mode,node.rdev); }
   return n
  }
  let m=ROOT.lock();

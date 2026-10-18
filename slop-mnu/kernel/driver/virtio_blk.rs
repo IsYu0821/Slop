@@ -64,7 +64,6 @@ fn setup_queue(io:u16,ring:*mut u8)->Result<(),&'static str>{
  Ok(())
 }
 fn do_request(typ:u32,sector:u64)->Result<(),i64>{
- crate::println!("do_request type={} sector={}",typ,sector);
  let mut blk=BLK.lock();
  if !blk.ready{return Err(crate::errno::ENODEV)}
  let io=blk.io;
@@ -99,10 +98,8 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
    let len=(pp.add(8) as *const u32).read_volatile();
    let flags=(pp.add(12) as *const u16).read_volatile();
    let next=(pp.add(14) as *const u16).read_volatile();
-   crate::println!("desc{} addr={:#x} len={} flags={} next={}",di,addr,len,flags,next);
   }
   port::outw(io+QUEUE_NOTIFY,0);
-  crate::println!("blk after notify");
   // spin
   let mut used=used_idx_real(r).read_volatile();
   let start=used;

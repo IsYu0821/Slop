@@ -3,7 +3,6 @@ use crate::{errno, vfs};
 const EXT2_MAGIC:u16=0xEF53;
 pub fn ready()->bool{ crate::driver::virtio_blk::ready() }
 fn read_bytes(off:u64,dst:&mut[u8])->Result<(),i64>{
- crate::println!("read_bytes off={} len={}",off,dst.len());
  let cap=crate::driver::virtio_blk::capacity()*512;
  if off as usize+dst.len() > cap as usize {return Err(errno::EINVAL)}
  let mut done=0usize;
@@ -55,13 +54,11 @@ fn read_inode(sb:&Super,inum:u32)->Result<Inode,i64>{
  let inode_size=sb.s_inode_size as usize;
  let table_block=gd.bg_inode_table as u64;
  let byte_off=idx*inode_size;
- crate::println!("ext2 gd table_block={} idx={} byte_off={}",table_block,idx,byte_off);
  let block=table_block + (byte_off/bs) as u64;
  let off=byte_off%bs;
  let mut buf=[0u8;4096];
  read_block(block,bs,&mut buf)?;
  let inode:Inode=unsafe{core::ptr::read(buf[off..].as_ptr() as *const Inode)};
- crate::println!("read_inode raw bytes {:02x} {:02x} off={}",buf[off],buf[off+1],off);
  Ok(inode)
 }
 fn read_file_block(sb:&Super,inode:&Inode,block_index:usize)->Result<u64,i64>{
@@ -138,7 +135,6 @@ let n=make_vfs_inode(path,inum,&inode,&sb); Ok(n)
 }
 fn make_vfs_inode(path:&str,inum:u32,inode:&Inode,sb:&Super)->vfs::Inode{
  let mode=inode.i_mode as u32;
- crate::println!("make_vfs_inode inum={} mode={:#x} inode_ptr={:#x} raw0={:#x} raw1={:#x}",inum,mode,inode as *const Inode as usize,unsafe{(inode as *const Inode).cast::<u8>().read()},unsafe{(inode as *const Inode).cast::<u8>().add(1).read()});
  let size=inode.i_size_lo as u64;
  let mut name=[0u8;127+1];
  let b=path.as_bytes(); let nl=b.len().min(127); name[..nl].copy_from_slice(&b[..nl]);
@@ -153,7 +149,6 @@ pub fn read(inode_rdev:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  while done<dst.len() && off as usize+done < size {
   let poff=off as usize+done;
   let blk=read_file_block(&sb,&inode,poff/ (block_size(&sb) as usize))?;
-  crate::println!("ext2 read poff={} blk={}",poff,blk);
   if blk==0 {break}
   let bs=block_size(&sb);
   let mut block=[0u8;4096];

@@ -4,8 +4,8 @@ use crate::errno; use core::mem::size_of; use types::*;
 #[repr(C)] struct UtsName { sysname:[u8;65], nodename:[u8;65], release:[u8;65], version:[u8;65], machine:[u8;65], domainname:[u8;65] }
 
 static mut HOSTNAME:[u8;65]=[0;65];
-#[derive(Clone,Copy)]struct MountEntry{used:bool,source:[u8;128],slen:usize,target:[u8;128],tlen:usize}
-static mut MOUNTS:[MountEntry;16]=[MountEntry{used:false,source:[0;128],slen:0,target:[0;128],tlen:0};16];
+#[derive(Clone,Copy)]struct MountEntry{used:bool,ns:u64,source:[u8;128],slen:usize,target:[u8;128],tlen:usize}
+static mut MOUNTS:[MountEntry;16]=[MountEntry{used:false,ns:0,source:[0;128],slen:0,target:[0;128],tlen:0};16];
 fn hostname_init(){unsafe{HOSTNAME[..4].copy_from_slice(b"slop");}}
 fn hostname_bytes()->[u8;65]{let h=unsafe{HOSTNAME}; if h[0]==0 { let mut d=[0u8;65]; d[..4].copy_from_slice(b"slop"); d } else { h } }
 pub fn dispatch(n:u64,a:[u64;6])->i64 {
@@ -176,7 +176,6 @@ fn fd_result(r:Result<i32,i64>)->i64{match r{Ok(v)=>v as i64,Err(e)=>errno::neg(
 fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {
  if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
  let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- crate::println!("sys_read fd={} id={}",fd,id);
  /* Sockets return one recv's worth; looping would block waiting for the
     remainder of a length the peer never promised. */
  let single_shot=matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::Socket(_)));
@@ -335,9 +334,8 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let mut ev=["";EXEC_MAX_VEC];for i in 0..ec{ev[i]=match core::str::from_utf8(&eb[i][..el[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
- let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>{crate::println!("loaded");v},Err(_)=>{crate::println!("load fail");return errno::neg(errno::ENOEXEC)}};
- crate::println!("replace start");
- match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{crate::println!("replace ok");},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
+ let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
+ match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();});
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}
@@ -919,7 +917,8 @@ fn apply_mounts(input:&str)->[u8;256]{
  let m=unsafe{&*(&raw const MOUNTS)};
  // find longest target prefix
  let mut best:Option<usize>=None;
- for e in m.iter(){if !e.used{continue} if let Ok(t)=core::str::from_utf8(&e.target[..e.tlen]){
+ let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
+ for e in m.iter(){if !e.used || e.ns!=ns{continue} if let Ok(t)=core::str::from_utf8(&e.target[..e.tlen]){
   if input==t || input.starts_with(t) && (input.len()==t.len() || input.as_bytes()[t.len()]==b'/'){
    if best.map(|b|m[b].tlen<t.len()).unwrap_or(true){best=Some(m.iter().position(|x|x.used && core::str::from_utf8(&x.target[..x.tlen]).ok()==Some(t)).unwrap());}
   }
@@ -1715,6 +1714,7 @@ fn sys_mount(source:u64,target:u64,fstype:u64,flags:u64,data:u64)->i64{
  let mut m=unsafe{&mut *(&raw mut MOUNTS)};
  let slot=match m.iter().position(|e|!e.used){Some(i)=>i,None=>return errno::neg(errno::ENOMEM)};
  m[slot].used=true;
+ m[slot].ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
  let sl=sp.len().min(127); m[slot].source[..sl].copy_from_slice(sp.as_bytes()); m[slot].slen=sl;
  let tl=tp.len().min(127); m[slot].target[..tl].copy_from_slice(tp.as_bytes()); m[slot].tlen=tl;
  0
@@ -1724,7 +1724,8 @@ fn sys_umount2(target:u64,flags:u64)->i64{
  let mut tb=[0u8;128];
  let tp=match copy_path(target,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut m=unsafe{&mut *(&raw mut MOUNTS)};
- if let Some(e)=m.iter_mut().find(|e|e.used && core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(tp)){e.used=false;return 0}
+ let ns=crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1);
+ if let Some(e)=m.iter_mut().find(|e|e.used && e.ns==ns && core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(tp)){e.used=false;return 0}
  errno::neg(errno::EINVAL)
 }
 fn sys_pivot_root(new_root:u64,put_old:u64)->i64{

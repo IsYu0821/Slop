@@ -23,7 +23,7 @@ pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
 pub fn current_pgid()->u32{let s=SCHED.lock();s.tasks[s.current].pgid}
 pub fn current_sid()->u32{let s=SCHED.lock();s.tasks[s.current].sid}
 pub fn alloc_ns()->u64{NEXT_NS.fetch_add(1,Ordering::Relaxed)}
-pub fn uts_hostname(ns:u64)->[u8;65]{let idx=(ns as usize)%16;unsafe{if UTS_NAMESPACES[idx][0]==0 && idx==1 {let mut d=[0u8;65];d[..4].copy_from_slice(b"slop");d}else{UTS_NAMESPACES[idx]}}}
+pub fn uts_hostname(ns:u64)->[u8;65]{let idx=(ns as usize)%16;unsafe{if UTS_NAMESPACES[idx][0]==0{let mut d=[0u8;65];d[..4].copy_from_slice(b"slop");d}else{UTS_NAMESPACES[idx]}}}
 pub fn set_uts_hostname(ns:u64,name:&[u8]){let idx=(ns as usize)%16;unsafe{UTS_NAMESPACES[idx]=[0;65];let n=name.len().min(64);UTS_NAMESPACES[idx][..n].copy_from_slice(&name[..n]);}}
 pub fn alloc_uts_ns(src:u64)->u64{let id=alloc_ns();let idx=(id as usize)%16;let srcidx=(src as usize)%16;unsafe{UTS_NAMESPACES[idx]=UTS_NAMESPACES[srcidx];}id}
 pub fn sched_pids()->[u32;8]{let s=SCHED.lock();let mut p=[0;8];for i in 0..8{p[i]=s.tasks[i].pid};p}
