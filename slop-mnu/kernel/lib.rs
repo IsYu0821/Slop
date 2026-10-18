@@ -60,6 +60,8 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     println!("resources: fd accounting self-test passed");
     if !vm::resource_self_test(){println!("mmap ledger self-test failed");arch::halt()}
     println!("resources: mmap ledger self-test passed");
+    if !memory::refcount_self_test(){println!("memory refcount self-test failed");arch::halt()}
+    println!("resources: memory refcount self-test passed");
     if let Err(e)=task::scheduler_self_test(){println!("scheduler self-test failed: {}",e);arch::halt()}
     if bi.initrd_base==0 || bi.initrd_size==0 { println!("no embedded Linux ELF"); arch::halt(); }
     let initramfs=unsafe { core::slice::from_raw_parts(bi.initrd_base as *const u8,bi.initrd_size as usize) };

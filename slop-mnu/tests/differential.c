@@ -23,6 +23,7 @@
 #include <sys/sysinfo.h>
 #include <sys/syscall.h>
 #include <poll.h>
+#include <signal.h>
 #include <dirent.h>
 #include <errno.h>
 #include <time.h>
@@ -270,6 +271,114 @@ int main(void) {
             return fail("io_uring munmap");
         close(ringfd);
         printf("DIFF_IOURING_OK\n");
+    }
+
+    /* Lazy demand-paged anonymous mapping: write and read back a pattern. */
+    {
+        unsigned char *lazy = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (lazy == MAP_FAILED) return fail("lazy anon mmap");
+        for (size_t i = 0; i < 65536; i++) lazy[i] = (unsigned char)(i * 7 + 3);
+        for (size_t i = 0; i < 65536; i++)
+            if (lazy[i] != (unsigned char)(i * 7 + 3)) return fail("lazy anon content");
+        if (munmap(lazy, 65536) != 0) return fail("lazy anon munmap");
+        printf("DIFF_LAZY_ANON_OK\n");
+    }
+
+    /* Lazy file-backed mapping: contents come from the file on first touch. */
+    {
+        int ffd = open("/tmp/differential-mmap", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (ffd < 0) return fail("file mmap create");
+        unsigned char pattern[8192];
+        for (size_t i = 0; i < sizeof(pattern); i++) pattern[i] = (unsigned char)(i * 13);
+        if (write(ffd, pattern, sizeof(pattern)) != (ssize_t)sizeof(pattern))
+            return fail("file mmap write");
+        close(ffd);
+        ffd = open("/tmp/differential-mmap", O_RDONLY);
+        if (ffd < 0) return fail("file mmap reopen");
+        unsigned char *fm = mmap(NULL, 8192, PROT_READ, MAP_PRIVATE, ffd, 0);
+        if (fm == MAP_FAILED) return fail("file mmap");
+        if (memcmp(fm, pattern, 8192) != 0) return fail("file mmap content");
+        if (memcmp(fm + 4088, pattern + 4088, 16) != 0) return fail("file mmap page boundary");
+        if (munmap(fm, 8192) != 0) return fail("file mmap munmap");
+        close(ffd);
+        unlink("/tmp/differential-mmap");
+        printf("DIFF_MMAP_FILE_OK\n");
+    }
+
+    /* Demand-paged brk: small allocations and large (mmap) allocations. */
+    {
+        char *small = malloc(3000);
+        char *large = malloc(300000);
+        if (!small || !large) return fail("malloc");
+        memset(small, 0x5a, 3000);
+        memset(large, 0xa5, 300000);
+        for (int i = 0; i < 3000; i++) if (small[i] != 0x5a) return fail("brk content");
+        for (int i = 0; i < 300000; i += 4093) if (large[i] != (char)0xa5) return fail("large malloc content");
+        free(large);
+        free(small);
+        printf("DIFF_BRK_OK\n");
+    }
+
+    /* mremap grows a mapping preserving contents, then moves it to a fixed address. */
+    {
+        char *m = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m == MAP_FAILED) return fail("mremap mmap");
+        memcpy(m, "remap-src", 10);
+        void *grown = mremap(m, 4096, 16384, MREMAP_MAYMOVE);
+        if (grown == MAP_FAILED) return fail("mremap grow");
+        if (memcmp(grown, "remap-src", 10) != 0) return fail("mremap grow content");
+        void *target = mmap(NULL, 8192, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (target == MAP_FAILED) return fail("mremap target");
+        void *moved = mremap(grown, 4096, 4096, MREMAP_MAYMOVE | MREMAP_FIXED, target);
+        if (moved != target) return fail("mremap FIXED address");
+        if (memcmp(moved, "remap-src", 10) != 0) return fail("mremap FIXED content");
+        if (munmap(moved, 4096) != 0) return fail("mremap FIXED munmap");
+        munmap((char *)target + 4096, 4096);
+        munmap((char *)grown + 4096, 12288);
+        printf("DIFF_MREMAP_OK\n");
+    }
+
+    /* Copy-on-write fork: children see the parent's bytes but diverge privately. */
+    {
+        char *cow = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (cow == MAP_FAILED) return fail("cow mmap");
+        memcpy(cow, "parent-view", 12);
+        pid_t pid = fork();
+        if (pid < 0) return fail("cow fork");
+        if (pid == 0) {
+            if (memcmp(cow, "parent-view", 12) != 0) _exit(7);
+            memcpy(cow, "child-view", 11);
+            if (memcmp(cow, "child-view", 11) != 0) _exit(8);
+            _exit(0);
+        }
+        int status = 0;
+        if (waitpid(pid, &status, 0) != pid || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+            return fail("cow child");
+        if (memcmp(cow, "parent-view", 12) != 0) return fail("cow parent isolation");
+        if (munmap(cow, 4096) != 0) return fail("cow munmap");
+        printf("DIFF_COW_OK\n");
+    }
+
+    /* mprotect splits a PROT_NONE mapping; the guard page still faults. */
+    {
+        char *guard = mmap(NULL, 8192, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (guard == MAP_FAILED) return fail("guard mmap");
+        if (mprotect(guard + 4096, 4096, PROT_READ | PROT_WRITE) != 0)
+            return fail("guard mprotect");
+        strcpy(guard + 4096, "usable");
+        pid_t pid = fork();
+        if (pid < 0) return fail("guard fork");
+        if (pid == 0) { *(volatile char *)guard = 1; _exit(0); }
+        int status = 0;
+        if (waitpid(pid, &status, 0) != pid || !WIFSIGNALED(status) || WTERMSIG(status) != SIGSEGV)
+            return fail("guard sigsegv");
+        if (strcmp(guard + 4096, "usable") != 0) return fail("guard usable page");
+        if (munmap(guard, 8192) != 0) return fail("guard munmap");
+        printf("DIFF_MPROTECT_SPLIT_OK\n");
     }
 
     int memfd = memfd_create("diff", 0);

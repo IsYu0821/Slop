@@ -15,7 +15,7 @@ impl PageTableRoot{
  pub fn destroy_private_slot<A:PhysAccess>(&self,a:&A,slot:usize)->Result<(),i64>{if slot>=256{return Err(crate::errno::EINVAL)}
  let pml4=unsafe{a.table(self.pml4)};let top=pml4[slot];
  if top&PRESENT==0{pml4[slot]=0;return Ok(())}
- if top&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pdpt_pa=top&ADDR;let pdpt=unsafe{a.table(pdpt_pa)};for i in 0..512{let e3=pdpt[i];if e3&PRESENT==0{continue}if e3&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pd_pa=e3&ADDR;let pd=unsafe{a.table(pd_pa)};for j in 0..512{let e2=pd[j];if e2&PRESENT==0{continue}if e2&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pt_pa=e2&ADDR;let pt=unsafe{a.table(pt_pa)};for k in 0..512{let e1=pt[k];if e1&PRESENT!=0{crate::memory::free_frame(e1&ADDR)?;pt[k]=0;}}if let Err(e)=crate::memory::free_frame(pt_pa){return Err(e)}pd[j]=0;}
+ if top&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pdpt_pa=top&ADDR;let pdpt=unsafe{a.table(pdpt_pa)};for i in 0..512{let e3=pdpt[i];if e3&PRESENT==0{continue}if e3&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pd_pa=e3&ADDR;let pd=unsafe{a.table(pd_pa)};for j in 0..512{let e2=pd[j];if e2&PRESENT==0{continue}if e2&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pt_pa=e2&ADDR;let pt=unsafe{a.table(pt_pa)};for k in 0..512{let e1=pt[k];if e1&PRESENT!=0{crate::memory::release_frame(e1&ADDR)?;pt[k]=0;}}if let Err(e)=crate::memory::free_frame(pt_pa){return Err(e)}pd[j]=0;}
     if let Err(e)=crate::memory::free_frame(pd_pa){return Err(e)}pdpt[i]=0;}
    if let Err(e)=crate::memory::free_frame(pdpt_pa){return Err(e)}pml4[slot]=0;Ok(())}
  pub unsafe fn activate(&self){unsafe{core::arch::asm!("mov cr3, {}",in(reg)self.pml4,options(nostack,preserves_flags));}}

@@ -38,7 +38,7 @@ required={
  'kernel/vfs.rs':['mount_initramfs','pub fn lookup','pub fn image'],
  'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2'],
  
- 'kernel/process.rs':['map_zeroed','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image'],
+ 'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
  'tests/hello-linux.S':['mov $9,%rax','mov $10,%rax','mov $11,%rax','mov $12,%rax','cmpq $1,(%rsp)','/bin/hello-c'],
  'kernel/linux_abi/mod.rs':['sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of'],

@@ -2,5 +2,16 @@
 use crate::{arch::x86_64::{paging::{PageTableRoot,PRESENT,USER,WRITABLE},phys::Identity},errno};
 pub const USER_MIN:usize=0x1000;pub const USER_MAX:usize=0x0000_8000_0000_0000;const PAGE:usize=4096;
 fn checked(ptr:usize,len:usize)->Result<usize,i64>{if len==0{return Ok(ptr)}let end=ptr.checked_add(len).ok_or(errno::EFAULT)?;if ptr<USER_MIN||end>USER_MAX||end<ptr{return Err(errno::EFAULT)}Ok(end)}
-pub fn copy_from_user(dst:&mut[u8],src:usize)->Result<(),i64>{checked(src,dst.len())?;let root=PageTableRoot::current();let phys=Identity;let mut done=0;while done<dst.len(){let va=src+done;let (pa,flags)=root.query(&phys,va as u64).ok_or(errno::EFAULT)?;if flags&(PRESENT|USER)!=(PRESENT|USER){return Err(errno::EFAULT)}let n=core::cmp::min(PAGE-(va&(PAGE-1)),dst.len()-done);let from=unsafe{phys.bytes(pa,n)};dst[done..done+n].copy_from_slice(from);done+=n;}Ok(())}
-pub fn copy_to_user(dst:usize,src:&[u8])->Result<(),i64>{checked(dst,src.len())?;let root=PageTableRoot::current();let phys=Identity;let mut done=0;while done<src.len(){let va=dst+done;let (pa,flags)=root.query(&phys,va as u64).ok_or(errno::EFAULT)?;if flags&(PRESENT|USER|WRITABLE)!=(PRESENT|USER|WRITABLE){return Err(errno::EFAULT)}let n=core::cmp::min(PAGE-(va&(PAGE-1)),src.len()-done);let to=unsafe{phys.bytes(pa,n)};to.copy_from_slice(&src[done..done+n]);done+=n;}Ok(())}
+/* Resolves one user address, materialising demand-paged and COW pages via the
+   current process fault handler so syscall buffers work without pre-touching. */
+fn resolve(va:usize,write:bool)->Result<u64,i64>{
+ let root=PageTableRoot::current();let phys=Identity;
+ let ok=|flags:u64|if write{flags&(PRESENT|USER|WRITABLE)==(PRESENT|USER|WRITABLE)}else{flags&(PRESENT|USER)==(PRESENT|USER)};
+ if let Some((pa,flags))=root.query(&phys,va as u64){if ok(flags){return Ok(pa)}}
+ if crate::task::has_current_process()&&crate::task::with_current_process(|p|p.handle_page_fault(va as u64,write)).map(|r|r.is_ok()).unwrap_or(false){
+  if let Some((pa,flags))=root.query(&phys,va as u64){if ok(flags){return Ok(pa)}}
+ }
+ Err(errno::EFAULT)
+}
+pub fn copy_from_user(dst:&mut[u8],src:usize)->Result<(),i64>{checked(src,dst.len())?;let phys=Identity;let mut done=0;while done<dst.len(){let va=src+done;let pa=resolve(va,false)?;let n=core::cmp::min(PAGE-(va&(PAGE-1)),dst.len()-done);let from=unsafe{phys.bytes(pa,n)};dst[done..done+n].copy_from_slice(from);done+=n;}Ok(())}
+pub fn copy_to_user(dst:usize,src:&[u8])->Result<(),i64>{checked(dst,src.len())?;let phys=Identity;let mut done=0;while done<src.len(){let va=dst+done;let pa=resolve(va,true)?;let n=core::cmp::min(PAGE-(va&(PAGE-1)),src.len()-done);let to=unsafe{phys.bytes(pa,n)};to.copy_from_slice(&src[done..done+n]);done+=n;}Ok(())}

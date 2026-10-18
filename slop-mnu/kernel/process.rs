@@ -1,5 +1,5 @@
 //! Per-process state: private address space, VM ledger, brk and descriptors.
-use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX,ADDR},phys::Identity},fd::FdTable,vm::{Map,VmFlags}};
+use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX,ADDR},phys::Identity},fd::FdTable,vm::{Map,VmFlags,VmKind}};
 const PAGE:u64=4096;
 const MAX_SECCOMP_FILTERS:usize=64;
 #[derive(Clone,Copy)]struct SeccompFilterRef{frame:u64,refs:u32}
@@ -46,12 +46,10 @@ impl Process{
  pub fn reset_exec_state(&mut self){self.brk=BRK_BASE;self.vm=Map::new();self.clear_child_tid=0;self.handlers=crate::signal::handlers_dfl();self.sigframe=0;}
  fn pte_flags(prot:u64)->Result<u64,i64>{if prot&!7!=0{return Err(crate::errno::EINVAL)}Ok(USER|if prot&2!=0{WRITABLE}else{0}|if prot&4==0{NX}else{0})}
  fn vm_flags(prot:u64)->Result<VmFlags,i64>{let mut f=VmFlags::USER;let _=Self::pte_flags(prot)?;if prot&1!=0{f.0|=VmFlags::READ.0}if prot&2!=0{f.0|=VmFlags::WRITE.0}if prot&4!=0{f.0|=VmFlags::EXEC.0}f.0|=VmFlags::ANON.0;Ok(f)}
-  fn map_zeroed(&self,start:u64,len:u64,prot:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let end=start.checked_add(len).ok_or(crate::errno::ENOMEM)?;let mut va=start;while va<end{let pa=match crate::memory::alloc_frame(){Some(v)=>v,None=>{self.rollback(start,va);return Err(crate::errno::ENOMEM)}};unsafe{phys.table(pa).fill(0)}if let Err(e)=root.map_page(&phys,va,pa,flags){let _=crate::memory::free_frame(pa);self.rollback(start,va);return Err(e)}va+=PAGE;}Ok(())}
-  fn rollback(&self,start:u64,end:u64){let root=self.root();let phys=Identity;let mut va=start;while va<end{if let Ok(pa)=root.unmap_page(&phys,va){let _=crate::memory::free_frame(pa);}va+=PAGE;}}
-  fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{let pa=root.unmap_page(&phys,va)?;if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::free_frame(pa)?}va+=PAGE;}Ok(())}
+  fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{match root.unmap_page(&phys,va){Ok(pa)=>{if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::release_frame(pa)?}}Err(e)=>{if e!=crate::errno::ENOENT{return Err(e)}}}va+=PAGE;}Ok(())}
   fn unmap_external_mappings(root:&PageTableRoot,vm:&Map){let access=Identity;for i in 0..vm.resource_stats().areas{if let Some(area)=vm.area(i){if !area.flags.contains(VmFlags::EXTERNAL){continue}let mut va=area.start as u64;while va<area.end as u64{if let Ok(frame)=root.unmap_page(&access,va){crate::fd::iouring_mapping_release(frame)}va+=PAGE;}}}}
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
- pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};if self.vm.insert(old_page,len,flags).is_err(){return old}if self.map_zeroed(old_page as u64,len as u64,3).is_err(){let _=self.vm.remove(old_page,len);return old}}else if new_page<old_page{return old}self.brk=request;request}
+ pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};if self.vm.insert(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{
   const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;
   if len==0{return Err(crate::errno::EINVAL)}
@@ -66,7 +64,17 @@ impl Process{
   let size=Self::up(len as u64)?;
   let mut vf=Self::vm_flags(prot)?;
   if iouring{if flags&MAP_SHARED==0||size!=PAGE as usize{return Err(crate::errno::EINVAL)}vf.0|=VmFlags::EXTERNAL.0;}
- let start=if flags&MAP_FIXED!=0{if addr&4095!=0{return Err(crate::errno::EINVAL)}self.vm.insert(addr,size,vf)?;addr}else{self.vm.allocate(size,vf)?};
+ let (vma_kind,vma_cow)=if iouring {
+  (VmKind::Anon,false)
+ }else if anon {
+  (VmKind::Anon,false)
+ }else{
+  let id=self.fds.get(fd as usize).ok_or(crate::errno::EBADF)?;
+  let inode=match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>{return Err(crate::errno::ENODEV)}};
+  if prot&2!=0{return Err(crate::errno::ENODEV)}
+  (VmKind::File{inode,offset}, flags&MAP_PRIVATE!=0)
+ };
+ let start=if flags&MAP_FIXED!=0{if addr&4095!=0{return Err(crate::errno::EINVAL)}self.vm.insert(addr,size,vf,vma_kind,vma_cow)?;addr}else{self.vm.allocate(size,vf,vma_kind,vma_cow)?};
  if iouring{
   let id=self.fds.get(fd as usize).ok_or(crate::errno::EBADF)?;
   let frame=match offset as u64 {0=>crate::fd::iouring_sq_ring(id),0x8000000=>crate::fd::iouring_cq_ring(id),0x10000000=>crate::fd::iouring_sqes(id),_=>0};
@@ -74,68 +82,130 @@ impl Process{
    let pte=Self::pte_flags(prot)?;
    if let Err(e)=self.root().map_page(&crate::arch::x86_64::phys::Identity,start as u64,frame,pte){let _=self.vm.remove(start,size);return Err(e)}
    if let Err(e)=crate::fd::iouring_mapping_acquire(id){let _=self.root().unmap_page(&crate::arch::x86_64::phys::Identity,start as u64);let _=self.vm.remove(start,size);return Err(e)}
- }else if anon{
-  if let Err(e)=self.map_zeroed(start as u64,size as u64,prot){let _=self.vm.remove(start,size);return Err(e)}
- }else{
-  if let Err(e)=self.map_zeroed(start as u64,size as u64,prot){let _=self.vm.remove(start,size);return Err(e)}
-  /* File-backed: copy file bytes into the mapped pages. */
-  let id=match self.fds.get(fd as usize){Some(id)=>id,None=>{let _=self.vm.remove(start,size);return Err(crate::errno::EBADF)}};
-  let inode=match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>{let _=self.vm.remove(start,size);return Err(crate::errno::ENODEV)}};
-  if prot&2!=0{let _=self.vm.remove(start,size);return Err(crate::errno::ENODEV)}
-  let file_size=inode.size as usize;
-  let off=offset as usize;
-  let mut done=0usize;
-  let mut buf=[0u8;512];
-  while done<size{
-   let remain=size-done;
-   let foff=off+done;
-   let n=if foff<file_size{core::cmp::min(buf.len(),core::cmp::min(remain,file_size-foff))}else{0};
-   if n>0{
-    let src=unsafe{core::slice::from_raw_parts(inode.data.add(foff),n)};
-    buf[..n].copy_from_slice(src);
-   }else{let z=core::cmp::min(buf.len(),remain);for b in &mut buf[..z]{*b=0}}
-   let chunk=core::cmp::min(buf.len(),remain);
-   if chunk>0{
-    let dst=start+done;
-    if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..chunk]){let _=self.vm.remove(start,size);return Err(e)}
-   }
-   done+=chunk;
-  }
  }
+ /* Anonymous, file-backed and brk pages are demand-paged by the fault
+    handler: the VMA ledger keeps kind and offset, so mmap only reserves. */
  Ok(start)
  }
   /* Grows or shrinks an anonymous mapping: allocate the new range, copy the
      live bytes across, then release the old range. */
-  pub fn mremap(&mut self,old:usize,old_size:usize,new_size:usize,flags:u64)->Result<usize,i64>{
-   const MREMAP_MAYMOVE:u64=1;
+  pub fn mremap(&mut self,old:usize,old_size:usize,new_size:usize,flags:u64,new_addr:u64)->Result<usize,i64>{
+   const MREMAP_MAYMOVE:u64=1; const MREMAP_FIXED:u64=2;
    if old%4096!=0||old_size==0||new_size==0{return Err(crate::errno::EINVAL)}
-   if flags&!MREMAP_MAYMOVE!=0{return Err(crate::errno::EINVAL)}
+   if flags&!(MREMAP_MAYMOVE|MREMAP_FIXED)!=0{return Err(crate::errno::EINVAL)}
    if self.vm.flags_at(old).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){return Err(crate::errno::EOPNOTSUPP)}
    let vf=Self::vm_flags(3)?;
-   let dst=self.vm.allocate(new_size,vf)?;
-   if self.map_zeroed(dst as u64,new_size as u64,3).is_err(){let _=self.vm.remove(dst,new_size);return Err(crate::errno::ENOMEM)}
-   let mut chunk=[0u8;512];
+   let dst=if flags&MREMAP_FIXED!=0{
+    if new_addr as usize %4096!=0{return Err(crate::errno::EINVAL)}
+    let _=self.munmap(new_addr as usize,new_size);
+    if let Err(e)=self.vm.insert(new_addr as usize,new_size,vf,VmKind::Anon,false){return Err(e)}
+    new_addr as usize
+   }else{
+    self.vm.allocate(new_size,vf,VmKind::Anon,false)?
+   };
+   /* Runs under with_current_process, so usercopy cannot be reused here:
+      fault both sides in through the process itself, then copy the frames. */
+   let root=self.root();let phys=Identity;
+   let ok=|va:u64,write:bool|root.query(&phys,va).map(|(_,f)|f&crate::arch::x86_64::paging::PRESENT!=0&&f&crate::arch::x86_64::paging::USER!=0&&(!write||f&crate::arch::x86_64::paging::WRITABLE!=0)).unwrap_or(false);
+   let total=core::cmp::min(old_size,new_size);
    let mut done=0usize;
-   while done<core::cmp::min(old_size,new_size){
-    let n=core::cmp::min(chunk.len(),core::cmp::min(old_size,new_size)-done);
-    if let Err(e)=crate::usercopy::copy_from_user(&mut chunk[..n],old+done){let _=self.munmap(old,old_size);return Err(e)}
-    if let Err(e)=crate::usercopy::copy_to_user(dst+done,&chunk[..n]){let _=self.munmap(old,old_size);return Err(e)}
-    done+=n;
+   while done<total{
+    let n=core::cmp::min(PAGE as usize,total-done);
+    if !ok((old+done) as u64,false)&&self.handle_page_fault((old+done) as u64,false).is_err(){let _=self.munmap(old,old_size);return Err(crate::errno::EFAULT)}
+    if !ok((dst+done) as u64,true)&&self.handle_page_fault((dst+done) as u64,true).is_err(){let _=self.munmap(old,old_size);return Err(crate::errno::EFAULT)}
+    let (spa,_)=match root.query(&phys,(old+done) as u64){Some(v)=>v,None=>{let _=self.munmap(old,old_size);return Err(crate::errno::EFAULT)}};
+    let (dpa,_)=match root.query(&phys,(dst+done) as u64){Some(v)=>v,None=>{let _=self.munmap(old,old_size);return Err(crate::errno::EFAULT)}};
+    unsafe{phys.bytes(dpa,n).copy_from_slice(phys.bytes(spa,n))}
+    done+=PAGE as usize;
    }
    let _=self.munmap(old,old_size);
    Ok(dst)
   }
  pub fn munmap(&mut self,addr:usize,len:usize)->Result<(),i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;self.unmap_pages(addr as u64,size as u64)?;self.vm.remove(addr,size)}
  pub fn mprotect(&mut self,addr:usize,len:usize,prot:u64)->Result<(),i64>{
- if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;let f=Self::vm_flags(prot)?;let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let mut va=addr as u64;let end=va+size as u64;while va<end{root.protect_page(&phys,va,flags)?;va+=PAGE}
+ if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;let f=Self::vm_flags(prot)?;let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let mut va=addr as u64;let end=va+size as u64;while va<end{
+  /* Demand-paged pages have no PTE yet: protection lives in the VMA ledger
+     until the fault handler installs the mapping with the recorded flags. */
+  /* Shared COW pages must stay read-only; a later write fault upgrades them. */
+  let cow=self.vm.find_vma(va as usize).map(|a|a.cow).unwrap_or(false);
+  if !(cow&&flags&crate::arch::x86_64::paging::WRITABLE!=0){
+   if let Err(e)=root.protect_page(&phys,va,flags){if e!=crate::errno::ENOENT{return Err(e)}}
+  }
+  va+=PAGE;
+ }
  /* Execve images have no VMA ledger entry; treat that as bookkeeping only. */
  let _=self.vm.protect(addr,size,f);Ok(())}
  pub fn mapped_for_test(&self,addr:u64,write:bool)->bool{self.root().query(&Identity,addr).map(|(_,f)|f&PRESENT!=0&&f&USER!=0&&(!write||f&WRITABLE!=0)).unwrap_or(false)}
- /* Deep-copies the private PML4 slots of the caller into a fresh CR3. */
+ pub fn mlock(&mut self,addr:usize,len:usize)->Result<usize,i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}self.vm.set_locked_range(addr,len,true)?;Ok(0)}
+ pub fn munlock(&mut self,addr:usize,len:usize)->Result<usize,i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}self.vm.set_locked_range(addr,len,false)?;Ok(0)}
+ pub fn handle_page_fault(&mut self,addr:u64,write:bool)->Result<(),()>{
+  if addr as usize >= crate::usercopy::USER_MAX {return Err(())}
+  let page=(addr as usize)&!4095;
+  let root=self.root();
+  let phys=crate::arch::x86_64::phys::Identity;
+  // Present PTE: fork marks every shared private page read-only, so a write
+  // fault here is COW unless the mapping itself is read-only on purpose.
+  if let Some((pa,pte_flags))=root.query(&phys,addr){
+   if pte_flags & crate::arch::x86_64::paging::PRESENT != 0 {
+    if write && pte_flags & crate::arch::x86_64::paging::WRITABLE == 0 && pte_flags & crate::arch::x86_64::paging::USER != 0 {
+     if let Some(vma)=self.vm.find_vma(addr as usize){
+      if !vma.flags.contains(VmFlags::WRITE){return Err(())}
+     }
+     let frame=pa & crate::arch::x86_64::paging::ADDR;
+     if crate::memory::refcount(frame)>1 {
+      let new=crate::memory::alloc_frame().ok_or(())?;
+      unsafe{phys.table(new).copy_from_slice(phys.table(frame));}
+      let _=root.unmap_page(&phys,page as u64);
+      root.map_page(&phys,page as u64,new,pte_flags & !crate::arch::x86_64::paging::ADDR | crate::arch::x86_64::paging::WRITABLE).map_err(|_|())?;
+      let _=crate::memory::refcount_dec(frame);
+     }else{
+      /* Sole owner (for example after the COW sibling exited): promote in place. */
+      root.protect_page(&phys,page as u64,pte_flags & !crate::arch::x86_64::paging::ADDR | crate::arch::x86_64::paging::WRITABLE).map_err(|_|())?;
+     }
+     return Ok(())
+    }
+    return Err(())
+   }
+  }
+  let vma=self.vm.find_vma(addr as usize).ok_or(())?;
+  // Not present: allocate/map.
+  let mut prot=0u64;
+  if vma.flags.contains(VmFlags::READ){prot|=1}
+  if vma.flags.contains(VmFlags::WRITE){prot|=2}
+  if vma.flags.contains(VmFlags::EXEC){prot|=4}
+  if (!vma.flags.contains(VmFlags::READ)&&!vma.flags.contains(VmFlags::WRITE)&&!vma.flags.contains(VmFlags::EXEC))||(write&&!vma.flags.contains(VmFlags::WRITE)){return Err(())}
+  let pf=Self::pte_flags(prot).map_err(|_|())?;
+  match vma.kind {
+   VmKind::File{inode,offset}=>{
+    let frame=crate::memory::alloc_frame().ok_or(())?;
+    unsafe{phys.table(frame).fill(0);}
+    let file_off=offset + (page as u64 - vma.start as u64);
+    let mut buf=[0u8;4096];
+    let _=crate::vfs::read_off(inode,file_off,&mut buf);
+    unsafe{core::slice::from_raw_parts_mut(frame as *mut u8,4096).copy_from_slice(&buf);}
+    root.map_page(&phys,page as u64,frame,pf).map_err(|_|())?
+   }
+   _=>{
+    let frame=crate::memory::alloc_frame().ok_or(())?;
+    unsafe{phys.table(frame).fill(0);}
+    root.map_page(&phys,page as u64,frame,pf).map_err(|_|())?
+   }
+  }
+  Ok(())
+ }
+ /* COW fork: shares the private frames of the caller with a fresh CR3, then
+    revokes write access on both sides so the next store faults into the COW
+    path. Frames carry refcounts; teardown releases them through release_frame. */
  pub fn clone_address_space(&self)->Result<u64,i64>{
-  let access=Identity;let slots=[self.image_slot,self.stack_slot,self.mmap_slot];
-  let child=self.root().clone_bootstrap(&access,&slots)?;
-  for &slot in &slots{if let Err(e)=copy_slot(&self.root(),&access,&child,slot){for &done in &slots{let _=child.destroy_private_slot(&access,done);}let _=crate::memory::free_frame(child.pml4);return Err(e)}}
+  let access=Identity;
+  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot];let mut n=0usize;
+  for i in 0..all.len(){let s=all[i];if !all[..n].contains(&s){all[n]=s;n+=1;}}
+  let slots=&all[..n];
+  let child=self.root().clone_bootstrap(&access,slots)?;
+  for &slot in slots{if let Err(e)=share_slot(&self.root(),&access,&child,slot){for &done in slots{let _=child.destroy_private_slot(&access,done);}let _=crate::memory::free_frame(child.pml4);return Err(e)}}
+  for &slot in slots{make_slot_readonly(&self.root(),&access,slot)}
+  /* Stale writable TLB entries would bypass the COW fault; reload CR3. */
+  unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
   pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,groups:self.groups,ngroups:self.ngroups})}
@@ -178,15 +248,62 @@ impl Process{
 impl Drop for Process{fn drop(&mut self){if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}}}
 pub fn fs_base()->u64{crate::task::fs_base()}
 pub fn set_fs_base(v:u64)->bool{if v<crate::usercopy::USER_MAX as u64{crate::task::set_current_fs_base(v);true}else{false}}
-fn copy_slot(src:&PageTableRoot,a:&Identity,dst:&PageTableRoot,slot:usize)->Result<(),i64>{let pml4=unsafe{a.table(src.pml4)};let top=pml4[slot];if top&PRESENT==0{return Ok(())}if top&(1<<7)!=0{return Err(crate::errno::EINVAL)}
- let pdpt=unsafe{a.table(top&ADDR)};
- for i in 0..512{let e3=pdpt[i];if e3&PRESENT==0{continue}if e3&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pd=unsafe{a.table(e3&ADDR)};
-  for j in 0..512{let e2=pd[j];if e2&PRESENT==0{continue}if e2&(1<<7)!=0{return Err(crate::errno::EINVAL)}let pt=unsafe{a.table(e2&ADDR)};
-   for k in 0..512{let e1=pt[k];if e1&PRESENT==0{continue}
-    let pa=crate::memory::alloc_frame().ok_or(crate::errno::ENOMEM)?;
-    unsafe{a.table(pa).copy_from_slice(unsafe{a.table(e1&ADDR)})}
-    let va=((slot as u64)<<39)|((i as u64)<<30)|((j as u64)<<21)|((k as u64)<<12);
-    if let Err(e)=dst.map_page(a,va,pa,(e1&0xfff)|(e1&NX)){let _=crate::memory::free_frame(pa);return Err(e)}
-   }}}
+fn make_slot_readonly(root:&PageTableRoot,a:&Identity,slot:usize){
+ let pml4=unsafe{a.table(root.pml4)};
+ let top=pml4[slot];
+ if top&crate::arch::x86_64::paging::PRESENT==0{return;}
+ let pdpt=unsafe{a.table(top&crate::arch::x86_64::paging::ADDR)};
+ for i in 0..512{
+  let e3=pdpt[i];
+  if e3&crate::arch::x86_64::paging::PRESENT==0{continue;}
+  if e3&(1<<7)!=0{continue;}
+  let pd=unsafe{a.table(e3&crate::arch::x86_64::paging::ADDR)};
+  for j in 0..512{
+   let e2=pd[j];
+   if e2&crate::arch::x86_64::paging::PRESENT==0{continue;}
+   if e2&(1<<7)!=0{continue;}
+   let pt=unsafe{a.table(e2&crate::arch::x86_64::paging::ADDR)};
+   for k in 0..512{
+    if pt[k]&crate::arch::x86_64::paging::PRESENT!=0{pt[k]&=!crate::arch::x86_64::paging::WRITABLE;}
+   }
+  }
+ }
+}
+fn share_slot(src:&PageTableRoot,a:&Identity,dst:&PageTableRoot,slot:usize)->Result<(),i64>{
+ use crate::arch::x86_64::paging::{PRESENT,WRITABLE,USER,ADDR,NX};
+ let pml4_src=unsafe{a.table(src.pml4)};
+ let top=pml4_src[slot];
+ if top&PRESENT==0{return Ok(())}
+ let pdpt_pa=crate::memory::alloc_frame().ok_or(crate::errno::ENOMEM)?;
+ unsafe{a.table(pdpt_pa).fill(0)}
+ unsafe{a.table(dst.pml4)[slot]=pdpt_pa|PRESENT|WRITABLE|USER}
+ let pdpt_src=unsafe{a.table(top&ADDR)};
+ for i in 0..512{
+  let e3=pdpt_src[i];
+  if e3&PRESENT==0{continue;}
+  if e3&(1<<7)!=0{return Err(crate::errno::EINVAL)}
+  let pd_pa=crate::memory::alloc_frame().ok_or(crate::errno::ENOMEM)?;
+  unsafe{a.table(pd_pa).fill(0)}
+  unsafe{a.table(pdpt_pa)[i]=pd_pa|PRESENT|WRITABLE|USER}
+  let pd_src=unsafe{a.table(e3&ADDR)};
+  for j in 0..512{
+   let e2=pd_src[j];
+   if e2&PRESENT==0{continue;}
+   if e2&(1<<7)!=0{return Err(crate::errno::EINVAL)}
+   let pt_pa=crate::memory::alloc_frame().ok_or(crate::errno::ENOMEM)?;
+   unsafe{a.table(pt_pa).fill(0)}
+   unsafe{a.table(pd_pa)[j]=pt_pa|PRESENT|WRITABLE|USER}
+   let pt_src=unsafe{a.table(e2&ADDR)};
+   for k in 0..512{
+    let e1=pt_src[k];
+    if e1&PRESENT==0{continue;}
+    let pa=e1&ADDR;
+    crate::memory::refcount_inc(pa);
+    /* Shared leaves start read-only so the first store on either side faults. */
+    let flags=((e1&0xfff)|(e1&NX))&!WRITABLE;
+    unsafe{a.table(pt_pa)[k]=pa|flags;}
+   }
+  }
+ }
  Ok(())
 }
