@@ -95,5 +95,11 @@ int main(int argc, char **argv, char **envp) {
         return 1;
     }
     puts("syscalls: iov, positional io, access, readlink and mremap passed");
-    return 0;
+    {
+        char *av[] = {"hello-dyn", "from-syscall", 0};
+        char *ev[] = {"SLOP_MNU_DYN=1", 0};
+        execve("/bin/hello-dyn", av, ev);
+    }
+    puts("syscalls: failed: execve /bin/hello-dyn");
+    return 1;
 }

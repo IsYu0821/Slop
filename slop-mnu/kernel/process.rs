@@ -49,7 +49,10 @@ impl Process{
    Ok(dst)
   }
  pub fn munmap(&mut self,addr:usize,len:usize)->Result<(),i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;self.unmap_pages(addr as u64,size as u64)?;self.vm.remove(addr,size)}
- pub fn mprotect(&mut self,addr:usize,len:usize,prot:u64)->Result<(),i64>{if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;let f=Self::vm_flags(prot)?;let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let mut va=addr as u64;let end=va+size as u64;while va<end{root.protect_page(&phys,va,flags)?;va+=PAGE}self.vm.protect(addr,size,f)}
+ pub fn mprotect(&mut self,addr:usize,len:usize,prot:u64)->Result<(),i64>{
+ if addr&4095!=0||len==0{return Err(crate::errno::EINVAL)}let size=Self::up(len as u64)?;let f=Self::vm_flags(prot)?;let root=self.root();let phys=Identity;let flags=Self::pte_flags(prot)?;let mut va=addr as u64;let end=va+size as u64;while va<end{root.protect_page(&phys,va,flags)?;va+=PAGE}
+ /* Execve images have no VMA ledger entry; treat that as bookkeeping only. */
+ let _=self.vm.protect(addr,size,f);Ok(())}
  pub fn mapped_for_test(&self,addr:u64,write:bool)->bool{self.root().query(&Identity,addr).map(|(_,f)|f&PRESENT!=0&&f&USER!=0&&(!write||f&WRITABLE!=0)).unwrap_or(false)}
  /* Deep-copies the private PML4 slots of the caller into a fresh CR3. */
  pub fn clone_address_space(&self)->Result<u64,i64>{

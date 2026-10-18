@@ -1,6 +1,12 @@
-//! Commits a static ELF64 to a private bootstrap CR3 with rollback on failure.
+//! Commits an ELF64 image (static or dynamic) to a private bootstrap CR3 with
+//! rollback on failure. Dynamic images load their PT_INTERP interpreter first
+//! and enter through its entry point with AT_BASE set.
 use crate::{arch::x86_64::{paging::{self,PageTableRoot},phys::Identity},elf,linux_abi::stack,memory};
-const PAGE:u64=4096;const MAX_COMMITTED:usize=256;const USER_STACK_PAGES:u64=8;
+const PAGE:u64=4096;const MAX_COMMITTED:usize=512;const USER_STACK_PAGES:u64=8;
+/* Load bias for the dynamic linker; the PIE main image sits above it in the
+   same PML4 slot. */
+const LD_BASE:u64=0x0000_4000_0000_0000;
+const EXE_BASE:u64=0x0000_4001_0000_0000;
 #[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize}
 #[derive(Clone,Copy)]struct Owned{va:u64,pa:u64}const EMPTY:Owned=Owned{va:0,pa:0};
 struct Transaction<'a>{root:&'a PageTableRoot,phys:&'a Identity,pages:[Owned;MAX_COMMITTED],len:usize,committed:bool}
@@ -8,25 +14,57 @@ impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{S
 impl Drop for Transaction<'_>{fn drop(&mut self){if self.committed{return}for p in self.pages[..self.len].iter().rev(){let _=self.root.unmap_page(self.phys,p.va);let _=memory::free_frame(p.pa);}}}
 pub unsafe fn load_static(image:&[u8])->Result<Loaded,&'static str>{unsafe{load_static_args(image,&["/init"],&[],"/init",PageTableRoot::current().pml4)}}
 pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str,bootstrap_cr3:u64)->Result<Loaded,&'static str>{
- let ep=crate::exec::plan(image)?;if ep.needs_interpreter{return Err("dynamic ELF not supported")}
  let parsed=elf::plan(image)?;let access=Identity;let firmware=PageTableRoot::current();
- let image_slot=((ep.entry>>39)&511)as usize;let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
- if image_slot==0{return Err("ELF must not share bootstrap identity slot")}
+ /* A PT_INTERP segment means dynamic linking: load the interpreter from the
+    initramfs, then the main image above it, and enter via the interpreter. */
+ let interp_bytes=if parsed.has_interpreter{
+  let path=elf::interp_path(image,&parsed)?;
+  Some(crate::vfs::image(path).map_err(|_|"interpreter not in initramfs")?)
+ }else{None};
+ let interp=match interp_bytes{Some(b)=>Some(elf::plan(b).map_err(|_|"bad interpreter ELF")?),None=>None};
+ let is_pie=parsed.header.kind==elf::ET_DYN;
+ let exe_base=if is_pie{EXE_BASE}else{0};
+ let entry=match interp.as_ref(){Some(ip)=>LD_BASE+ip.header.entry,None=>exe_base+parsed.header.entry};
+ /* Dynamic images load the interpreter and a PIE main image in the same slot;
+    a static ET_EXEC keeps its absolute entry-derived slot. */
+ let image_slot=if interp.is_some(){((core::cmp::max(exe_base,LD_BASE)>>39)&511)as usize}else if is_pie{((exe_base>>39)&511)as usize}else{((parsed.header.entry>>39)&511)as usize};
+ let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
+ if image_slot==0{return Err("image must not share bootstrap identity slot")}
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;let root=firmware.clone_bootstrap(&access,&[image_slot,stack_slot,mmap_slot]).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
+ if let Some(ip)=interp.as_ref(){
+  let bytes=interp_bytes.ok_or("interpreter image lost")?;
+  for seg in &ip.segments[..ip.segment_count]{
+   if ((LD_BASE+seg.vaddr>>39)&511)as usize!=image_slot{return Err("interpreter crosses private PML4 slot")}
+   map_segment(&mut tx,&root,&access,bytes,LD_BASE,seg)?;
+  }
+ }
  for seg in &parsed.segments[..parsed.segment_count]{
-  if ((seg.vaddr>>39)&511)as usize!=image_slot{return Err("ELF crosses private PML4 slot")}
-  let first=seg.vaddr&!(PAGE-1);let last=align(seg.vaddr.checked_add(seg.memory_size).ok_or("segment overflow")?)?;let mut va=first;
-  while va<last{tx.page(va,flags(seg.flags))?;va+=PAGE;}
-  for i in 0..seg.file_size{let pa=root.translate(&access,seg.vaddr+i).ok_or("ELF mapping disappeared")?;unsafe{access.bytes(pa,1)[0]=image[(seg.file_offset+i)as usize];}}
-  for i in seg.file_size..seg.memory_size{let pa=root.translate(&access,seg.vaddr+i).ok_or("BSS mapping disappeared")?;unsafe{access.bytes(pa,1)[0]=0;}}
+  if ((exe_base+seg.vaddr>>39)&511)as usize!=image_slot{return Err("ELF crosses private PML4 slot")}
+  map_segment(&mut tx,&root,&access,image,exe_base,seg)?;
  }
  let stack_top=crate::exec::USER_STACK_TOP;let stack_base=stack_top-USER_STACK_PAGES*PAGE;
  for i in 0..USER_STACK_PAGES{let pa=tx.page(stack_base+i*PAGE,paging::USER|paging::WRITABLE|paging::NX)?;unsafe{access.bytes(pa,PAGE as usize).fill(0)};}
  let stack_pa=root.translate(&access,stack_top-PAGE).ok_or("stack mapping disappeared")?;
  let page=unsafe{access.bytes(stack_pa,PAGE as usize)};
- let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],crate::exec::stack_info(&ep)).map_err(|_|"stack build failed")?;
- let loaded=Loaded{entry:ep.entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot};tx.commit();Ok(loaded)
+ /* AT_PHDR and AT_ENTRY describe the main image; AT_BASE is the interpreter. */
+ let phoff=parsed.header.phoff;
+ let phdr_vaddr=parsed.segments[..parsed.segment_count].iter().find_map(|s|{
+  if phoff>=s.file_offset&&phoff<s.file_offset+s.file_size{Some(exe_base+s.vaddr+(phoff-s.file_offset))}else{None}
+ }).ok_or("program headers not mapped")?;
+ let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0}};
+ let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],info).map_err(|_|"stack build failed")?;
+ let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot};tx.commit();Ok(loaded)
+}
+/* Maps one PT_LOAD at base+seg.vaddr, copying file bytes and zeroing the rest. */
+fn map_segment(tx:&mut Transaction,root:&PageTableRoot,access:&Identity,image:&[u8],base:u64,seg:&elf::LoadSegment)->Result<(),&'static str>{
+ let first=base+seg.vaddr&!(PAGE-1);
+ let last=align(base+seg.vaddr.checked_add(seg.memory_size).ok_or("segment overflow")?)?;
+ let mut va=first;
+ while va<last{tx.page(va,flags(seg.flags))?;va+=PAGE;}
+ for i in 0..seg.file_size{let pa=root.translate(access,base+seg.vaddr+i).ok_or("ELF mapping disappeared")?;unsafe{access.bytes(pa,1)[0]=image[(seg.file_offset+i)as usize];}}
+ for i in seg.file_size..seg.memory_size{let pa=root.translate(access,base+seg.vaddr+i).ok_or("BSS mapping disappeared")?;unsafe{access.bytes(pa,1)[0]=0;}}
+ Ok(())
 }
 fn flags(pf:u32)->u64{let mut f=paging::USER;if pf&elf::PF_W!=0{f|=paging::WRITABLE}if pf&elf::PF_X==0{f|=paging::NX}f}
 fn align(v:u64)->Result<u64,&'static str>{v.checked_add(PAGE-1).map(|x|x&!(PAGE-1)).ok_or("alignment overflow")}
