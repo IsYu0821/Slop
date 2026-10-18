@@ -30,8 +30,13 @@ pub fn alloc_file(kind:OpenKind)->Result<u32,i64>{
 pub fn incref(id:u32){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.refs+=1}}
 pub fn release(id:u32){let kind={let mut t=OPEN.lock();match t[id as usize].as_mut(){None=>return,Some(f)=>{f.refs-=1;if f.refs>0{return}let k=f.kind;t[id as usize]=None;k}}};match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),_=>{}}}
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
+/* Directory-walk cursor used by getdents64. */
+pub fn offset_get(id:u32)->u64{OPEN.lock()[id as usize].map(|f|f.offset).unwrap_or(0)}
+pub fn offset_set(id:u32,v:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=v}}
 
 pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
+/* O_CREAT path: creates the node when missing, then opens it. */
+pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 pub fn close(fd:usize)->Result<(),i64>{crate::task::with_current_process(|p|p.fds.close(fd)).unwrap_or(Err(errno::ESRCH))}
 pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
@@ -43,8 +48,17 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
  }
 }
 pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
- let kind=OPEN.lock()[id as usize].map(|f|f.kind).ok_or(errno::EBADF)?;
- match kind{OpenKind::Console=>{crate::console::write_bytes(src);Ok(src.len())},OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),_=>Err(errno::EBADF)}
+ let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
+ match kind{
+  OpenKind::Console=>{crate::console::write_bytes(src);Ok(src.len())},
+  OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),
+  OpenKind::Inode(n)=>{
+   let got=vfs::write(n,offset,src)?;
+   if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}
+   Ok(got)
+  },
+  OpenKind::PipeRead(_)=>Err(errno::EBADF),
+ }
 }
 pub fn seek(id:u32,off:i64,whence:u64)->Result<u64,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};

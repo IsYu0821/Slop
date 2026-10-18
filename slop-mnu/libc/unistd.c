@@ -23,6 +23,9 @@
 #define SYS_EXIT_GROUP 231
 #define SYS_PIPE2 293
 #define SYS_NANOSLEEP 35
+#define SYS_UNLINKAT 263
+#define SYS_GETDENTS64 217
+#define AT_FDCWD_C -100
 
 /* POSIX wrapper convention: report -1 and stash the raw errno value. */
 static long sys_fail(long r) {
@@ -34,19 +37,19 @@ static long sys_fail(long r) {
 }
 
 ssize_t write(int fd, const void *buf, size_t n) {
-    return (ssize_t)__slop_syscall6(SYS_WRITE, fd, (long)buf, (long)n, 0, 0, 0);
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_WRITE, fd, (long)buf, (long)n, 0, 0, 0));
 }
 
 ssize_t read(int fd, void *buf, size_t n) {
-    return (ssize_t)__slop_syscall6(SYS_READ, fd, (long)buf, (long)n, 0, 0, 0);
+    return (ssize_t)sys_fail(__slop_syscall6(SYS_READ, fd, (long)buf, (long)n, 0, 0, 0));
 }
 
 int close(int fd) {
-    return (int)__slop_syscall6(SYS_CLOSE, fd, 0, 0, 0, 0, 0);
+    return (int)sys_fail(__slop_syscall6(SYS_CLOSE, fd, 0, 0, 0, 0, 0));
 }
 
 int openat(int dirfd, const char *path, int flags, int mode) {
-    return (int)__slop_syscall6(SYS_OPENAT, dirfd, (long)path, flags, mode, 0, 0);
+    return (int)sys_fail(__slop_syscall6(SYS_OPENAT, dirfd, (long)path, flags, mode, 0, 0));
 }
 
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, long offset) {
@@ -82,6 +85,14 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 
 pid_t waitpid(pid_t pid, int *status, int options) {
     return (pid_t)sys_fail(__slop_syscall6(SYS_WAIT4, pid, (long)status, options, 0, 0, 0));
+}
+
+int unlink(const char *path) {
+    return (int)sys_fail(__slop_syscall6(SYS_UNLINKAT, AT_FDCWD_C, (long)path, 0, 0, 0, 0));
+}
+
+int getdents64(int fd, struct dirent64 *buf, size_t count) {
+    return (int)sys_fail(__slop_syscall6(SYS_GETDENTS64, fd, (long)buf, count, 0, 0, 0));
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem) {

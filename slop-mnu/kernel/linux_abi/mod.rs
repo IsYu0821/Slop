@@ -29,6 +29,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::WRITEV=>sys_writev(a[0],a[1],a[2] as i32),
     nr::GETDENTS64=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::FUTEX=>sys_futex(a[0],a[1] as i32,a[2] as i32,a[3],a[4] as u64,a[5] as i32),
+    nr::UNLINKAT=>sys_unlinkat(a[0] as i64,a[1],a[2]),
     nr::GETCWD=>sys_getcwd(a[0],a[1]),
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
@@ -115,13 +116,25 @@ fn sys_rt_sigprocmask(how:u64,set:u64,old:u64)->i64{
  if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&prev as*const u64).cast::<u8>(),8)};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0
 }
 fn sys_rt_sigreturn()->i64{unsafe{crate::arch::x86_64::syscall::signal_restore_frame()}}
+fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_REMOVEDIR:u64=0x200;
+ if dirfd!=AT_FDCWD||flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ match crate::vfs::unlink(p){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
 fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{if flags&!0x80000!=0||oldfd==newfd{return errno::neg(errno::EINVAL)}fd_result(crate::fd::dup2(oldfd,newfd))}
 fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{match cmd{0=>fd_result(crate::fd::dup_from(fd,arg as usize)),1|2|3|4=>0,_=>errno::neg(errno::EINVAL)}}
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
-fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0o77777!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
+fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const O_CREAT:u64=0o100;
+ if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if flags&O_CREAT!=0{return match crate::fd::create_open(p,0o644){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
+ match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
+}
 fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};let n=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blksize=4096;st.st_blocks=((n.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
 fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.27.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
@@ -213,30 +226,51 @@ fn sys_writev(fd:u64,ptr:u64,count:i32)->i64{
  }
  total
 }
+/* linux_dirent64: d_ino(8) d_off(8) d_reclen(2) d_type(1) d_name(NUL). */
 fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
  if count<=0{return errno::neg(errno::EINVAL)}
  let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
  let inode=match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::ENOTDIR)};
- let path=core::str::from_utf8(&inode.name[..inode.name_len]).unwrap_or("");
- let entries=crate::vfs::readdir(path).unwrap_or(0);
- if entries==0{return 0}
+ let path=match core::str::from_utf8(&inode.name[..inode.name_len]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
+ let start=crate::fd::offset_get(id);
+ /* Collect the directory once so the closure cannot deadlock on ROOT. */
+ let mut entries:[(u64,u32,[u8;64],usize);48]=[(0,0,[0;64],0);48];
+ let mut n=0usize;
+ let _=crate::vfs::readdir(path,|ino,mode,name|{
+  if n<48{
+   let b=name.as_bytes();
+   let l=core::cmp::min(b.len(),63);
+   entries[n]=(ino,mode,{let mut a=[0u8;64];a[..l].copy_from_slice(&b[..l]);a},l);
+   n+=1;
+  }
+ });
+ if n==0{return 0}
  let mut buf=[0u8;1024];
- let mut off=0i64;
- for i in 0..entries{
-  let reclen=16;
-  if off+reclen as i64>count as i64{break}
-  buf[off as usize..off as usize+8].copy_from_slice(&(i+2).to_ne_bytes());
-  buf[off as usize+8..off as usize+9].copy_from_slice(&0u8.to_ne_bytes());
-  buf[off as usize+9..off as usize+16].copy_from_slice(b"test");
-  off+=reclen as i64;
+ let mut off=0usize;
+ let mut idx=start as usize;
+ let mut emitted=false;
+ while idx<n{
+  let (ino,mode,nb,nl)=entries[idx];
+  let reclen=(19+nl+1+7)&!7;
+  if off+reclen>count as usize{break}
+  let d_off=(idx+1)as u64;
+  buf[off..off+8].copy_from_slice(&ino.to_ne_bytes());
+  buf[off+8..off+16].copy_from_slice(&d_off.to_ne_bytes());
+  buf[off+16..off+18].copy_from_slice(&(reclen as u16).to_ne_bytes());
+  let d_type=match mode&0o170000{0o040000=>4u8,0o100000=>8u8,_=>0};
+  buf[off+18]=d_type;
+  buf[off+19..off+19+nl].copy_from_slice(&nb[..nl]);
+  buf[off+19+nl]=0;
+  off+=reclen;
+  idx+=1;
+  emitted=true;
  }
- if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf[..off as usize]){return errno::neg(e)}
- off
+ if !emitted{return 0}
+ crate::fd::offset_set(id,idx as u64);
+ if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf[..off]){return errno::neg(e)}
+ off as i64
 }
 fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
- /* Minimal futex stub: FUTEX_WAIT returns 0, FUTEX_WAKE returns 0 */
- match op&0x7f{
-  1=>0,
-  _=>errno::neg(errno::ENOSYS)
- }
+ let _=uaddr2;let _=val3;
+ match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout){Ok(v)=>v,Err(e)=>errno::neg(e)}
 }

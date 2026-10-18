@@ -9,4 +9,4 @@ pub const GETPPID:u64=110; pub const ARCH_PRCTL:u64=158; pub const GETTID:u64=18
 pub const FUTEX:u64=202; pub const CLOCK_GETTIME:u64=228; pub const EXIT_GROUP:u64=231;
 pub const OPENAT:u64=257; pub const NEWFSTATAT:u64=262; pub const SET_TID_ADDRESS:u64=218;
 pub const SET_ROBUST_LIST:u64=273; pub const DUP3:u64=292; pub const PIPE2:u64=293; pub const PRLIMIT64:u64=302; pub const GETRANDOM:u64=318;
-pub const READV:u64=19; pub const WRITEV:u64=20; pub const GETDENTS64:u64=217;
+pub const READV:u64=19; pub const WRITEV:u64=20; pub const GETDENTS64:u64=217; pub const UNLINKAT:u64=263;

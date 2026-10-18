@@ -35,6 +35,9 @@ for text in \
   'execve: committed /bin/hello-signal' \
   'signals: main entered' \
   'signals: handler delivery, mask and default action passed' \
+  'execve: committed /bin/hello-file' \
+  'file: main entered' \
+  'file: create, write, read, unlink, getdents64 and futex passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then

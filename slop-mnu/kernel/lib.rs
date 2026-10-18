@@ -20,6 +20,7 @@ pub mod task;
 pub mod time;
 pub mod vfs;
 pub mod fd;
+pub mod futex;
 pub mod vm;
 pub mod wait_queue;
 pub mod usercopy;

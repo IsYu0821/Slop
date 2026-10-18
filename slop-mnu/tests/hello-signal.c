@@ -103,5 +103,11 @@ int main(int argc, char **argv, char **envp) {
         return 1;
     }
     puts("signals: handler delivery, mask and default action passed");
-    return 0;
+    {
+        char *av[] = {"hello-file", "from-signal", 0};
+        char *ev[] = {"SLOP_MNU_FILE=1", 0};
+        execve("/bin/hello-file", av, ev);
+    }
+    puts("signals: failed: execve /bin/hello-file");
+    return 1;
 }
