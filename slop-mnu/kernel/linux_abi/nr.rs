@@ -1,5 +1,5 @@
 //! Linux x86-64 syscall numbers. ABI facts only; no Linux implementation code.
-pub const READ:u64=0; pub const WRITE:u64=1; pub const IOCTL:u64=16; pub const RT_SIGACTION:u64=13; pub const RT_SIGPROCMASK:u64=14; pub const RT_SIGRETURN:u64=15; pub const CLOSE:u64=3; pub const FSTAT:u64=5;
+pub const READ:u64=0; pub const OPEN:u64=2; pub const CREAT:u64=85; pub const FSYNC:u64=74; pub const FDATASYNC:u64=75; pub const EVENTFD2:u64=290; pub const INOTIFY_INIT1:u64=294; pub const TIMERFD_CREATE:u64=283; pub const TIME:u64=201; pub const TGKILL:u64=234; pub const TKILL:u64=200; pub const RT_SIGPENDING:u64=127; pub const RT_SIGTIMEDWAIT:u64=128; pub const GETPRIORITY:u64=140; pub const SETPRIORITY:u64=141; pub const PAUSE:u64=34; pub const ALARM:u64=37; pub const GETITIMER:u64=36; pub const SETITIMER:u64=38; pub const STAT:u64=4; pub const LSTAT:u64=6; pub const UNLINK:u64=87; pub const WRITE:u64=1; pub const IOCTL:u64=16; pub const RT_SIGACTION:u64=13; pub const RT_SIGPROCMASK:u64=14; pub const RT_SIGRETURN:u64=15; pub const CLOSE:u64=3; pub const FSTAT:u64=5;
 pub const LSEEK:u64=8; pub const MMAP:u64=9; pub const MPROTECT:u64=10; pub const MUNMAP:u64=11;
 pub const BRK:u64=12; pub const PIPE:u64=22; pub const SCHED_YIELD:u64=24; pub const DUP2:u64=33; pub const NANOSLEEP:u64=35;
 pub const GETPID:u64=39; pub const CLONE:u64=56; pub const EXECVE:u64=59; pub const EXIT:u64=60; pub const WAIT4:u64=61; pub const KILL:u64=62; pub const UNAME:u64=63;
@@ -13,8 +13,41 @@ pub const MREMAP:u64=25; pub const MADVISE:u64=28; pub const RT_SIGSUSPEND:u64=1
 pub const WAITID:u64=247; pub const SCHED_GETAFFINITY:u64=204;
 pub const READLINKAT:u64=267; pub const FACCESSAT:u64=269; pub const EXECVEAT:u64=322; pub const MEMBARRIER:u64=324;
 pub const RSEQ:u64=334; pub const STATX:u64=332; pub const ACCESS:u64=21; pub const FACCESSAT2:u64=439; pub const CLONE3:u64=435; pub const POLL:u64=7; pub const PPOLL:u64=271;
-pub const EPOLL_CREATE1:u64=291; pub const EPOLL_CTL:u64=233; pub const EPOLL_WAIT:u64=232;
+pub const EPOLL_CREATE1:u64=291; pub const EPOLL_CTL:u64=233; pub const EPOLL_WAIT:u64=232; pub const EPOLL_PWAIT:u64=281;
 pub const PKEY_ALLOC:u64=330; pub const TIMER_CREATE:u64=222; pub const GETDENTS:u64=78; pub const PREAD64:u64=17; pub const PWRITE64:u64=18;
 pub const READV:u64=19; pub const WRITEV:u64=20; pub const GETDENTS64:u64=217; pub const UNLINKAT:u64=263;
 pub const SOCKET:u64=41; pub const CONNECT:u64=42; pub const ACCEPT:u64=43; pub const SENDTO:u64=44; pub const RECVFROM:u64=45;
 pub const SHUTDOWN:u64=48; pub const BIND:u64=49; pub const LISTEN:u64=50; pub const GETSOCKNAME:u64=51; pub const GETPEERNAME:u64=52; pub const SOCKETPAIR:u64=53; pub const FORK:u64=57;
+pub const CHDIR:u64=80; pub const FCHDIR:u64=81; pub const RENAME:u64=82; pub const MKDIR:u64=83; pub const RMDIR:u64=84;
+pub const LINK:u64=86; pub const SYMLINK:u64=88; pub const READLINK:u64=89; pub const CHMOD:u64=90; pub const FCHMOD:u64=91;
+pub const CHOWN:u64=92; pub const FCHOWN:u64=93; pub const LCHOWN:u64=94; pub const UTIME:u64=132; pub const TRUNCATE:u64=76; pub const FTRUNCATE:u64=77;
+pub const DUP:u64=32; pub const GETTIMEOFDAY:u64=96; pub const GETRLIMIT:u64=97; pub const SETRLIMIT:u64=160; pub const GETRUSAGE:u64=98; pub const TIMES:u64=100;
+pub const CLOCK_GETRES:u64=229; pub const CLOCK_NANOSLEEP:u64=230; pub const SELECT:u64=23; pub const PSELECT6:u64=270;
+pub const UTIMENSAT:u64=280; pub const LINKAT:u64=265; pub const SYMLINKAT:u64=266; pub const MKDIRAT:u64=258; pub const RENAMEAT:u64=264; pub const RENAMEAT2:u64=316;
+pub const FCHMODAT:u64=268; pub const FCHOWNAT:u64=260; pub const UTIMEAT:u64=261; pub const FSTATFS:u64=138; pub const STATFS:u64=137;
+pub const GETUID32:u64=199; pub const SETUID:u64=105; pub const SETGID:u64=106; pub const GETGROUPS:u64=115; pub const SETGROUPS:u64=116;
+pub const CAPGET:u64=125; pub const CAPSET:u64=126; pub const PTRACE:u64=101; pub const SYSINFO:u64=99; pub const UTSNAME:u64=63;
+
+pub const SETPGID:u64=109; pub const GETPGID:u64=121; pub const SETSID:u64=112; pub const GETSID:u64=124; pub const PRCTL:u64=157; pub const MSYNC:u64=26; pub const MLOCK:u64=149; pub const MUNLOCK:u64=150; pub const MLOCKALL:u64=151; pub const MUNLOCKALL:u64=152;
+
+pub const CLOSE_RANGE:u64=436; pub const FADVISE64:u64=221; pub const SYNC:u64=162; pub const GETCPU:u64=309; pub const SCHED_SETAFFINITY:u64=203; pub const MINCORE:u64=27; pub const MLOCK2:u64=325;  pub const NICE:u64=34; pub const SYNC_FILE_RANGE:u64=277; pub const FALLOCATE:u64=285; pub const SENDFILE:u64=40; pub const SPLICE:u64=275; pub const TEE:u64=276; pub const COPY_FILE_RANGE:u64=326; pub const FUTIMESAT:u64=261; pub const UTIMES:u64=235; pub const GETXATTR:u64=191; pub const LGETXATTR:u64=192; pub const FGETXATTR:u64=193; pub const SETXATTR:u64=188; pub const LSETXATTR:u64=189; pub const FSETXATTR:u64=190; pub const LISTXATTR:u64=194; pub const LLISTXATTR:u64=195; pub const FLISTXATTR:u64=196; pub const REMOVEXATTR:u64=197; pub const LREMOVEXATTR:u64=198; pub const FREMOVEXATTR:u64=199; pub const INOTIFY_ADD_WATCH:u64=254; pub const INOTIFY_RM_WATCH:u64=255; pub const SIGNALFD4:u64=289; pub const TIMERFD_SETTIME:u64=286; pub const TIMERFD_GETTIME:u64=287; pub const USERFAULTFD:u64=323; pub const MEMFD_CREATE:u64=319; pub const MKNODAT:u64=259;
+pub const SETREUID:u64=113;
+pub const SETREGID:u64=114;
+pub const SETRESUID:u64=117;
+pub const GETRESUID:u64=118;
+pub const SETRESGID:u64=119;
+pub const GETRESGID:u64=120;
+pub const UMASK:u64=95;
+pub const UNSHARE:u64=272;
+pub const SETNS:u64=308;
+pub const SECCOMP:u64=317;
+pub const INOTIFY_INIT:u64=253;
+pub const MOUNT:u64=165; pub const UMOUNT2:u64=166; pub const PIVOT_ROOT:u64=155; pub const CHROOT:u64=161;
+pub const SETHOSTNAME:u64=170; pub const SETDOMAINNAME:u64=171; pub const REBOOT:u64=169; pub const IOPERM:u64=173; pub const IOPL:u64=172;
+pub const SYSLOG:u64=103; 
+
+pub const PERSONALITY:u64=135;
+pub const IO_URING_SETUP:u64=425; pub const IO_URING_ENTER:u64=426; pub const IO_URING_REGISTER:u64=427;
+pub const SETSOCKOPT:u64=54; pub const GETSOCKOPT:u64=55; pub const SENDMSG:u64=46; pub const RECVMSG:u64=47; pub const ACCEPT4:u64=288;
+pub const SENDMMSG:u64=307; pub const RECVMMSG:u64=299;
+pub const PIDFD_OPEN:u64=434; pub const PIDFD_SEND_SIGNAL:u64=424; pub const PIDFD_GETFD:u64=438;

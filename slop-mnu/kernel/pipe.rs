@@ -12,6 +12,8 @@ pub fn alloc()->Result<u8,i64>{for i in 0..MAX_PIPES{let mut p=PIPES[i].lock();i
 pub fn add_reader(id:u8){PIPES[id as usize].lock().readers+=1}
 pub fn add_writer(id:u8){PIPES[id as usize].lock().writers+=1}
 pub fn close_reader(id:u8){let mut p=PIPES[id as usize].lock();p.readers=p.readers.saturating_sub(1);let empty=p.readers==0&&p.writers==0;if p.readers==0{p.writeq.wake_all();}if empty{p.used=false;}}
+pub fn has_data(id:u8)->bool{PIPES[id as usize].lock().len>0}
+pub fn has_space(id:u8)->bool{PIPES[id as usize].lock().len<CAPACITY}
 pub fn close_writer(id:u8){let mut p=PIPES[id as usize].lock();p.writers=p.writers.saturating_sub(1);let empty=p.readers==0&&p.writers==0;if p.writers==0{p.readq.wake_all();}if empty{p.used=false;}}
 fn copy_into(p:&mut Pipe,src:&[u8],n:usize){for i in 0..n{p.buf[(p.head+p.len+i)%CAPACITY]=src[i];}}
 fn copy_out(p:&mut Pipe,dst:&mut[u8],n:usize){for i in 0..n{dst[i]=p.buf[p.head];p.head=(p.head+1)%CAPACITY;}p.len-=n;}

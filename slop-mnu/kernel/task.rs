@@ -1,22 +1,26 @@
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
-use core::sync::atomic::{AtomicBool,AtomicU32,Ordering};
+use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
 use crate::process::Process;
 use crate::sync::IrqSpinLock;
 const MAX_TASKS:usize=8;const STACK_SIZE:usize=32768;
 #[repr(align(16))]struct Stack([u8;STACK_SIZE]);
 #[derive(Clone,Copy,PartialEq)]pub enum State{Unused,Running,Runnable,Sleeping,Zombie}
-#[derive(Clone,Copy)]pub struct Task{pub pid:u32,pub ppid:u32,pub pgid:u32,pub state:State,pub rsp:u64,pub kernel_stack_top:u64,pub cr3:u64,pub fs_base:u64,pub wake_tick:u64,pub wake_pending:bool,pub exit_code:i32,pub term_signal:u8,pub is_thread:bool,pub user_rsp:u64}
-const EMPTY:Task=Task{pid:0,ppid:0,pgid:0,state:State::Unused,rsp:0,kernel_stack_top:0,cr3:0,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};
+#[derive(Clone,Copy)]pub struct Task{pub pid:u32,pub ppid:u32,pub pgid:u32,pub sid:u32,pub state:State,pub rsp:u64,pub kernel_stack_top:u64,pub cr3:u64,pub fs_base:u64,pub wake_tick:u64,pub wake_pending:bool,pub exit_code:i32,pub term_signal:u8,pub is_thread:bool,pub user_rsp:u64}
+const EMPTY:Task=Task{pid:0,ppid:0,pgid:0,sid:0,state:State::Unused,rsp:0,kernel_stack_top:0,cr3:0,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};
 struct Scheduler{tasks:[Task;MAX_TASKS],current:usize,next_pid:u32}
 static SCHED:IrqSpinLock<Scheduler>=IrqSpinLock::new(Scheduler{tasks:[EMPTY;MAX_TASKS],current:0,next_pid:2});
+static NEXT_NS:AtomicU64=AtomicU64::new(2);
 /* One Process per user task slot; kernel-only tasks leave their entry empty. */
 static PROCS:IrqSpinLock<[Option<Process>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
 static mut STACKS:[Stack;MAX_TASKS]=[const{Stack([0;STACK_SIZE])};MAX_TASKS];
 static NEED_RESCHED:AtomicBool=AtomicBool::new(false);static PID:AtomicU32=AtomicU32::new(1);
 unsafe extern "sysv64"{fn switch_context(old:*mut u64,new:u64);}
-pub fn init(bootstrap_stack_top:u64){let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,ppid:0,pgid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
+pub fn init(bootstrap_stack_top:u64){let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
 pub fn current_pid()->u32{PID.load(Ordering::Relaxed)}
 pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
+pub fn current_pgid()->u32{let s=SCHED.lock();s.tasks[s.current].pgid}
+pub fn current_sid()->u32{let s=SCHED.lock();s.tasks[s.current].sid}
+pub fn alloc_ns()->u64{NEXT_NS.fetch_add(1,Ordering::Relaxed)}
 pub fn sched_pids()->[u32;8]{let s=SCHED.lock();let mut p=[0;8];for i in 0..8{p[i]=s.tasks[i].pid};p}
 pub fn current_kernel_stack_top()->u64{let s=SCHED.lock();s.tasks[s.current].kernel_stack_top}
 /* Locks are never nested the other way around: the scheduler guard is released
@@ -26,27 +30,28 @@ pub fn has_current_process()->bool{let slot=SCHED.lock().current;PROCS.lock()[sl
 fn take_slot(s:&mut Scheduler)->Result<usize,i64>{(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Unused).ok_or(crate::errno::EAGAIN)}
 fn alloc_pid(s:&mut Scheduler)->u32{let pid=s.next_pid;s.next_pid=s.next_pid.wrapping_add(1).max(2);pid}
 fn build_kernel_stack(slot:usize,entry:u64)->u64{let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let mut sp=(top&!15)-8;unsafe{sp-=8;*(sp as*mut u64)=entry;for _ in 0..6{sp-=8;*(sp as*mut u64)=0;}}sp}
-pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;s.tasks[slot]=Task{pid,ppid,pgid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;s.tasks[slot]=Task{pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
 static KERNEL_ENTRIES:IrqSpinLock<[Option<fn()>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static USER_STARTS:IrqSpinLock<[Option<crate::exec_runtime::Loaded>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static FORK_RESUMES:IrqSpinLock<[Option<crate::arch::x86_64::syscall::UserFrame>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
-pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot)?;let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{pid,ppid,pgid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
-pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let fs_base=s.tasks[parent].fs_base;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{pid,ppid,pgid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
-pub fn fork_process(frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=match with_current_process(|p|p.clone_address_space()){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};let child=match with_current_process(|p|p.fork_child(child_cr3)){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};spawn_fork(child,frame)}
+pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot)?;let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;let fs_base=s.tasks[parent].fs_base;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn fork_process(frame:crate::arch::x86_64::syscall::UserFrame,flags:u64)->Result<u32,i64>{let child_cr3=match with_current_process(|p|p.clone_address_space()){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};let child=match with_current_process(|p|p.fork_child(child_cr3)){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};spawn_fork(child,frame)}
 extern "sysv64" fn user_thread_trampoline()->!{let slot=SCHED.lock().current;let loaded=USER_STARTS.lock()[slot].take().unwrap();crate::println!("task: entering user pid={} rip={:#x} rsp={:#x}",current_pid(),loaded.entry,loaded.rsp);unsafe{crate::arch::x86_64::user::enter(loaded.entry,loaded.rsp)}}
 /* Spawns a CLONE_VM thread: shares the caller's address space and descriptor
    table, runs on the caller-provided stack with the given TLS base. */
-pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u64,tls:u64,ctid:u64)->Result<u32,i64>{
+pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u64,tls:u64,ctid:u64,ns_flags:u64)->Result<u32,i64>{
  let (cr3,bootstrap,image_slot,stack_slot,mmap_slot,fds,brk,handlers)=match with_current_process(|p|(p.cr3,p.bootstrap_cr3,p.image_slot,p.stack_slot,p.mmap_slot,p.fds.clone_incref(),p.brk,p.handlers)){
   Some(v)=>v,None=>return Err(crate::errno::ESRCH)};
- let child=Process{cr3,bootstrap_cr3:bootstrap,image_slot,stack_slot,mmap_slot,vm:crate::vm::Map::new(),brk,clear_child_tid:ctid,fds,pending:0,sigmask:0,handlers,sigframe:0,exe_path:[0;64],exe_len:0};
+ let mut child=Process{cr3,bootstrap_cr3:bootstrap,image_slot,stack_slot,mmap_slot,vm:crate::vm::Map::new(),brk,clear_child_tid:ctid,fds,pending:0,sigmask:0,handlers,sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,umask:0,groups:[0;32],ngroups:0};
+ apply_ns_flags(&mut child,ns_flags);
  let mut frame=frame;frame.rsp=child_stack;
  let mut s=SCHED.lock();
  let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>return Err(e)};
- let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;
+ let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;
  let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);
  FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);
- s.tasks[slot]=Task{pid,ppid,pgid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:true,user_rsp:child_stack};
+ s.tasks[slot]=Task{pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:true,user_rsp:child_stack};
  Ok(pid)
 }
 extern "sysv64" fn fork_thread_trampoline()->!{let slot=SCHED.lock().current;let frame=FORK_RESUMES.lock()[slot].take().unwrap();crate::println!("task: fork child resumed pid={}",current_pid());unsafe{crate::arch::x86_64::user::resume(&frame)}}
@@ -68,6 +73,35 @@ pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
  Ok(())
 }
 fn finish(code:i32,signal:u8)->!{{let mut s=SCHED.lock();let current=s.current;s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;s.tasks[current].term_signal=signal;let parent=s.tasks[current].ppid;drop(s);if parent!=0{let _=signal_pid(parent,crate::signal::SIGCHLD);}}loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
+pub fn setpgid(pid:u32,pgid:u32)->Result<(),i64>{
+ let me=current_pid();
+ let target=if pid==0{me}else{pid};
+ if target!=me{return Err(crate::errno::EPERM)}
+ let mut s=SCHED.lock();
+ let idx=s.current;
+ let newpg=if pgid==0{me}else{pgid};
+ if newpg!=me{return Err(crate::errno::EPERM)}
+ s.tasks[idx].pgid=newpg;
+ Ok(())
+}
+pub fn setsid()->Result<u32,i64>{
+ let me=current_pid();
+ let mut s=SCHED.lock();
+ let idx=s.current;
+ if s.tasks[idx].pgid==me{return Err(crate::errno::EPERM)}
+ s.tasks[idx].pgid=me;s.tasks[idx].sid=me;Ok(me)
+}
+fn apply_ns_flags(p:&mut Process,flags:u64){
+ const CLONE_NEWUTS:u64=0x04000000; const CLONE_NEWIPC:u64=0x08000000; const CLONE_NEWUSER:u64=0x10000000; const CLONE_NEWPID:u64=0x20000000; const CLONE_NEWNET:u64=0x40000000; const CLONE_NEWCGROUP:u64=0x02000000; const CLONE_NEWTIME:u64=0x00000080; const CLONE_NEWNS:u64=0x00020000;
+ if flags&CLONE_NEWUTS!=0{p.ns_uts=alloc_ns();}
+ if flags&CLONE_NEWIPC!=0{p.ns_ipc=alloc_ns();}
+ if flags&CLONE_NEWNS!=0{p.ns_mnt=alloc_ns();}
+ if flags&CLONE_NEWPID!=0{p.ns_pid=alloc_ns();}
+ if flags&CLONE_NEWNET!=0{p.ns_net=alloc_ns();}
+ if flags&CLONE_NEWUSER!=0{p.ns_user=alloc_ns();p.uid=0;p.gid=0;p.euid=0;p.egid=0;p.suid=0;p.sgid=0;p.cap_eff=u64::MAX;p.cap_prm=u64::MAX;}
+ if flags&CLONE_NEWCGROUP!=0{p.ns_cgroup=alloc_ns();}
+ if flags&CLONE_NEWTIME!=0{p.ns_time=alloc_ns();}
+}
 pub fn finish_current(code:i32)->!{finish(code,0)}
 pub fn exit(code:i32)->!{
  let is_thread={let s=SCHED.lock();s.tasks[s.current].is_thread};

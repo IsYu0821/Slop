@@ -18,8 +18,11 @@ struct dirent64 {
 #define DT_DIR 4
 
 struct timespec { long tv_sec; long tv_nsec; };
+struct timeval { long tv_sec; long tv_usec; };
+struct timezone { int tz_minuteswest; int tz_dsttime; };
 typedef long ssize_t;
 typedef int pid_t;
+struct rlimit { unsigned long rlim_cur; unsigned long rlim_max; };
 
 ssize_t write(int fd, const void *buf, size_t n);
 ssize_t read(int fd, void *buf, size_t n);
@@ -60,4 +63,23 @@ int madvise(void *addr, size_t len, int advice);
 int membarrier(int cmd, int flags);
 int nanosleep(const struct timespec *req, struct timespec *rem);
 
+
+int chdir(const char *path);
+int fchdir(int fd);
+char *getcwd(char *buf, size_t size);
+int mkdir(const char *path, int mode);
+int rmdir(const char *path);
+int rename(const char *old, const char *new);
+int chmod(const char *path, int mode);
+int fchmod(int fd, int mode);
+int truncate(const char *path, long length);
+int ftruncate(int fd, long length);
+int dup(int oldfd);
+int gettimeofday(struct timeval *tv, struct timezone *tz);
+int getrlimit(int resource, struct rlimit *rlim);
+int setrlimit(int resource, const struct rlimit *rlim);
+int getrusage(int who, void *ru);
+long times(void *buf);
+int select(int nfds, void *readfds, void *writefds, void *exceptfds, struct timeval *timeout);
+int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags);
 #endif

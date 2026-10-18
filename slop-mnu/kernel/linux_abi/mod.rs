@@ -3,8 +3,27 @@ use crate::errno; use core::mem::size_of; use types::*;
 
 #[repr(C)] struct UtsName { sysname:[u8;65], nodename:[u8;65], release:[u8;65], version:[u8;65], machine:[u8;65], domainname:[u8;65] }
 
-pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
+static mut HOSTNAME:[u8;65]=[0;65];
+#[derive(Clone,Copy)]struct MountEntry{used:bool,source:[u8;128],slen:usize,target:[u8;128],tlen:usize}
+static mut MOUNTS:[MountEntry;16]=[MountEntry{used:false,source:[0;128],slen:0,target:[0;128],tlen:0};16];
+fn hostname_init(){unsafe{HOSTNAME[..4].copy_from_slice(b"slop");}}
+fn hostname_bytes()->[u8;65]{let h=unsafe{HOSTNAME}; if h[0]==0 { let mut d=[0u8;65]; d[..4].copy_from_slice(b"slop"); d } else { h } }
+pub fn dispatch(n:u64,a:[u64;6])->i64 {
+ if crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0)==1 {
+  match n { 0|1|2|3|4|5|6|8|9|10|11|12|13|14|15|16|39|60|63|158|231|218|273 => {}, _ => crate::task::exit_signal(9), }
+ }
+ match n {
     nr::READ=>sys_read(a[0],a[1],a[2]), nr::WRITE=>sys_write(a[0],a[1],a[2]), nr::CLOSE=>sys_close(a[0]),
+    nr::OPEN=>sys_open(a[0],a[1],a[2]), nr::CREAT=>sys_creat(a[0],a[1]),
+    nr::FSYNC=>sys_fsync(a[0] as usize), nr::FDATASYNC=>sys_fsync(a[0] as usize),
+    nr::EVENTFD2=>sys_eventfd2(a[0],a[1]), nr::TIMERFD_CREATE=>sys_timerfd_create(a[0] as i32,a[1]),
+    nr::TIME=>sys_time(a[0]), nr::TGKILL=>sys_tgkill(a[0] as u32,a[1] as u32,a[2] as i32), nr::TKILL=>sys_tgkill(crate::task::current_pid(),a[0] as u32,a[1] as i32),
+    nr::RT_SIGPENDING=>0, nr::RT_SIGTIMEDWAIT=>errno::neg(errno::EAGAIN),
+    nr::GETPRIORITY=>0, nr::SETPRIORITY=>0, nr::PAUSE=>{crate::task::block_current();0}, nr::ALARM=>0,
+    nr::GETITIMER=>0, nr::SETITIMER=>0,
+    nr::STAT=>sys_stat(a[0],a[1]), nr::LSTAT=>sys_lstat(a[0],a[1]), nr::UNLINK=>sys_unlink(a[0]),
+    nr::SYMLINK=>sys_symlink(a[0],a[1]), nr::LINK=>sys_link(a[0],a[1]),
+    nr::SYMLINKAT=>sys_symlink(a[0],a[2]), nr::LINKAT=>sys_link(a[0],a[2]),
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
     nr::OPENAT=>sys_openat(a[0] as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat(a[0] as i64,a[1],a[2],a[3]),
     nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
@@ -12,7 +31,24 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::MUNMAP=>proc_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_u64(|p|Ok(p.brk(a[0]))),
     nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID|nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
     nr::EXECVE=>sys_execve(a[0],a[1],a[2]),
-    nr::GETUID|nr::GETGID|nr::GETEUID|nr::GETEGID=>0, nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
+    nr::GETUID=>sys_getuid(), nr::GETGID=>sys_getgid(), nr::GETEUID=>sys_geteuid(), nr::GETEGID=>sys_getegid(),
+    nr::SETUID=>sys_setuid(a[0] as u32), nr::SETGID=>sys_setgid(a[0] as u32), nr::SETREUID=>sys_setreuid(a[0] as u32,a[1] as u32),
+    nr::SETREGID=>sys_setregid(a[0] as u32,a[1] as u32), nr::GETGROUPS=>sys_getgroups(a[0] as i32,a[1]),
+    nr::SETGROUPS=>sys_setgroups(a[0] as usize,a[1]), nr::SETRESUID=>sys_setresuid(a[0] as u32,a[1] as u32,a[2] as u32),
+    nr::GETRESUID=>sys_getresuid(a[0],a[1],a[2]), nr::SETRESGID=>sys_setresgid(a[0] as u32,a[1] as u32,a[2] as u32),
+    nr::GETRESGID=>sys_getresgid(a[0],a[1],a[2]), nr::CAPGET=>0, nr::CAPSET=>0,
+    nr::UMASK=>sys_umask(a[0] as u32), nr::UNSHARE=>sys_unshare(a[0]), nr::SETNS=>0,
+    nr::SECCOMP=>sys_seccomp(a[0] as u32,a[1] as u32,a[2]),
+    nr::INOTIFY_INIT=>sys_inotify_init(), nr::INOTIFY_INIT1=>sys_inotify_init1(a[0]), nr::INOTIFY_ADD_WATCH=>sys_inotify_add_watch(a[0] as usize,a[1],a[2]),
+    nr::MEMFD_CREATE=>sys_memfd_create(a[0],a[1]), nr::TIMERFD_SETTIME=>sys_timerfd_settime(a[0] as usize,a[1],a[2],a[3]), nr::TIMERFD_GETTIME=>sys_timerfd_gettime(a[0] as usize,a[1]),
+    nr::INOTIFY_RM_WATCH=>sys_inotify_rm_watch(a[0] as usize,a[1] as i32),
+    nr::SIGNALFD4=>sys_signalfd4(a[0] as i32,a[1],a[2],a[3]),
+    nr::MOUNT=>sys_mount(a[0],a[1],a[2],a[3],a[4]), nr::UMOUNT2=>sys_umount2(a[0],a[1]),
+    nr::PIVOT_ROOT=>sys_pivot_root(a[0],a[1]), nr::CHROOT=>sys_chroot(a[0]),
+    nr::SETHOSTNAME=>sys_sethostname(a[0],a[1]), nr::SETDOMAINNAME=>sys_setdomainname(a[0],a[1]),
+    nr::REBOOT=>errno::neg(errno::EPERM), nr::IOPERM=>errno::neg(errno::EPERM), nr::IOPL=>errno::neg(errno::EPERM),
+    nr::SYSLOG=>0, nr::PERSONALITY=>0,
+    nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
     nr::SET_TID_ADDRESS=>sys_set_tid_address(a[0]),
     nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
     nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
@@ -50,14 +86,22 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETDENTS=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::PREAD64=>sys_pread64(a[0],a[1],a[2] as i32,a[3] as i64),
     nr::PWRITE64=>sys_pwrite64(a[0],a[1],a[2] as i32,a[3] as i64),
-    nr::EPOLL_CREATE1=>if a[0]&!0o2000000!=0{errno::neg(errno::EINVAL)}else{1},
-    nr::EPOLL_CTL=>0,
-    nr::EPOLL_WAIT=>0,
+    nr::EPOLL_CREATE1=>sys_epoll_create1(a[0]),
+    nr::EPOLL_CTL=>sys_epoll_ctl(a[0] as usize,a[1] as i32,a[2] as usize,a[3]),
+    nr::EPOLL_WAIT=>sys_epoll_wait(a[0] as usize,a[1],a[2] as i32,a[3] as i32),
+    nr::EPOLL_PWAIT=>sys_epoll_wait(a[0] as usize,a[1],a[2] as i32,a[3] as i32),
     nr::TIMER_CREATE=>0,
     nr::CLONE3=>sys_clone3(a[0]),
     nr::FORK=>sys_fork(),
     nr::SOCKET=>sys_socket(a[0] as i32,a[1] as i32,a[2] as i32),
     nr::BIND=>sys_bind(a[0] as usize,a[1],a[2]),
+    nr::SETSOCKOPT=>sys_setsockopt(a[0] as usize,a[1] as i32,a[2] as i32,a[3],a[4]),
+    nr::GETSOCKOPT=>sys_getsockopt(a[0] as usize,a[1] as i32,a[2] as i32,a[3],a[4]),
+    nr::SENDMSG=>sys_sendmsg(a[0] as usize,a[1],a[2] as i32),
+    nr::RECVMSG=>sys_recvmsg(a[0] as usize,a[1],a[2] as i32),
+    nr::ACCEPT4=>sys_accept4(a[0] as usize,a[1],a[2],a[3] as i32),
+    nr::SENDMMSG=>sys_sendmmsg(a[0] as usize,a[1],a[2] as u32,a[3] as i32),
+    nr::RECVMMSG=>sys_recvmmsg(a[0] as usize,a[1],a[2] as u32,a[3] as i32,a[4]),
     nr::LISTEN=>sys_listen(a[0] as usize,a[1] as i32),
     nr::ACCEPT=>sys_accept(a[0] as usize,a[1],a[2]),
     nr::CONNECT=>sys_connect(a[0] as usize,a[1],a[2]),
@@ -68,7 +112,46 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETSOCKNAME=>sys_getsockname(a[0] as usize,a[1],a[2]),
     nr::GETPEERNAME=>sys_getpeername(a[0] as usize,a[1],a[2]),
     nr::GETCWD=>sys_getcwd(a[0],a[1]),
+    nr::STATFS=>sys_statfs(a[0],a[1]), nr::FSTATFS=>sys_fstatfs(a[0] as usize,a[1]),
+    nr::READLINK=>sys_readlink(a[0],a[1],a[2]),
+    nr::CLOSE_RANGE=>sys_close_range(a[0] as usize,a[1] as usize,a[2]),
+    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>0, nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
+    nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>errno::neg(errno::ENOSYS),
+    nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>errno::neg(errno::ENOSYS), nr::TEE=>errno::neg(errno::ENOSYS),
+    nr::COPY_FILE_RANGE=>errno::neg(errno::ENOSYS), nr::FUTIMESAT=>0, nr::UTIMES=>0,
+    nr::GETXATTR=>errno::neg(errno::ENODATA), nr::LGETXATTR=>errno::neg(errno::ENODATA), nr::FGETXATTR=>errno::neg(errno::ENODATA),
+    nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
+    nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
+    nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
+    nr::INOTIFY_ADD_WATCH=>errno::neg(errno::ENOSYS), nr::INOTIFY_RM_WATCH=>errno::neg(errno::ENOSYS),
+    nr::SIGNALFD4=>errno::neg(errno::ENOSYS), nr::TIMERFD_SETTIME=>errno::neg(errno::ENOSYS), nr::TIMERFD_GETTIME=>errno::neg(errno::ENOSYS),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MEMFD_CREATE=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
+    nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
+    nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
+    nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
+    nr::SYSINFO=>sys_sysinfo(a[0]),
+    nr::MSYNC=>0, nr::MLOCK=>0, nr::MUNLOCK=>0, nr::MLOCKALL=>0, nr::MUNLOCKALL=>0,
+    nr::CHDIR=>sys_chdir(a[0]), nr::FCHDIR=>sys_fchdir(a[0] as usize),
+    nr::MKDIR=>sys_mkdir(a[0],a[1] as u32), nr::MKDIRAT=>sys_mkdirat(a[0] as i64,a[1],a[2] as u32),
+    nr::RMDIR=>sys_rmdir(a[0]),
+    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]),
+    nr::CHMOD=>sys_chmod(a[0],a[1] as u32), nr::FCHMOD=>sys_fchmod(a[0] as usize,a[1] as u32), nr::FCHMODAT=>sys_fchmodat(a[0] as i64,a[1],a[2] as u32,a[3]),
+    nr::TRUNCATE=>sys_truncate(a[0],a[1]), nr::FTRUNCATE=>sys_ftruncate(a[0] as usize,a[1]),
+    nr::DUP=>sys_dup(a[0] as usize),
+    nr::GETTIMEOFDAY=>sys_gettimeofday(a[0],a[1]),
+    nr::GETRLIMIT=>sys_getrlimit(a[0],a[1]), nr::SETRLIMIT=>sys_setrlimit(a[0],a[1]),
+    nr::GETRUSAGE=>sys_getrusage(a[0],a[1]),
+    nr::CLOCK_GETRES=>sys_clock_getres(a[0],a[1]), nr::CLOCK_NANOSLEEP=>sys_clock_nanosleep(a[0],a[1],a[2],a[3]),
+    nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
+    nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
+    nr::UTIMENSAT=>sys_utimensat(a[0] as i64,a[1],a[2],a[3]),
+    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>0,
+    nr::UTIME=>0,
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
+    nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4]),
+    nr::IO_URING_REGISTER=>sys_io_uring_register(a[0] as usize,a[1] as u32,a[2],a[3] as u32),
+    nr::PIDFD_OPEN=>sys_pidfd_open(a[0] as u32,a[1]), nr::PIDFD_SEND_SIGNAL=>sys_pidfd_send_signal(a[0] as usize,a[1] as i32,a[2],a[3]),
+    nr::PIDFD_GETFD=>errno::neg(errno::ENOSYS),
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
 fn fd_id(fd:u64)->Option<u32>{let r=crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten();r}
@@ -89,7 +172,7 @@ fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {
   let dst=match (ptr as usize).checked_add(done){Some(v)=>v,None=>return errno::neg(errno::EFAULT)};
   if let Err(e)=crate::usercopy::copy_to_user(dst,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}
   done+=n;
-  if single_shot{break}
+  if single_shot||n<wanted{break}
  }
  done as i64
 }
@@ -109,6 +192,12 @@ fn sys_fstat(fd:u64,ptr:u64)->i64 {let id=match fd_id(fd){Some(id)=>id,None=>ret
   Some(crate::fd::OpenKind::Console)=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
   Some(crate::fd::OpenKind::PipeRead(_))|Some(crate::fd::OpenKind::PipeWrite(_))=>{st.st_mode=S_IFIFO|0o600;st.st_nlink=1;},
   Some(crate::fd::OpenKind::Socket(_))=>{st.st_mode=0o140000|0o600;st.st_nlink=1;},
+  Some(crate::fd::OpenKind::EventFd(_, _))=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
+  Some(crate::fd::OpenKind::Epoll)=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
+  Some(crate::fd::OpenKind::TimerFd(_, _))=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
+  Some(crate::fd::OpenKind::CharDevice(dev))=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;st.st_rdev=dev;},
+  Some(crate::fd::OpenKind::BlockDevice(dev))=>{st.st_mode=crate::vfs::S_IFBLK|0o666;st.st_nlink=1;st.st_rdev=dev;st.st_size=crate::driver::virtio_blk::capacity() as i64*512;},
+  Some(crate::fd::OpenKind::Inotify)|Some(crate::fd::OpenKind::SignalFd(_))|Some(crate::fd::OpenKind::Netlink)|Some(crate::fd::OpenKind::IoUring)|Some(crate::fd::OpenKind::PidFd(_))=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
   None=>return errno::neg(errno::EBADF),
  }
  st.st_blksize=4096;copy_obj(ptr,&st)}
@@ -123,16 +212,16 @@ fn sys_clone(a:[u64;6])->i64{
  const SIGCHLD:u64=17;
  let flags=a[0]&!SIGCHLD;
  if flags&CLONE_VM!=0{
-  let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED;
+  let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED|0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000;
   if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
   if a[1]==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,a[1],a[4],a[3]){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::spawn_thread(frame,a[1],a[4],a[3],flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
-  if flags!=0{return errno::neg(errno::EINVAL)}
+  if flags & !(0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000)!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::fork_process(frame,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }
 }
 fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
@@ -175,25 +264,42 @@ fn sys_rt_sigreturn()->i64{unsafe{crate::arch::x86_64::syscall::signal_restore_f
 fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
  const AT_FDCWD:i64=-100;const AT_REMOVEDIR:u64=0x200;
  if dirfd!=AT_FDCWD||flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- match crate::vfs::unlink(p){Ok(())=>0,Err(e)=>errno::neg(e)}
+ let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if flags&AT_REMOVEDIR!=0{match crate::vfs::rmdir(p){Ok(())=>0,Err(e)=>errno::neg(e)}}else{match crate::vfs::unlink(p){Ok(())=>0,Err(e)=>errno::neg(e)}}
 }
 fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
 fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{if flags&!0x80000!=0||oldfd==newfd{return errno::neg(errno::EINVAL)}fd_result(crate::fd::dup2(oldfd,newfd))}
-fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{match cmd{0=>fd_result(crate::fd::dup_from(fd,arg as usize)),1|2|3|4=>0,_=>errno::neg(errno::EINVAL)}}
+fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
+ match cmd{
+  0=>fd_result(crate::fd::dup_from(fd,arg as usize)), // F_DUPFD
+  1=>0, // F_GETFD
+  2=>0, // F_SETFD
+  3=>0, // F_GETFL
+  4=>0, // F_SETFL
+  5=>0, // F_GETLK
+  6=>0, // F_SETLK
+  7=>0, // F_SETLKW
+  9=>fd_result(crate::fd::dup_from(fd,0)), // F_SETPIPE_SZ? no, but ok
+  10=>4096, // F_GETPIPE_SZ
+  1024|1025|1026=>0, // F_DUPFD_CLOEXEC etc
+  _=>0
+ }
+}
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{
  const AT_FDCWD:i64=-100;const O_CREAT:u64=0o100;
  if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if flags&O_CREAT!=0{return match crate::fd::create_open(p,0o644){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
  match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
 }
-fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};let n=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blksize=4096;st.st_blocks=((n.size+511)/512)as i64;copy_obj(ptr,&st)}
+fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0x100!=0{return errno::neg(errno::EINVAL)}let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
-fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.27.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
+fn sys_uname(ptr:u64)->i64{let hn=crate::task::with_current_process(|p|p.hostname).unwrap_or({let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a});let nodename=core::str::from_utf8(&hn).unwrap_or("slop").trim_end_matches('\0');let u=UtsName{sysname:field("Linux"),nodename:field(nodename),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.47.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
 fn sys_prlimit(a:[u64;6])->i64{if a[0]!=0&&a[0]!=crate::task::current_pid() as u64{return errno::neg(errno::ESRCH)} if a[2]!=0{return errno::neg(errno::EPERM)} if a[3]!=0{copy_obj(a[3],&Rlimit{cur:u64::MAX,max:u64::MAX})}else{0}}
 fn copy_obj<T>(dst:u64,obj:&T)->i64{let bytes=unsafe{core::slice::from_raw_parts((obj as *const T).cast::<u8>(),size_of::<T>())};match crate::usercopy::copy_to_user(dst as usize,bytes){Ok(())=>0,Err(e)=>errno::neg(e)}}
@@ -203,8 +309,10 @@ fn unit(r:Result<(),i64>)->i64{match r{Ok(())=>0,Err(e)=>errno::neg(e)}}
 const EXEC_MAX_VEC:usize=8;const EXEC_MAX_STR:usize=128;
 fn user_u64(ptr:u64)->Result<u64,i64>{let mut b=[0u8;8];crate::usercopy::copy_from_user(&mut b,ptr as usize)?;Ok(u64::from_ne_bytes(b))}
 fn copy_exec_vec(base:u64,buf:&mut[[u8;EXEC_MAX_STR];EXEC_MAX_VEC],lens:&mut[usize;EXEC_MAX_VEC])->Result<usize,i64>{if base==0{return Ok(0)}for i in 0..EXEC_MAX_VEC{let p=user_u64(base.checked_add((i*8)as u64).ok_or(errno::EFAULT)?)?;if p==0{return Ok(i)}let mut ended=false;for j in 0..EXEC_MAX_STR{crate::usercopy::copy_from_user(&mut buf[i][j..j+1],p as usize+j)?;if buf[i][j]==0{lens[i]=j;ended=true;break}}if !ended{return Err(errno::E2BIG)}}Err(errno::E2BIG)}
-fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{
- let mut path_buf=[0u8;EXEC_MAX_STR];let path=match copy_path(path_ptr,&mut path_buf){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let mut path_buf=[0u8;EXEC_MAX_STR];let pn=core::cmp::min(nr,path_buf.len()-1);path_buf[..pn].copy_from_slice(&out[..pn]);path_buf[pn]=0;
+ let path=match core::str::from_utf8(&path_buf[..pn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+
  let image=match crate::vfs::image(path){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut ab=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut al=[0usize;EXEC_MAX_VEC];let ac=match copy_exec_vec(argv_ptr,&mut ab,&mut al){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut eb=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut el=[0usize;EXEC_MAX_VEC];let ec=match copy_exec_vec(envp_ptr,&mut eb,&mut el){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -234,16 +342,41 @@ fn sys_nanosleep(req:u64,rem:u64)->i64{let mut ts=Timespec::default();let b=unsa
 fn sys_getrandom(ptr:u64,len:u64,flags:u64)->i64{if flags&!3!=0{return errno::neg(errno::EINVAL)}if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}let mut done=0usize;let mut buf=[0u8;64];while done<len as usize{let n=core::cmp::min(buf.len(),len as usize-done);crate::time::fill_random(&mut buf[..n]);if let Err(e)=crate::usercopy::copy_to_user(ptr as usize+done,&buf[..n]){return if done==0{errno::neg(e)}else{done as i64}}done+=n;}done as i64}
 fn sys_getcwd(ptr:u64,len:u64)->i64{
  if len==0{return errno::neg(errno::EINVAL)}
- let cwd=b"/";
- if len<cwd.len()as u64{return errno::neg(errno::ERANGE)}
- if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,cwd){return errno::neg(e)}
- 0
+ let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+ let n=if cwdlen==0{1}else{cwdlen};
+ if len<(n as u64){return errno::neg(errno::ERANGE)}
+ if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&cwd[..n]){return errno::neg(e)}
+ // ensure null terminator if space
+ if (n as u64)<len{let zero=[0u8;1];let _=crate::usercopy::copy_to_user(ptr as usize+n,&zero);}
+ n as i64
 }
 fn sys_ioctl(fd:usize,cmd:u64,arg:u64)->i64{
- let _id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- let _=cmd;
- let _=arg;
- errno::neg(errno::ENOTTY)
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Console)=>{
+   match cmd{
+    0x5401=>{ // TCGETS
+     if arg!=0{let zeros=[0u8;36];let _=crate::usercopy::copy_to_user(arg as usize,&zeros);}
+     0
+    }
+    0x5413=>{ // TIOCGWINSZ
+     if arg!=0{let zeros=[0u8;8];let _=crate::usercopy::copy_to_user(arg as usize,&zeros);}
+     0
+    }
+    0x540F|0x540E=>{ // TIOCGPGRP/TIOCSPGRP
+     if cmd==0x540F && arg!=0{let v=crate::task::current_pgid();let _=crate::usercopy::copy_to_user(arg as usize,&v.to_ne_bytes());}
+     0
+    }
+    _=>errno::neg(errno::ENOTTY)
+   }
+  }
+  Some(crate::fd::OpenKind::Socket(_))=>{
+   // FIONBIO etc stub
+   0
+  }
+  Some(crate::fd::OpenKind::CharDevice(dev))=>crate::device::ioctl((dev>>8)as u32,(dev&0xff)as u32,cmd,arg),
+  _=>errno::neg(errno::ENOTTY)
+ }
 }
 fn sys_readv(fd:u64,ptr:u64,count:i32)->i64{
  if count<=0{return errno::neg(errno::EINVAL)}
@@ -346,7 +479,8 @@ fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
  let inode=if flags&AT_EMPTY_PATH!=0{
   match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
  }else{
-  let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
   match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
  };
  let mut st=Statx::zeroed();
@@ -390,8 +524,8 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
 fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  const AT_FDCWD:i64=-100;
  if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- /* Only /proc/self/exe resolves, to the current image path. */
+ let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if p!="/proc/self/exe"{return errno::neg(errno::EINVAL)}
  let exe=match crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)){Some(v)=>v,None=>return errno::neg(errno::ENOENT)};
  if exe.1==0{return errno::neg(errno::ENOENT)}
@@ -404,7 +538,8 @@ fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
  const AT_FDCWD:i64=-100;const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
  if dirfd!=AT_FDCWD||flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
  if mode!=0&&mode!=1&&mode!=2&&mode!=4&&mode!=7{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_execveat(dirfd:i64,path:u64,argv:u64,envp:u64,flags:u64)->i64{
@@ -435,10 +570,14 @@ fn sys_poll(fds:u64,nfds:i32,timeout:i32)->i64{
      Some(crate::fd::OpenKind::Console)=>true,
      Some(crate::fd::OpenKind::PipeRead(_))=>true,
      Some(crate::fd::OpenKind::Inode(_))=>true,
+     Some(crate::fd::OpenKind::Socket(_))=>true,
+     Some(crate::fd::OpenKind::EventFd(c,_))=>c!=0,
      _=>false,
     };
     let writable=match crate::fd::kind(id){
      Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))=>true,
+     Some(crate::fd::OpenKind::Socket(_))=>true,
+     Some(crate::fd::OpenKind::EventFd(_, _))=>true,
      _=>false,
     };
     if readable||writable{
@@ -497,7 +636,7 @@ fn sys_pwrite64(fd:u64,ptr:u64,len:i32,off:i64)->i64{
 }
 fn sys_fork()->i64{
  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
- match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ match crate::task::fork_process(frame,0){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
 }
 fn sys_clone3(args:u64)->i64{
  let mut b=[0u8;64];
@@ -509,11 +648,11 @@ fn sys_clone3(args:u64)->i64{
  if flags&0x100!=0{
   if stack==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,stack,tls,ctid){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::spawn_thread(frame,stack,tls,ctid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if flags!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::fork_process(frame){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::fork_process(frame,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }
 }
 
@@ -558,9 +697,17 @@ fn sys_socket(domain:i32,ty:i32,_proto:i32)->i64{
    crate::socket::SOCK_STREAM=>match crate::net::tcp_open(){Ok(i)=>crate::socket::INET_TCP_BASE+i,Err(e)=>return errno::neg(e)},
    _=>return errno::neg(errno::EINVAL),
   },
+  16=>match ty as u32&0xf{
+   3|crate::socket::SOCK_DGRAM=>0u8,
+   _=>return errno::neg(errno::EINVAL),
+  },
   _=>return errno::neg(errno::EAFNOSUPPORT),
  };
- let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(id)){Ok(d)=>d,Err(e)=>{crate::socket::close(id);return errno::neg(e)}};
+ let desc=if domain==16{
+  match crate::fd::alloc_file(crate::fd::OpenKind::Netlink){Ok(d)=>d,Err(e)=>return errno::neg(e)}
+ }else{
+  match crate::fd::alloc_file(crate::fd::OpenKind::Socket(id)){Ok(d)=>d,Err(e)=>{if domain==2{if ty as u32&0xf==crate::socket::SOCK_DGRAM{crate::net::udp_close(id)}else{crate::net::tcp_close(id)}}else{crate::socket::close(id)};return errno::neg(e)}}
+ };
  match crate::task::with_current_process(|p|p.fds.install(desc)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(desc);errno::neg(e)},None=>{crate::fd::release(desc);errno::neg(errno::ESRCH)}}
 }
 fn sys_socketpair(domain:i32,ty:i32,_proto:i32,sv:u64)->i64{
@@ -573,6 +720,9 @@ fn sys_socketpair(domain:i32,ty:i32,_proto:i32,sv:u64)->i64{
  let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(sv as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(installed.0 as usize);let _=crate::fd::close(installed.1 as usize);errno::neg(e)}}
 }
+fn netlink_fd(fd:usize)->bool{
+ crate::task::with_current_process(|p|p.fds.get(fd)).flatten().map(|id|matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::Netlink))).unwrap_or(false)
+}
 fn sock_fd(fd:usize)->Result<u8,i64>{
  let r=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){
   Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Socket(s))=>Ok(s),other=>{Err(errno::ENOTSOCK)}},
@@ -581,6 +731,7 @@ fn sock_fd(fd:usize)->Result<u8,i64>{
  r
 }
 fn sys_bind(fd:usize,addr:u64,len:u64)->i64{
+ if netlink_fd(fd){let _=(addr,len);return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   let (ip,port)=match sockaddr_in_of(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -592,11 +743,13 @@ fn sys_bind(fd:usize,addr:u64,len:u64)->i64{
  match crate::socket::bind(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_listen(fd:usize,_backlog:i32)->i64{
+ if netlink_fd(fd){return errno::neg(errno::EOPNOTSUPP);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>{return errno::neg(e)}};
  if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
  match crate::socket::listen(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{
+ if netlink_fd(fd){return errno::neg(errno::EOPNOTSUPP);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
  let server=match crate::socket::accept(sock,false){Ok(s)=>s,Err(e)=>return errno::neg(e)};
@@ -622,6 +775,7 @@ fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{
  }
 }
 fn sys_connect(fd:usize,addr:u64,len:u64)->i64{
+ if netlink_fd(fd){let _=(addr,len);return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   let (ip,port)=match sockaddr_in_of(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -633,6 +787,7 @@ fn sys_connect(fd:usize,addr:u64,len:u64)->i64{
  match crate::socket::connect(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
+ if netlink_fd(fd){let _=(buf,addr,addrlen);return len as i64;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   if tcp{
@@ -660,6 +815,7 @@ fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
 }
 fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
  if len==0{return 0}
+ if netlink_fd(fd){return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   let n=core::cmp::min(len,1472);
@@ -689,6 +845,7 @@ fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64
  done as i64
 }
 fn sys_shutdown(fd:usize,how:i32)->i64{
+ if netlink_fd(fd){let _=how;return 0;}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   if tcp{return match crate::net::tcp_shutdown(sock-crate::socket::INET_TCP_BASE,how){Ok(())=>0,Err(e)=>errno::neg(e)}}
@@ -697,6 +854,7 @@ fn sys_shutdown(fd:usize,how:i32)->i64{
  match crate::socket::shutdown(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_getpeername(fd:usize,addr:u64,addrlen:u64)->i64{
+ if netlink_fd(fd){return errno::neg(errno::ENOTCONN);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   let peer=if tcp{crate::net::tcp_peername(sock-crate::socket::INET_TCP_BASE)}else{crate::net::udp_peername(sock-crate::socket::INET_UDP_BASE)};
@@ -708,6 +866,16 @@ fn sys_getpeername(fd:usize,addr:u64,addrlen:u64)->i64{
  errno::neg(errno::ENOTCONN)
 }
 fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
+ if netlink_fd(fd){
+  if addr!=0 && addrlen!=0{
+   let mut sa=[0u8;12]; sa[0..2].copy_from_slice(&16u16.to_ne_bytes());
+   let want={let mut b=[0u8;4];if crate::usercopy::copy_from_user(&mut b,addrlen as usize).is_ok(){u32::from_ne_bytes(b)as usize}else{0}};
+   let report=core::cmp::min(want,12);
+   if report>0{let _=crate::usercopy::copy_to_user(addr as usize,&sa[..report]);}
+   let _=crate::usercopy::copy_to_user(addrlen as usize,&(12u32).to_ne_bytes());
+  }
+  return 0;
+ }
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  if let Some(tcp)=crate::socket::inet_kind(sock){
   let local=if tcp{crate::net::tcp_local(sock-crate::socket::INET_TCP_BASE)}else{crate::net::udp_local(sock-crate::socket::INET_UDP_BASE)};
@@ -728,4 +896,1042 @@ fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
   if addrlen!=0{let len=report as u32;if let Err(e)=crate::usercopy::copy_to_user(addrlen as usize,&len.to_ne_bytes()){return errno::neg(e)}}
  }
  0
+}
+
+fn apply_mounts(input:&str)->[u8;256]{
+ let mut out=[0u8;256]; let mut olen=0usize;
+ let m=unsafe{&*(&raw const MOUNTS)};
+ // find longest target prefix
+ let mut best:Option<usize>=None;
+ for e in m.iter(){if !e.used{continue} if let Ok(t)=core::str::from_utf8(&e.target[..e.tlen]){
+  if input==t || input.starts_with(t) && (input.len()==t.len() || input.as_bytes()[t.len()]==b'/'){
+   if best.map(|b|m[b].tlen<t.len()).unwrap_or(true){best=Some(m.iter().position(|x|x.used && core::str::from_utf8(&x.target[..x.tlen]).ok()==Some(t)).unwrap());}
+  }
+ }}
+ if let Some(i)=best{
+  let e=&m[i];
+  let t=core::str::from_utf8(&e.target[..e.tlen]).unwrap();
+  let src=core::str::from_utf8(&e.source[..e.slen]).unwrap();
+  // copy source
+  let sl=src.len().min(120); out[..sl].copy_from_slice(&src.as_bytes()[..sl]); olen=sl;
+  let rest=&input[t.len()..];
+  let rl=rest.len().min(120-olen);
+  out[olen..olen+rl].copy_from_slice(&rest.as_bytes()[..rl]); olen+=rl;
+  if olen==0{out[0]=b'/';olen=1;}
+  return out;
+ }
+ let il=input.len().min(255);
+ out[..il].copy_from_slice(input.as_bytes()); olen=il;
+ if olen==0{out[0]=b'/';olen=1;}
+ out
+}
+fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
+ let mut input=[0u8;256];let mut ilen=0usize;
+ if p.starts_with('/') && rootlen>1 {
+  let rl=rootlen.min(120);
+  input[..rl].copy_from_slice(&root[..rl]); ilen=rl;
+  if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
+  let pl=p.len().min(120-ilen);
+  input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
+  input[ilen]=0;
+ }
+ let input_str=if ilen>0 && input[0]!=0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
+ let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
+ let mut out=[0u8;128];
+ let mounted=apply_mounts(input_str);
+ let mounted_str=core::str::from_utf8(&mounted[..mounted.iter().position(|&b|b==0).unwrap_or(mounted.len())]).unwrap_or(input_str);
+ let n=crate::vfs::resolve(cwd_slice,mounted_str,&mut out).map_err(|e|errno::neg(e))?;
+ Ok((out,n))
+}
+fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
+ let mut input=[0u8;256];let mut ilen=0usize;
+ if p.starts_with('/') && rootlen>1 {
+  let rl=rootlen.min(120);
+  input[..rl].copy_from_slice(&root[..rl]); ilen=rl;
+  if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
+  let pl=p.len().min(120-ilen);
+  input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
+ }
+ let input_str=if ilen>0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
+ let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
+ let mut out=[0u8;128];
+ let mounted=apply_mounts(input_str);
+ let mounted_str=core::str::from_utf8(&mounted[..mounted.iter().position(|&b|b==0).unwrap_or(mounted.len())]).unwrap_or(input_str);
+ let n=crate::vfs::resolve_nofollow(cwd_slice,mounted_str,&mut out).map_err(|e|errno::neg(e))?;
+ Ok((out,n))
+}
+fn sys_chdir(path_ptr:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if !crate::vfs::is_dir(path){return errno::neg(errno::ENOTDIR)}
+ let _=crate::task::with_current_process(|pr|{pr.set_cwd(path);});
+ 0
+}
+fn sys_fchdir(fd:usize)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   if n.mode & 0o170000 != crate::vfs::S_IFDIR as u32 {return errno::neg(errno::ENOTDIR)}
+   let path=core::str::from_utf8(&n.name[..n.name_len]).unwrap_or("/");
+   let _=crate::task::with_current_process(|pr|{pr.set_cwd(path);});
+   0
+  }
+  _=>errno::neg(errno::ENOTDIR)
+ }
+}
+fn sys_mkdir(path_ptr:u64,mode:u32)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
+ const AT_FDCWD:i64=-100;
+ if dirfd!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
+ sys_mkdir(path_ptr,mode)
+}
+fn sys_rmdir(path_ptr:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::rmdir(path){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_rename(old_ptr:u64,new_ptr:u64)->i64{
+ let (o,on)=match resolve_path_ptr_nofollow(old_ptr){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match resolve_path_ptr_nofollow(new_ptr){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::rename(old,newp){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_renameat(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64)->i64{
+ const AT_FDCWD:i64=-100;
+ if olddir!=AT_FDCWD||newdir!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
+ sys_rename(old_ptr,new_ptr)
+}
+fn sys_chmod(path_ptr:u64,mode:u32)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::chmod_path(path,mode){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_fchmod(fd:usize,mode:u32)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>match crate::vfs::chmod_ino(n.ino,mode){Ok(())=>0,Err(e)=>errno::neg(e)},
+  _=>errno::neg(errno::EBADF)
+ }
+}
+fn sys_fchmodat(dirfd:i64,path_ptr:u64,mode:u32,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;
+ if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
+ sys_chmod(path_ptr,mode)
+}
+fn sys_truncate(path_ptr:u64,len:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::truncate_path(path,len){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_ftruncate(fd:usize,len:u64)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>match crate::vfs::truncate_ino(n.ino,len){Ok(())=>0,Err(e)=>errno::neg(e)},
+  _=>errno::neg(errno::EBADF)
+ }
+}
+fn sys_dup(fd:usize)->i64{fd_result(crate::fd::dup_from(fd,0))}
+fn sys_gettimeofday(tv:u64,tz:u64)->i64{
+ let ns=crate::time::monotonic_ns();
+ #[repr(C)] struct Timeval{tv_sec:i64,tv_usec:i64}
+ let t=Timeval{tv_sec:(ns/1_000_000_000)as i64,tv_usec:((ns%1_000_000_000)/1000)as i64};
+ if tv!=0{let r=copy_obj(tv,&t);if r<0{return r;}}
+ if tz!=0{let zeros=[0u8;8];let _=crate::usercopy::copy_to_user(tz as usize,&zeros);}
+ 0
+}
+fn sys_getrlimit(resource:u64,rlim:u64)->i64{
+ if rlim==0{return errno::neg(errno::EFAULT)}
+ let _=resource;
+ copy_obj(rlim,&Rlimit{cur:u64::MAX/4,max:u64::MAX/4})
+}
+fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
+fn sys_getrusage(who:u64,ru:u64)->i64{let _=who;if ru==0{return errno::neg(errno::EFAULT)}let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(ru as usize,&zeros){return errno::neg(e)}0}
+fn sys_times(ptr:u64)->i64{if ptr!=0{let zeros=[0u8;32];let _=crate::usercopy::copy_to_user(ptr as usize,&zeros);}0}
+fn sys_clock_getres(clock:u64,ptr:u64)->i64{
+ let _=clock;
+ if ptr!=0{copy_obj(ptr,&Timespec{tv_sec:0,tv_nsec:1_000_000})}else{0}
+}
+fn sys_clock_nanosleep(clock:u64,flags:u64,req:u64,rem:u64)->i64{
+ let _=clock;let _=flags;let _=rem;
+ sys_nanosleep(req,0)
+}
+fn bit_get(ptr:u64,fd:i32)->bool{
+ let byte=(fd/8) as usize;let bit=fd%8;
+ let mut b=[0u8;1];
+ if crate::usercopy::copy_from_user(&mut b,ptr as usize+byte).is_ok(){b[0]&(1<<bit)!=0}else{false}
+}
+fn bit_set(out:&mut [u8],fd:i32){let byte=(fd/8)as usize;let bit=fd%8;if byte<out.len(){out[byte]|=1<<bit;}}
+fn select_impl(nfds:i32,rfds:u64,wfds:u64,efds:u64,mut to_ns:u64,has_timeout:bool)->i64{
+ if nfds<0||nfds>1024{return errno::neg(errno::EINVAL)}
+ let nwords=(nfds as usize+7)/8;
+ let mut retries=0u32;
+ loop{
+  let mut r_out=[0u8;128];let mut w_out=[0u8;128];let mut e_out=[0u8;128];
+  let mut ready=0i64;
+  for fd in 0..nfds{
+   let mut want_r=false;let mut want_w=false;
+   if rfds!=0{want_r=bit_get(rfds,fd);}
+   if wfds!=0{want_w=bit_get(wfds,fd);}
+   if !want_r&&!want_w{continue;}
+   match fd_id(fd as u64){
+    Some(id)=>{
+     let readable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)=>true,Some(crate::fd::OpenKind::PipeRead(_))=>true,Some(crate::fd::OpenKind::Inode(_))=>true,Some(crate::fd::OpenKind::Socket(_))=>true,_=>false};
+     let writable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))|Some(crate::fd::OpenKind::Socket(_))=>true,_=>false};
+     if want_r&&readable{bit_set(&mut r_out,fd);ready+=1;}
+     if want_w&&writable{bit_set(&mut w_out,fd);ready+=1;}
+    }
+    None=>return errno::neg(errno::EBADF)
+   }
+  }
+  if ready>0{
+   if rfds!=0{if let Err(e)=crate::usercopy::copy_to_user(rfds as usize,&r_out[..nwords]){return errno::neg(e)}}
+   if wfds!=0{if let Err(e)=crate::usercopy::copy_to_user(wfds as usize,&w_out[..nwords]){return errno::neg(e)}}
+   if efds!=0{let z=[0u8;128];if let Err(e)=crate::usercopy::copy_to_user(efds as usize,&z[..nwords]){return errno::neg(e)}}
+   return ready;
+  }
+  if has_timeout{
+   if to_ns==0{return 0}
+   let step=core::cmp::min(to_ns,1_000_000u64);
+   crate::task::sleep_until(crate::time::ticks_after_ns(step));
+   to_ns=to_ns.saturating_sub(step);
+  } else {
+   if retries>50{return 0}
+   retries+=1;
+   crate::task::sleep_until(crate::time::ticks_after_ns(1_000_000));
+  }
+ }
+}
+fn sys_select(nfds:i32,rfds:u64,wfds:u64,efds:u64,timeout:u64)->i64{
+ let mut to_ns=0u64;let mut has_timeout=false;
+ if timeout!=0{
+  has_timeout=true;
+  let mut b=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,timeout as usize){return errno::neg(e)}
+  let sec=i64::from_ne_bytes(b[0..8].try_into().unwrap());
+  let usec=i64::from_ne_bytes(b[8..16].try_into().unwrap());
+  if sec<0||usec<0||usec>=1_000_000{return errno::neg(errno::EINVAL)}
+  to_ns=(sec as u64)*1_000_000_000+(usec as u64)*1000;
+ }
+ select_impl(nfds,rfds,wfds,efds,to_ns,has_timeout)
+}
+fn sys_pselect6(nfds:i32,rfds:u64,wfds:u64,efds:u64,sigmask_ptr:u64,timeout:u64)->i64{
+ let _=sigmask_ptr;
+ let mut to_ns=0u64;let mut has_timeout=false;
+ if timeout!=0{
+  has_timeout=true;
+  let mut b=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,timeout as usize){return errno::neg(e)}
+  let sec=i64::from_ne_bytes(b[0..8].try_into().unwrap());
+  let nsec=i64::from_ne_bytes(b[8..16].try_into().unwrap());
+  if sec<0||nsec<0{return errno::neg(errno::EINVAL)}
+  to_ns=(sec as u64)*1_000_000_000+(nsec as u64);
+ }
+ select_impl(nfds,rfds,wfds,efds,to_ns,has_timeout)
+}
+fn sys_utimensat(dirfd:i64,path_ptr:u64,times:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;
+ if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let _=times;
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::lookup(path){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+
+fn sys_stat(path_ptr:u64,ptr:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let node=match crate::vfs::lookup(path){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+ let mut st=Stat::default();
+ st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
+ copy_obj(ptr,&st)
+}
+fn sys_lstat(path_ptr:u64,ptr:u64)->i64{
+ let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let node=match crate::vfs::lookup(path){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+ let mut st=Stat::default();
+ st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
+ copy_obj(ptr,&st)
+}
+fn sys_unlink(path_ptr:u64)->i64{
+ let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::unlink(path){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+
+fn sys_setpgid(pid:u32,pgid:u32)->i64{match crate::task::setpgid(pid,pgid){Ok(())=>0,Err(e)=>errno::neg(e)}}
+fn sys_getpgid(pid:u32)->i64{
+ let p=if pid==0{crate::task::current_pid()}else{pid};
+ if p!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
+ crate::task::current_pgid() as i64
+}
+fn sys_setsid()->i64{match crate::task::setsid(){Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
+fn sys_getsid(pid:u32)->i64{
+ let p=if pid==0{crate::task::current_pid()}else{pid};
+ if p!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
+ crate::task::current_sid() as i64
+}
+fn sys_prctl(option:i32,arg2:u64,arg3:u64,arg4:u64,arg5:u64)->i64{
+ let _=(arg3,arg4,arg5);
+ match option{
+  15=>{ // PR_SET_NAME
+   let mut b=[0u8;16];
+   if let Err(e)=crate::usercopy::copy_from_user(&mut b,arg2 as usize){return errno::neg(e)}
+   let _=crate::task::with_current_process(|p|{p.name=b;});
+   0
+  }
+  16=>{ // PR_GET_NAME
+   let name=crate::task::with_current_process(|p|p.name).unwrap_or([0;16]);
+   if let Err(e)=crate::usercopy::copy_to_user(arg2 as usize,&name){return errno::neg(e)}
+   0
+  }
+  21=>crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0) as i64, // PR_GET_SECCOMP
+  22=>{ // PR_SET_SECCOMP
+   if arg2==1{let _=crate::task::with_current_process(|p|{p.seccomp_mode=1;});0}else{errno::neg(errno::EINVAL)}
+  }
+  38=>0, // PR_SET_NO_NEW_PRIVS
+  39=>0, // PR_GET_NO_NEW_PRIVS
+  8=>0,  // PR_SET_KEEPCAPS
+  9=>0,  // PR_GET_KEEPCAPS
+  _=>0
+ }
+}
+fn sys_sysinfo(ptr:u64)->i64{
+ if ptr==0{return errno::neg(errno::EFAULT)}
+ // struct sysinfo is 112 bytes; fill zeros with uptime 1
+ let mut b=[0u8;112];
+ // uptime at offset 0 (long)
+ b[0..8].copy_from_slice(&1i64.to_ne_bytes());
+ if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&b){return errno::neg(e)}
+ 0
+}
+
+fn sys_open(path_ptr:u64,flags:u64,mode:u64)->i64{
+ const O_CREAT:u64=0o100;
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if flags&O_CREAT!=0{return match crate::fd::create_open(p,if mode==0{0o644}else{mode as u32}){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
+ match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
+}
+fn sys_creat(path_ptr:u64,mode:u64)->i64{sys_open(path_ptr,0o100|0o1,if mode==0{0o644}else{mode})}
+fn sys_fsync(fd:usize)->i64{let _=fd;0}
+fn sys_epoll_create1(flags:u64)->i64{
+ if flags&!0o2000000!=0{return errno::neg(errno::EINVAL)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::Epoll){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_timerfd_settime(fd:usize,flags:u64,newptr:u64,oldptr:u64)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut buf=[0u8;32];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut buf,newptr as usize){return errno::neg(e)}
+ let ival_sec=i64::from_ne_bytes(buf[0..8].try_into().unwrap());
+ let ival_nsec=i64::from_ne_bytes(buf[8..16].try_into().unwrap());
+ let val_sec=i64::from_ne_bytes(buf[16..24].try_into().unwrap());
+ let val_nsec=i64::from_ne_bytes(buf[24..32].try_into().unwrap());
+ if ival_sec<0||ival_nsec<0||val_sec<0||val_nsec<0{return errno::neg(errno::EINVAL)}
+ let now=crate::arch::x86_64::apic::ticks();
+ let delay_ticks=((val_sec as u64).saturating_mul(1000).saturating_add((val_nsec as u64)/1_000_000)).max(1);
+ let exp=now.saturating_add(delay_ticks);
+ let ivl_ticks=(ival_sec as u64).saturating_mul(1000).saturating_add((ival_nsec as u64)/1_000_000);
+ // update kind
+ crate::fd::timerfd_set(id,exp,ivl_ticks);
+ if oldptr!=0{
+  let zeros=[0u8;32]; let _=crate::usercopy::copy_to_user(oldptr as usize,&zeros);
+ }
+ let _=flags;
+ 0
+}
+fn sys_timerfd_gettime(fd:usize,ptr:u64)->i64{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let (exp,ivl)=match crate::fd::timerfd_get(id){Some(v)=>v,_=>return errno::neg(errno::EBADF)};
+ let now=crate::arch::x86_64::apic::ticks();
+ let rem=exp.saturating_sub(now);
+ let mut buf=[0u8;32];
+ buf[0..8].copy_from_slice(&(ivl/1000).to_ne_bytes()); // interval sec approx
+ buf[8..16].copy_from_slice(&((ivl%1000)*1_000_000).to_ne_bytes());
+ buf[16..24].copy_from_slice(&(rem/1000).to_ne_bytes());
+ buf[24..32].copy_from_slice(&((rem%1000)*1_000_000).to_ne_bytes());
+ if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf){return errno::neg(e)}
+ 0
+}
+fn sys_timerfd_create(clock:i32,flags:u64)->i64{
+ if clock!=0 && clock!=1{return errno::neg(errno::EINVAL)}
+ if flags&!3!=0{return errno::neg(errno::EINVAL)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::TimerFd(crate::arch::x86_64::apic::ticks().saturating_add(1000),0)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_eventfd2(init:u64,flags:u64)->i64{
+ if flags&!0x80003!=0{return errno::neg(errno::EINVAL)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::EventFd(init, (flags&1) as u8)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ // install
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_time(ptr:u64)->i64{
+ let sec=(crate::time::monotonic_ns()/1_000_000_000) as i64;
+ if ptr!=0{let _=copy_obj(ptr,&sec);}
+ sec
+}
+fn sys_tgkill(tgid:u32,pid:u32,sig:i32)->i64{
+ if tgid!=pid{return errno::neg(errno::EINVAL)}
+ if sig==0{return 0}
+ match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+
+#[repr(C)] struct StatFs{f_type:i64,f_bsize:i64,f_blocks:u64,f_bfree:u64,f_bavail:u64,f_files:u64,f_ffree:u64,f_fsid:i64,f_namelen:i64,f_frsize:i64,f_flags:i64,f_spare:[i64;4]}
+fn sys_statfs(path_ptr:u64,buf:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let _=core::str::from_utf8(&out[..n]).ok();
+ let st=StatFs{f_type:0x01021997,f_bsize:4096,f_blocks:4096,f_bfree:4096,f_bavail:4096,f_files:32 as u64,f_ffree:(32 as u64).saturating_sub(8),f_fsid:0,f_namelen:255,f_frsize:4096,f_flags:0,f_spare:[0;4]};
+ copy_obj(buf,&st)
+}
+fn sys_fstatfs(fd:usize,buf:u64)->i64{
+ let _=fd;
+ let st=StatFs{f_type:0x01021997,f_bsize:4096,f_blocks:4096,f_bfree:4096,f_bavail:4096,f_files:32 as u64,f_ffree:(32 as u64).saturating_sub(8),f_fsid:0,f_namelen:255,f_frsize:4096,f_flags:0,f_spare:[0;4]};
+ copy_obj(buf,&st)
+}
+fn sys_symlink(target_ptr:u64,path_ptr:u64)->i64{
+ let mut tb=[0u8;128];let mut pb=[0u8;128];
+ let t=match copy_path(target_ptr,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::symlink(t,p){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_link(old_ptr:u64,new_ptr:u64)->i64{
+ let (o,on)=match resolve_path_ptr_nofollow(old_ptr){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match resolve_path_ptr_nofollow(new_ptr){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::link(old,newp){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_readlink(path_ptr:u64,buf:u64,bufsiz:u64)->i64{
+ let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if p=="/proc/self/exe"{
+  let exe=match crate::task::with_current_process(|pr|(pr.exe_path,pr.exe_len)){Some(v)=>v,None=>return errno::neg(errno::ENOENT)};
+  if exe.1==0{return errno::neg(errno::ENOENT)}
+  let m=core::cmp::min(exe.1,bufsiz as usize);
+  if let Err(e)=crate::usercopy::copy_to_user(buf as usize,&exe.0[..m]){return errno::neg(e)}
+  return m as i64;
+ }
+ let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+ if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
+ let m=core::cmp::min(node.size as usize,bufsiz as usize);
+ if let Err(e)=crate::usercopy::copy_to_user(buf as usize,unsafe{core::slice::from_raw_parts(node.data,m)}){return errno::neg(e)}
+ return m as i64;
+}
+fn sys_close_range(first:usize,last:usize,flags:u64)->i64{
+ if flags!=0{return errno::neg(errno::EINVAL)}
+ let mut fd=first;
+ while fd<=last && fd<32{
+  let _=crate::task::with_current_process(|p|p.fds.close(fd));
+  fd+=1;
+ }
+ 0
+}
+fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{
+ if vec==0{return errno::neg(errno::EFAULT)}
+ let pages=(len as usize+4095)/4096;
+ let mut v=[1u8;256];
+ let n=core::cmp::min(pages,v.len());
+ if let Err(e)=crate::usercopy::copy_to_user(vec as usize,&v[..n]){return errno::neg(e)}
+ 0
+}
+
+fn sys_fallocate(fd:usize,mode:u64,offset:u64,len:u64)->i64{
+ if mode!=0{return errno::neg(errno::EOPNOTSUPP)}
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   let end=match offset.checked_add(len){Some(v)=>v,None=>return errno::neg(errno::EINVAL)};
+   if end>n.capacity{return errno::neg(errno::ENOSPC)}
+   if end>n.size{
+    let _=crate::vfs::truncate_ino(n.ino,end);
+   }
+   0
+  }
+  _=>errno::neg(errno::ENODEV)
+ }
+}
+fn sys_sendfile(out_fd:usize,in_fd:usize,off:u64,count:usize)->i64{
+ if count==0{return 0}
+ let in_id=match fd_id(in_fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let out_id=match fd_id(out_fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<count{
+  let n=core::cmp::min(buf.len(),count-done);
+  let got=match crate::fd::read(in_id,&mut buf[..n]){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
+  if got==0{break}
+  match crate::fd::write(out_id,&buf[..got]){Ok(m)=>done+=m,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+ }
+ done as i64
+}
+
+static mut EPOLL_COUNT:[u8;64]=[0;64];
+static mut EPOLL_FDS:[[u32;16];64]=[[0;16];64];
+static mut EPOLL_EVENTS:[[u32;16];64]=[[0;16];64];
+static mut EPOLL_DATA:[[u64;16];64]=[[0;16];64];
+
+fn epoll_find(epfd:usize,fd:usize)->Option<usize>{
+ if epfd>=64{return None}
+ let c=unsafe{EPOLL_COUNT[epfd]} as usize;
+ for i in 0..c{ if unsafe{EPOLL_FDS[epfd][i]} as usize==fd {return Some(i)} }
+ None
+}
+fn sys_epoll_ctl(epfd:usize,op:i32,fd:usize,event_ptr:u64)->i64{
+ let id=match fd_id(epfd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::Epoll)){return errno::neg(errno::EINVAL)}
+ if fd>=32{return errno::neg(errno::EBADF)}
+ match op{
+  1=>{ // EPOLL_CTL_ADD
+   if epoll_find(epfd,fd).is_some(){return errno::neg(errno::EEXIST)}
+   let mut ev=[0u8;12];
+   if event_ptr==0{return errno::neg(errno::EFAULT)}
+   if let Err(e)=crate::usercopy::copy_from_user(&mut ev,event_ptr as usize){return errno::neg(e)}
+   let events=u32::from_ne_bytes(ev[0..4].try_into().unwrap());
+   let data=u64::from_ne_bytes(ev[4..12].try_into().unwrap());
+   let c=unsafe{EPOLL_COUNT[epfd]} as usize;
+   if c>=16{return errno::neg(errno::ENOMEM)}
+   unsafe{EPOLL_FDS[epfd][c]=fd as u32;EPOLL_EVENTS[epfd][c]=events;EPOLL_DATA[epfd][c]=data;EPOLL_COUNT[epfd]+=1;}
+   0
+  }
+  2=>{ // EPOLL_CTL_DEL
+   if let Some(i)=epoll_find(epfd,fd){
+    let c=unsafe{EPOLL_COUNT[epfd]} as usize;
+    for j in i..c.saturating_sub(1){
+     unsafe{EPOLL_FDS[epfd][j]=EPOLL_FDS[epfd][j+1];EPOLL_EVENTS[epfd][j]=EPOLL_EVENTS[epfd][j+1];EPOLL_DATA[epfd][j]=EPOLL_DATA[epfd][j+1];}
+    }
+    unsafe{EPOLL_COUNT[epfd]-=1;}
+    0
+   }else{errno::neg(errno::ENOENT)}
+  }
+  3=>{ // EPOLL_CTL_MOD
+   if let Some(i)=epoll_find(epfd,fd){
+    let mut ev=[0u8;12];
+    if event_ptr==0{return errno::neg(errno::EFAULT)}
+    if let Err(e)=crate::usercopy::copy_from_user(&mut ev,event_ptr as usize){return errno::neg(e)}
+    let events=u32::from_ne_bytes(ev[0..4].try_into().unwrap());
+    let data=u64::from_ne_bytes(ev[4..12].try_into().unwrap());
+    unsafe{EPOLL_EVENTS[epfd][i]=events;EPOLL_DATA[epfd][i]=data;}
+    0
+   }else{errno::neg(errno::ENOENT)}
+  }
+  _=>errno::neg(errno::EINVAL)
+ }
+}
+fn epoll_ready(epfd:usize,events:u32,fd:usize)->bool{
+ let id=match crate::fd::kind(fd as u32){Some(x)=>x,_=>return false};
+ let readable=match id{
+  crate::fd::OpenKind::Console=>true,
+  crate::fd::OpenKind::PipeRead(p)=>crate::pipe::has_data(p),
+  crate::fd::OpenKind::Inode(_)=>true,
+  crate::fd::OpenKind::Socket(_)=>true,
+  crate::fd::OpenKind::CharDevice(_)=>true,
+  crate::fd::OpenKind::EventFd(c,_)=>c!=0,
+  crate::fd::OpenKind::TimerFd(_,_)=>true,
+  _=>false,
+ };
+ let writable=match id{
+  crate::fd::OpenKind::Console=>true,
+  crate::fd::OpenKind::PipeWrite(p)=>crate::pipe::has_space(p),
+  crate::fd::OpenKind::Socket(_)=>true,
+  crate::fd::OpenKind::CharDevice(_)=>true,
+  crate::fd::OpenKind::EventFd(_,_)=>true,
+  _=>false,
+ };
+ let mut ready=false;
+ if events&0x1!=0 && readable{ready=true;}
+ if events&0x4!=0 && writable{ready=true;}
+ ready
+}
+fn sys_epoll_wait(epfd:usize,events_ptr:u64,maxevents:i32,timeout:i32)->i64{
+ if maxevents<=0{return errno::neg(errno::EINVAL)}
+ let id=match fd_id(epfd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::Epoll)){return errno::neg(errno::EINVAL)}
+ let c=unsafe{EPOLL_COUNT[epfd]} as usize;
+ let mut ready_count=0i64;
+ let mut retries=0u32;
+ loop{
+  for i in 0..c{
+   let fd=unsafe{EPOLL_FDS[epfd][i]} as usize;
+   let evmask=unsafe{EPOLL_EVENTS[epfd][i]};
+   if !epoll_ready(epfd,evmask,fd){continue}
+   let mut rev=0u32;
+   if evmask&0x1!=0 && epoll_ready(epfd,0x1,fd){rev|=0x1}
+   if evmask&0x4!=0 && epoll_ready(epfd,0x4,fd){rev|=0x4}
+   if rev==0{rev=evmask&0x3;}
+   let mut buf=[0u8;12];
+   buf[0..4].copy_from_slice(&rev.to_ne_bytes());
+   buf[4..12].copy_from_slice(&unsafe{EPOLL_DATA[epfd][i]}.to_ne_bytes());
+   let off=(ready_count as usize)*12;
+   if let Err(e)=crate::usercopy::copy_to_user(events_ptr as usize+off,&buf){return errno::neg(e)}
+   ready_count+=1;
+   if ready_count>=maxevents as i64{break}
+  }
+  if ready_count>0{return ready_count}
+  if timeout==0{return 0}
+  if timeout>0{
+   if retries as i32 >= timeout {return 0} // coarse: 1ms per retry
+   crate::task::sleep_until(crate::time::ticks_after_ns(1_000_000));
+   retries+=1;
+  } else {
+   crate::task::sleep_until(crate::time::ticks_after_ns(1_000_000));
+  }
+ }
+}
+
+fn sys_getuid()->i64{crate::task::with_current_process(|p|p.uid).unwrap_or(0) as i64}
+fn sys_getgid()->i64{crate::task::with_current_process(|p|p.gid).unwrap_or(0) as i64}
+fn sys_geteuid()->i64{crate::task::with_current_process(|p|p.euid).unwrap_or(0) as i64}
+fn sys_getegid()->i64{crate::task::with_current_process(|p|p.egid).unwrap_or(0) as i64}
+fn sys_setuid(uid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if p.euid==0{p.uid=uid;p.suid=uid;p.euid=uid;p.fsuid=uid;}
+  else if uid==p.uid||uid==p.suid{p.euid=uid;p.fsuid=uid;}
+  else{return Err(crate::errno::EPERM)}
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setgid(gid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if p.egid==0{p.gid=gid;p.sgid=gid;p.egid=gid;p.fsgid=gid;}
+  else if gid==p.gid||gid==p.sgid{p.egid=gid;p.fsgid=gid;}
+  else{return Err(crate::errno::EPERM)}
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setreuid(ruid:u32,euid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if ruid!=u32::MAX{
+   if p.euid==0||ruid==p.uid||ruid==p.suid{p.uid=ruid;p.suid=ruid;}else{return Err(crate::errno::EPERM)}
+  }
+  if euid!=u32::MAX{
+   if p.euid==0||euid==p.uid||euid==p.suid||euid==p.euid{p.euid=euid;p.fsuid=euid;}else{return Err(crate::errno::EPERM)}
+  }
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setregid(rgid:u32, egid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if rgid!=u32::MAX{
+   if p.egid==0||rgid==p.gid||rgid==p.sgid{p.gid=rgid;p.sgid=rgid;}else{return Err(crate::errno::EPERM)}
+  }
+  if egid!=u32::MAX{
+   if p.egid==0||egid==p.gid||egid==p.sgid||egid==p.egid{p.egid=egid;p.fsgid=egid;}else{return Err(crate::errno::EPERM)}
+  }
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_getgroups(size:i32,ptr:u64)->i64{
+ let ng=crate::task::with_current_process(|p|p.ngroups).unwrap_or(0);
+ if size==0{return ng as i64}
+ if size<ng as i32{return errno::neg(errno::EINVAL)}
+ let groups=crate::task::with_current_process(|p|p.groups).unwrap_or([0;32]);
+ if ptr!=0{
+  let mut buf=[0u8;32*4];
+  for i in 0..ng{buf[i*4..i*4+4].copy_from_slice(&groups[i].to_ne_bytes());}
+  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf[..ng*4]){return errno::neg(e)}
+ }
+ ng as i64
+}
+fn sys_setgroups(size:usize,ptr:u64)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if p.euid!=0{return Err(crate::errno::EPERM)}
+  if size>32{return Err(crate::errno::EINVAL)}
+  let mut groups=[0u32;32];
+  if size>0{
+   let mut buf=[0u8;32*4];
+   if let Err(e)=crate::usercopy::copy_from_user(&mut buf,ptr as usize){return Err(e)}
+   for i in 0..size{groups[i]=u32::from_ne_bytes(buf[i*4..i*4+4].try_into().unwrap());}
+  }
+  p.groups=groups;p.ngroups=size;
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setresuid(ruid:u32,euid:u32,suid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if ruid!=u32::MAX && !(p.euid==0||ruid==p.uid||ruid==p.euid||ruid==p.suid){return Err(crate::errno::EPERM)}
+  if euid!=u32::MAX && !(p.euid==0||euid==p.uid||euid==p.euid||euid==p.suid){return Err(crate::errno::EPERM)}
+  if suid!=u32::MAX && !(p.euid==0||suid==p.uid||suid==p.euid||suid==p.suid){return Err(crate::errno::EPERM)}
+  if ruid!=u32::MAX{p.uid=ruid;}
+  if euid!=u32::MAX{p.euid=euid;p.fsuid=euid;}
+  if suid!=u32::MAX{p.suid=suid;}
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_getresuid(ruid:u64,euid:u64,suid:u64)->i64{
+ if let Some(p)=crate::task::with_current_process(|p|(p.uid,p.euid,p.suid)){
+  if ruid!=0{let _=crate::usercopy::copy_to_user(ruid as usize,&p.0.to_ne_bytes());}
+  if euid!=0{let _=crate::usercopy::copy_to_user(euid as usize,&p.1.to_ne_bytes());}
+  if suid!=0{let _=crate::usercopy::copy_to_user(suid as usize,&p.2.to_ne_bytes());}
+  0
+ }else{errno::neg(errno::ESRCH)}
+}
+fn sys_setresgid(rgid:u32,egid:u32,sgid:u32)->i64{
+ let r=crate::task::with_current_process(|p|{
+  if rgid!=u32::MAX && !(p.egid==0||rgid==p.gid||rgid==p.egid||rgid==p.sgid){return Err(crate::errno::EPERM)}
+  if egid!=u32::MAX && !(p.egid==0||egid==p.gid||egid==p.egid||egid==p.sgid){return Err(crate::errno::EPERM)}
+  if sgid!=u32::MAX && !(p.egid==0||sgid==p.gid||sgid==p.egid||sgid==p.sgid){return Err(crate::errno::EPERM)}
+  if rgid!=u32::MAX{p.gid=rgid;}
+  if egid!=u32::MAX{p.egid=egid;p.fsgid=egid;}
+  if sgid!=u32::MAX{p.sgid=sgid;}
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_getresgid(rgid:u64,egid:u64,sgid:u64)->i64{
+ if let Some(p)=crate::task::with_current_process(|p|(p.gid,p.egid,p.sgid)){
+  if rgid!=0{let _=crate::usercopy::copy_to_user(rgid as usize,&p.0.to_ne_bytes());}
+  if egid!=0{let _=crate::usercopy::copy_to_user(egid as usize,&p.1.to_ne_bytes());}
+  if sgid!=0{let _=crate::usercopy::copy_to_user(sgid as usize,&p.2.to_ne_bytes());}
+  0
+ }else{errno::neg(errno::ESRCH)}
+}
+fn sys_umask(mask:u32)->i64{
+ let old=crate::task::with_current_process(|p|{let o=p.umask;p.umask=mask&0o777;o}).unwrap_or(0);
+ old as i64
+}
+fn sys_unshare(flags:u64)->i64{
+ const CLONE_NEWUTS:u64=0x04000000; const CLONE_NEWIPC:u64=0x08000000; const CLONE_NEWUSER:u64=0x10000000; const CLONE_NEWPID:u64=0x20000000; const CLONE_NEWNET:u64=0x40000000; const CLONE_NEWCGROUP:u64=0x02000000; const CLONE_NEWTIME:u64=0x00000080; const CLONE_NEWNS:u64=0x00020000;
+ if flags & !(CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWUSER|CLONE_NEWPID|CLONE_NEWNET|CLONE_NEWCGROUP|CLONE_NEWTIME|CLONE_NEWNS)!=0{return errno::neg(errno::EINVAL)}
+ let r=crate::task::with_current_process(|p|{
+  if flags&CLONE_NEWUTS!=0{p.ns_uts=crate::task::alloc_ns();}
+  if flags&CLONE_NEWIPC!=0{p.ns_ipc=crate::task::alloc_ns();}
+  if flags&CLONE_NEWNS!=0{p.ns_mnt=crate::task::alloc_ns();}
+  if flags&CLONE_NEWPID!=0{p.ns_pid=crate::task::alloc_ns();}
+  if flags&CLONE_NEWNET!=0{p.ns_net=crate::task::alloc_ns();}
+  if flags&CLONE_NEWUSER!=0{p.ns_user=crate::task::alloc_ns();p.uid=0;p.gid=0;p.euid=0;p.egid=0;p.suid=0;p.sgid=0;p.cap_eff=u64::MAX;p.cap_prm=u64::MAX;}
+  if flags&CLONE_NEWCGROUP!=0{p.ns_cgroup=crate::task::alloc_ns();}
+  if flags&CLONE_NEWTIME!=0{p.ns_time=crate::task::alloc_ns();}
+  Ok(())
+ });
+ match r{Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setns(fd:i32,nstype:i32)->i64{
+ let _=(fd,nstype);
+ 0
+}
+fn sys_seccomp(op:u32,flags:u32,uargs:u64)->i64{
+ let _=(flags,uargs);
+ match op{
+  0=>{ // SECCOMP_SET_MODE_STRICT
+   let r=crate::task::with_current_process(|p|{p.seccomp_mode=1;});
+   let _=r;0
+  }
+  1=>0, // SET_MODE_FILTER stub
+  2=>0, // GET_ACTION_AVAIL
+  _=>errno::neg(errno::EINVAL),
+ }
+}
+fn sys_inotify_init()->i64{sys_inotify_init1(0)}
+fn sys_inotify_init1(flags:u64)->i64{
+ if flags&!0x800!=0{return errno::neg(errno::EINVAL)}
+ let _=flags;
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::Inotify){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_inotify_add_watch(fd:usize,path:u64,mask:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ crate::inotify::add_watch(fdid,p,mask as u32) as i64
+}
+fn sys_inotify_rm_watch(fd:usize,wd:i32)->i64{
+ let fdid=match crate::task::with_current_process(|pr|pr.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let r=crate::inotify::rm_watch(fdid,wd);
+ if r<0{errno::neg(r)}else{0}
+}
+fn sys_signalfd4(fd:i32,mask:u64,flags:u64,sizemask:u64)->i64{
+ let _=(fd,mask,flags,sizemask);
+ if fd!=-1{return fd as i64}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::SignalFd(mask)){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(newfd))=>newfd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+
+fn sys_mount(source:u64,target:u64,fstype:u64,flags:u64,data:u64)->i64{
+ let _=(flags,data);
+ let mut sb=[0u8;128];let mut tb=[0u8;128];let mut fb=[0u8;32];
+ let sp=match copy_path(source,&mut sb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let tp=match copy_path(target,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let _=copy_path(fstype,&mut fb);
+ let _=crate::vfs::mkdir(tp,0o755);
+ let mut m=unsafe{&mut *(&raw mut MOUNTS)};
+ let slot=match m.iter().position(|e|!e.used){Some(i)=>i,None=>return errno::neg(errno::ENOMEM)};
+ m[slot].used=true;
+ let sl=sp.len().min(127); m[slot].source[..sl].copy_from_slice(sp.as_bytes()); m[slot].slen=sl;
+ let tl=tp.len().min(127); m[slot].target[..tl].copy_from_slice(tp.as_bytes()); m[slot].tlen=tl;
+ 0
+}
+fn sys_umount2(target:u64,flags:u64)->i64{
+ let _=flags;
+ let mut tb=[0u8;128];
+ let tp=match copy_path(target,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let mut m=unsafe{&mut *(&raw mut MOUNTS)};
+ if let Some(e)=m.iter_mut().find(|e|e.used && core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(tp)){e.used=false;return 0}
+ errno::neg(errno::EINVAL)
+}
+fn sys_pivot_root(new_root:u64,put_old:u64)->i64{
+ let (out,n)=match resolve_path_ptr(new_root){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if !crate::vfs::is_dir(p){return errno::neg(errno::ENOTDIR)}
+ let _=crate::task::with_current_process(|pr|{pr.set_root(p);});
+ let _=put_old;
+ 0
+}
+fn sys_chroot(path:u64)->i64{
+ let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if !crate::vfs::is_dir(p){return errno::neg(errno::ENOTDIR)}
+ let _=crate::task::with_current_process(|pr|{pr.set_root(p);});
+ 0
+}
+fn sys_sethostname(name:u64,len:u64)->i64{
+ if crate::task::with_current_process(|p|p.euid).unwrap_or(1)!=0{return errno::neg(errno::EPERM)}
+ if len>64{return errno::neg(errno::EINVAL)}
+ let mut buf=[0u8;64];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut buf,name as usize){return errno::neg(e)}
+ let r=crate::task::with_current_process(|p|{p.hostname=[0;65];p.hostname[..len as usize].copy_from_slice(&buf[..len as usize]);});
+ match r{Some(())=>0,None=>errno::neg(errno::ESRCH)}
+}
+fn sys_setdomainname(name:u64,len:u64)->i64{
+ if crate::task::with_current_process(|p|p.euid).unwrap_or(1)!=0{return errno::neg(errno::EPERM)}
+ let _=(name,len);
+ 0
+}
+
+fn sys_capget(header:u64,data:u64)->i64{
+ if header==0{return errno::neg(errno::EFAULT)}
+ let mut ver=[0u8;4];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut ver,header as usize){return errno::neg(e)}
+ let version=u32::from_ne_bytes(ver);
+ let _=version;
+ if data!=0{
+  // cap_user_data_t: effective, permitted, inheritable (3 u32)
+  let all=u32::MAX;
+  let mut buf=[0u8;12];
+  buf[0..4].copy_from_slice(&all.to_ne_bytes());
+  buf[4..8].copy_from_slice(&all.to_ne_bytes());
+  buf[8..12].copy_from_slice(&all.to_ne_bytes());
+  if let Err(e)=crate::usercopy::copy_to_user(data as usize,&buf){return errno::neg(e)}
+ }
+ 0
+}
+fn sys_capset(header:u64,data:u64)->i64{
+ let _=(header,data);
+ 0
+}
+
+fn sys_io_uring_setup(entries:u32,params:u64)->i64{
+ if entries==0{return errno::neg(errno::EINVAL)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::IoUring){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+ if params!=0{
+  let zeros=[0u8;64];
+  let _=crate::usercopy::copy_to_user(params as usize,&zeros);
+ }
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_io_uring_enter(fd:usize,to_submit:u32,min_complete:u32,flags:u32,sig:u64)->i64{
+ let _=(min_complete,flags,sig);
+ let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
+ to_submit as i64
+}
+fn sys_io_uring_register(fd:usize,opcode:u32,arg:u64,nr_args:u32)->i64{
+ let _=(opcode,arg,nr_args);
+ let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ if !matches!(crate::fd::kind(id),Some(crate::fd::OpenKind::IoUring)){return errno::neg(errno::EINVAL)}
+ 0
+}
+
+fn sys_setsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,_optlen:u64)->i64{
+ if netlink_fd(fd){return 0}
+ let _=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ 0
+}
+fn sys_getsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,optlen:u64)->i64{
+ if netlink_fd(fd){
+  if optval!=0 && optlen!=0{let v=0i32;let _=crate::usercopy::copy_to_user(optval as usize,&v.to_ne_bytes());let _=crate::usercopy::copy_to_user(optlen as usize,&4u32.to_ne_bytes());}
+  return 0
+ }
+ let _=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if optval!=0 && optlen!=0{
+  let v=0i32;
+  let _=crate::usercopy::copy_to_user(optval as usize,&v.to_ne_bytes());
+  let _=crate::usercopy::copy_to_user(optlen as usize,&4u32.to_ne_bytes());
+ }
+ 0
+}
+fn parse_msghdr_iov(msg:u64)->Result<(u64,u64,u64,usize,i32),i64>{
+ // returns (msg_name, msg_namelen, iov_base, iov_count, flags)
+ if msg==0{return Err(errno::EFAULT)}
+ let mut hdr=[0u8;56];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,msg as usize){return Err(e)}
+ let name=u64::from_ne_bytes(hdr[0..8].try_into().unwrap());
+ let namelen=u32::from_ne_bytes(hdr[8..12].try_into().unwrap()) as u64;
+ let iov=u64::from_ne_bytes(hdr[16..24].try_into().unwrap());
+ let iovlen=usize::from_ne_bytes(hdr[24..32].try_into().unwrap());
+ let flags=i32::from_ne_bytes(hdr[48..52].try_into().unwrap()) as usize;
+ Ok((name,namelen,iov,iovlen as usize,flags as i32))
+}
+fn sys_sendmsg(fd:usize,msg:u64,_flags:i32)->i64{
+ if netlink_fd(fd){
+  let (iov,iovlen)=match parse_msghdr_iov(msg){Ok(v)=>(v.2,v.3),Err(e)=>return errno::neg(e)};
+  let mut total=0usize;
+  for i in 0..iovlen.min(16){
+   let mut hdr=[0u8;16];
+   if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,iov as usize + i*16){return errno::neg(e)}
+   total += usize::from_ne_bytes(hdr[8..16].try_into().unwrap());
+  }
+  return total as i64;
+ }
+ let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ // aggregate
+ let (name,namelen,iov,iovlen,_flags)=match parse_msghdr_iov(msg){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let mut total=0usize;
+ let mut buf=[0u8;512];
+ for i in 0..iovlen.min(16){
+  let mut hdr=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,iov as usize + i*16){return errno::neg(e)}
+  let base=u64::from_ne_bytes(hdr[0..8].try_into().unwrap());
+  let len=usize::from_ne_bytes(hdr[8..16].try_into().unwrap());
+  if len==0{continue}
+  let n=core::cmp::min(len,buf.len()-total);
+  if n>0{
+   if let Err(e)=crate::usercopy::copy_from_user(&mut buf[total..total+n],base as usize){return errno::neg(e)}
+   total+=n;
+  }
+ }
+ if total==0{return 0}
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  if tcp{
+   return match crate::net::tcp_send(sock-crate::socket::INET_TCP_BASE,&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+  } else {
+   let mut ip=0u32;let mut port=0u16;
+   if name!=0 && namelen>=16{
+    if let Ok((i,p))=sockaddr_in_of(name,namelen as u64){ip=i;port=p;}
+   }
+   return match crate::net::udp_send(sock-crate::socket::INET_UDP_BASE,if name!=0{Some((ip,port))}else{None},&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+  }
+ }
+ // unix
+ match crate::socket::send(sock,&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)}
+}
+fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
+ if netlink_fd(fd){return 0;}
+ let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ let (name,_namelen,iov,iovlen,_flags)=match parse_msghdr_iov(msg){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let mut total_cap=0usize;
+ for i in 0..iovlen.min(16){
+  let mut hdr=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,iov as usize + i*16){return errno::neg(e)}
+  total_cap += usize::from_ne_bytes(hdr[8..16].try_into().unwrap());
+ }
+ if total_cap==0{return 0}
+ let mut buf=[0u8;512];
+ let n=core::cmp::min(total_cap,buf.len());
+ let got=if let Some(tcp)=crate::socket::inet_kind(sock){
+  if tcp{match crate::net::tcp_recv(sock-crate::socket::INET_TCP_BASE,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)}}
+  else{match crate::net::udp_recv(sock-crate::socket::INET_UDP_BASE,&mut buf[..n]){Ok((g,_,_))=>g,Err(e)=>return errno::neg(e)}}
+ }else{
+  match crate::socket::recv(sock,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)}
+ };
+ // write iov
+ let mut off=0usize;
+ for i in 0..iovlen.min(16){
+  let mut hdr=[0u8;16];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,iov as usize + i*16){return errno::neg(e)}
+  let base=u64::from_ne_bytes(hdr[0..8].try_into().unwrap());
+  let len=usize::from_ne_bytes(hdr[8..16].try_into().unwrap());
+  if len==0{continue}
+  let chunk=core::cmp::min(len,got.saturating_sub(off));
+  if chunk>0{
+   if let Err(e)=crate::usercopy::copy_to_user(base as usize,&buf[off..off+chunk]){return errno::neg(e)}
+   off+=chunk;
+  }
+ }
+ if name!=0{
+  // best-effort peer address for inet
+  if crate::socket::inet_kind(sock).is_some(){
+   let mut sa=[0u8;16];
+   sa[0..2].copy_from_slice(&2u16.to_ne_bytes());
+   let _=crate::usercopy::copy_to_user(name as usize,&sa[..core::cmp::min(16,usize::from_ne_bytes([0;8]) )]);
+  }
+ }
+ got as i64
+}
+fn sys_accept4(fd:usize,addr:u64,addrlen:u64,flags:i32)->i64{
+ if flags & !0x80800 !=0{return errno::neg(errno::EINVAL)}
+ sys_accept(fd,addr,addrlen)
+}
+
+static MEMFD_COUNTER:core::sync::atomic::AtomicU64=core::sync::atomic::AtomicU64::new(1);
+fn sys_memfd_create(name:u64,flags:u64)->i64{
+ let _=(name,flags);
+ let n=MEMFD_COUNTER.fetch_add(1,core::sync::atomic::Ordering::Relaxed);
+ let mut path=[0u8;64];
+ let prefix=b"/memfd:";
+ path[..prefix.len()].copy_from_slice(prefix);
+ // append number
+ let mut off=prefix.len();
+ let mut v=n; let mut tmp=[0u8;20]; let mut i=0;
+ if v==0{tmp[0]=b'0';i=1}else{while v>0{tmp[i]=b'0'+(v%10)as u8;v/=10;i+=1}for j in 0..i/2{tmp.swap(j,i-1-j)}}
+ path[off..off+i].copy_from_slice(&tmp[..i]); off+=i; path[off]=0;
+ let p=match core::str::from_utf8(&path[..off]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let _=crate::vfs::create(p,0o666);
+ match crate::fd::create_open(p,0o666){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}
+}
+
+fn sys_sendmmsg(fd:usize,msgvec:u64,vlen:u32,flags:i32)->i64{
+ let mut sent=0i64;
+ for i in 0..vlen.min(16){
+  let r=sys_sendmsg(fd,msgvec+i as u64*56,flags);
+  if r<0{return if sent>0{sent}else{r}}
+  sent+=1;
+  let off=msgvec as usize+i as usize*56+52;
+  let _=crate::usercopy::copy_to_user(off,&(r as u32).to_ne_bytes());
+ }
+ sent
+}
+fn sys_recvmmsg(fd:usize,msgvec:u64,vlen:u32,flags:i32,_timeout:u64)->i64{
+ let mut recvd=0i64;
+ for i in 0..vlen.min(16){
+  let r=sys_recvmsg(fd,msgvec+i as u64*56,flags);
+  if r<0{return if recvd>0{recvd}else{r}}
+  if r==0{break}
+  let off=msgvec as usize+i as usize*56+52;
+  let _=crate::usercopy::copy_to_user(off,&(r as u32).to_ne_bytes());
+  recvd+=1;
+ }
+ recvd
+}
+
+fn sys_pidfd_open(pid:u32,flags:u64)->i64{
+ if flags!=0{return errno::neg(errno::EINVAL)}
+ if !crate::task::sched_pids().iter().any(|&p|p==pid){return errno::neg(errno::ESRCH)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::PidFd(pid)){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+}
+fn sys_pidfd_send_signal(fd:usize,sig:i32,info:u64,flags:u64)->i64{
+ if flags!=0{return errno::neg(errno::EINVAL)}
+ let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let pid=match crate::fd::kind(id){Some(crate::fd::OpenKind::PidFd(p))=>p,_=>return errno::neg(errno::EBADF)};
+ if sig==0{return 0}
+ match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
 }

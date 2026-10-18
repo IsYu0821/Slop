@@ -21,6 +21,8 @@ pub mod sync;
 pub mod task;
 pub mod time;
 pub mod vfs;
+pub mod device;
+pub mod inotify;
 pub mod fd;
 pub mod futex;
 pub mod vm;
@@ -59,6 +61,12 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let files=match vfs::mount_initramfs(initramfs){Ok(n)=>n,Err(e)=>{println!("initramfs mount failed errno={}",e);arch::halt()}};
     println!("vfs: initramfs mounted files={}",files);
     match vfs::image("/etc/motd"){Ok(v) if v==b"Slop/MNU initramfs\n"=>println!("vfs: path lookup and file read self-test passed"),_=>{println!("vfs self-test failed");arch::halt()}}
+    crate::device::init_devtmpfs();
+    println!("device: devtmpfs ready");
+    let _=crate::vfs::mkdir("/tmp",0o777);
+    let _=crate::vfs::mkdir("/run",0o777);
+    let _=crate::vfs::mkdir("/var",0o755);
+    let _=crate::vfs::mkdir("/var/tmp",0o777);
     let image=match vfs::image("/init"){Ok(v)=>v,Err(e)=>{println!("VFS /init lookup failed errno={}",e);arch::halt()}};
     let loaded=match unsafe { exec_runtime::load_static(image) }{Ok(v)=>v,Err(e)=>{println!("ELF commit failed: {}",e);arch::halt()}};
     println!("queueing Linux ELF rip={:#x} rsp={:#x} cr3={:#x}",loaded.entry,loaded.rsp,loaded.cr3);

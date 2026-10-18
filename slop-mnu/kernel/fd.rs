@@ -2,7 +2,7 @@
 //! dup and fork share descriptions, mirroring the Unix file-description model.
 use crate::{errno,sync::SpinLock,vfs};
 pub const MAX_FDS:usize=32;const MAX_OPEN:usize=64;
-#[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8)}
+#[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8),EventFd(u64,u8),Epoll,TimerFd(u64,u64),CharDevice(u64),BlockDevice(u64),Inotify,SignalFd(u64),Netlink,IoUring,PidFd(u32)}
 #[derive(Clone,Copy)]struct OpenFile{refs:u32,offset:u64,kind:OpenKind}
 static OPEN:SpinLock<[Option<OpenFile>;MAX_OPEN]>=SpinLock::new([const{None};MAX_OPEN]);
 
@@ -51,9 +51,9 @@ pub fn write_at(id:u32,off:u64,src:&[u8])->Result<usize,i64>{
 }
 pub fn offset_set(id:u32,v:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=v}}
 
-pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
+pub fn open(path:&str)->Result<i32,i64>{let inode=vfs::lookup(path)?;let kind=if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)};let id=alloc_file(kind)?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 /* O_CREAT path: creates the node when missing, then opens it. */
-pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file(OpenKind::Inode(inode))?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
+pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file(if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)})?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 pub fn close(fd:usize)->Result<(),i64>{
  let kind=crate::task::with_current_process(|p|p.fds.get(fd)).flatten().map(|id|crate::fd::kind(id));
  crate::task::with_current_process(|p|p.fds.close(fd)).unwrap_or(Err(errno::ESRCH))?;
@@ -67,7 +67,66 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
   OpenKind::Inode(n)=>{let got=vfs::read(n,offset,dst)?;if got>0{if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}}Ok(got)},
   OpenKind::PipeRead(p)=>crate::pipe::read(p,dst),
   OpenKind::Socket(s)=>crate::socket::recv(s,dst),
+  OpenKind::EventFd(c,sem)=>{
+    if dst.len()<8{return Err(errno::EINVAL)}
+    let mut t=OPEN.lock();let f=t[id as usize].as_mut().ok_or(errno::EBADF)?;
+    if let OpenKind::EventFd(counter,_)=&mut f.kind{
+      if *counter==0{return Err(errno::EAGAIN)}
+      let val=if sem!=0{1}else{*counter};
+      let bytes=val.to_ne_bytes();dst[..8].copy_from_slice(&bytes);
+      *counter=counter.saturating_sub(val);
+      Ok(8)
+    }else{Err(errno::EBADF)}
+  },
+  OpenKind::Epoll=>Err(errno::EBADF),
+  OpenKind::TimerFd(exp,ivl)=>{
+    let mut exp=exp; let mut ivl=ivl;
+    let mut now=crate::arch::x86_64::apic::ticks();
+    if now<exp{
+      crate::task::sleep_until(exp);
+      now=crate::arch::x86_64::apic::ticks();
+    }
+    let mut expirations=1u64;
+    if ivl>0 && now>exp{
+      expirations=1+(now-exp)/ivl.max(1);
+      exp += expirations*ivl.max(1);
+    } else if ivl>0 {
+      exp = exp.saturating_add(ivl);
+    } else {
+      exp = u64::MAX;
+    }
+    // update kind in place
+    let mut t=OPEN.lock();
+    if let Some(f)=t[id as usize].as_mut(){
+      if let OpenKind::TimerFd(e,i)=&mut f.kind{*e=exp;*i=ivl;}
+    }
+    drop(t);
+    let bytes=expirations.to_ne_bytes();
+    if dst.len()<8{return Err(errno::EINVAL)}
+    dst[..8].copy_from_slice(&bytes);
+    Ok(8)
+  },
   OpenKind::PipeWrite(_)=>Err(errno::EBADF),
+  OpenKind::CharDevice(dev)=>crate::device::read((dev>>8)as u32,(dev&0xff)as u32,dst),
+  OpenKind::BlockDevice(dev)=>{let got=crate::device::blk_read((dev>>8)as u32,(dev&0xff)as u32,offset,dst)?; if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64;} Ok(got)},
+  OpenKind::Inotify=>crate::inotify::read(id,dst),
+  OpenKind::SignalFd(mask)=>{
+    let pending=crate::task::with_current_process(|p|p.pending).unwrap_or(0);
+    let m=pending & mask;
+    if m==0{return Err(errno::EAGAIN)}
+    let sig=(m.trailing_zeros() as i32)+1;
+    let _=crate::task::with_current_process(|p|{p.pending &= !crate::signal::bit(sig);});
+    let mut buf=[0u8;128];
+    buf[0..4].copy_from_slice(&sig.to_ne_bytes());
+    let pid=crate::task::current_pid() as i32;
+    buf[12..16].copy_from_slice(&pid.to_ne_bytes());
+    if dst.len()<128{return Err(errno::EINVAL)}
+    dst[..128].copy_from_slice(&buf);
+    Ok(128)
+  },
+  OpenKind::Netlink=>Ok(0),
+  OpenKind::IoUring=>Err(errno::EBADF),
+  OpenKind::PidFd(_)=>Err(errno::EBADF),
  }
 }
 pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
@@ -76,17 +135,33 @@ pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
   OpenKind::Console=>{crate::console::write_bytes(src);Ok(src.len())},
   OpenKind::PipeWrite(p)=>crate::pipe::write(p,src),
   OpenKind::Socket(s)=>{crate::socket::send(s,src)},
+  OpenKind::EventFd(c,_)=>{
+    if src.len()<8{return Err(errno::EINVAL)}
+    let val=u64::from_ne_bytes(src[..8].try_into().unwrap());
+    let mut t=OPEN.lock();let f=t[id as usize].as_mut().ok_or(errno::EBADF)?;
+    if let OpenKind::EventFd(counter,_)=&mut f.kind{*counter=counter.saturating_add(val);Ok(8)}else{Err(errno::EBADF)}
+  },
+  OpenKind::Epoll=>Err(errno::EBADF),
+  OpenKind::TimerFd(_,_)=>Err(errno::EBADF),
   OpenKind::Inode(n)=>{
    let got=vfs::write(n,offset,src)?;
    if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}
    Ok(got)
   },
   OpenKind::PipeRead(_)=>Err(errno::EBADF),
+  OpenKind::CharDevice(dev)=>crate::device::write((dev>>8)as u32,(dev&0xff)as u32,src),
+  OpenKind::BlockDevice(dev)=>{let got=crate::device::blk_write((dev>>8)as u32,(dev&0xff)as u32,offset,src)?; if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64;} Ok(got)},
+  OpenKind::Netlink=>Ok(src.len()),
+  OpenKind::IoUring=>Err(errno::EBADF),
+  OpenKind::PidFd(_)=>Err(errno::EBADF),
+  OpenKind::Inotify=>Err(errno::EBADF),
+  OpenKind::SignalFd(_)=>Err(errno::EBADF),
  }
 }
 pub fn seek(id:u32,off:i64,whence:u64)->Result<u64,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
- let size=match kind{OpenKind::Inode(n)=>n.size,OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)|OpenKind::Socket(_)=>return Err(errno::ESPIPE)};
+ let size=match kind{OpenKind::Inode(n)=>n.size,OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)|OpenKind::Socket(_)|OpenKind::EventFd(_,_)|OpenKind::Epoll|OpenKind::TimerFd(_,_)|OpenKind::CharDevice(_)|OpenKind::BlockDevice(_)|OpenKind::Inotify|OpenKind::SignalFd(_)|OpenKind::Netlink|OpenKind::IoUring|OpenKind::PidFd(_)=>return Err(errno::ESPIPE)};
+ let size=match kind{OpenKind::BlockDevice(_)=>crate::driver::virtio_blk::capacity(),_=>0};
  let base=match whence{0=>0,1=>offset,2=>size,_=>return Err(errno::EINVAL)};let next=if off>=0{base.checked_add(off as u64)}else{base.checked_sub(off.unsigned_abs())}.ok_or(errno::EINVAL)?;
  if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=next}Ok(next)
 }
@@ -106,4 +181,13 @@ pub fn pipe2(flags:u64)->Result<(i32,i32),i64>{
  let w=match alloc_file(OpenKind::PipeWrite(p)){Ok(v)=>v,Err(e)=>{release(r);return Err(e)}};
  let installed=crate::task::with_current_process(|proc|proc.fds.install_pair(r,w));
  match installed{Some(Ok(pair))=>Ok(pair),Some(Err(e))=>{release(r);release(w);Err(e)},None=>{release(r);release(w);Err(errno::ESRCH)}}
+}
+
+pub fn timerfd_set(id:u32,exp:u64,ivl:u64){
+ if let Some(f)=OPEN.lock()[id as usize].as_mut(){
+  if let OpenKind::TimerFd(e,i)=&mut f.kind{*e=exp;*i=ivl;}
+ }
+}
+pub fn timerfd_get(id:u32)->Option<(u64,u64)>{
+ match kind(id){Some(OpenKind::TimerFd(e,i))=>Some((e,i)),_=>None}
 }

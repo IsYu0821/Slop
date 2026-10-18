@@ -1,3 +1,64 @@
+## 0.47.0 - 2026-10-18
+- Added per-process hostname state and sethostname support.
+- Added seccomp strict-mode enforcement.
+- Reflected hostname changes in uname.
+
+## 0.46.0 - 2026-10-18
+- Added a mount table and mount-aware path resolution.
+- Implemented mount and umount2 handling.
+- Enabled bind-style path translation through mountpoints.
+
+## 0.45.0 - 2026-10-18
+- Added pidfd_open and pidfd_send_signal.
+- Made private file-backed mmap writable.
+- Added setsockopt, getsockopt, sendmsg, recvmsg, accept4, sendmmsg and recvmmsg.
+
+## 0.44.0 - 2026-10-18
+- Added /proc/self/exe, root and cwd symlinks.
+- Added /proc/self/ns with namespace identifier links.
+- Improved process introspection through readlink.
+
+## 0.43.0 - 2026-10-18
+- Added setsockopt, getsockopt, sendmsg, recvmsg and accept4.
+- Aggregated iovec buffers in sendmsg/recvmsg.
+- Accepted common socket option calls.
+
+## 0.42.0 - 2026-10-18
+- Expanded `/sys` with class, block, device and kernel entries.
+- Added network interface and block device sysfs attributes.
+- Added `sethostname` and hostname reporting through `uname`.
+
+## 0.41.0 - 2026-10-18
+- Added virtio-blk legacy driver and `/dev/vda`.
+- Added block device VFS/file operations and seek support.
+- Added synchronous disk read/write through virtio descriptor chains.
+
+## 0.40.0 - 2026-10-18
+- Added credentials, groups, capabilities, umask and namespace state to processes.
+- Added setuid/setgid/setreuid/setregid/setresuid/setresgid/getgroups/setgroups/capget/capset/unshare/setns/seccomp syscalls.
+- Added netlink sockets, inotify and signalfd support.
+- Added a `/sys` virtual filesystem with kernel and device entries.
+- Propagated namespace flags through clone and fork.
+
+## 0.39.0 - 2026-10-18
+- Added symlink-aware path resolution, `symlink`, `link`, and `readlink`.
+- Added a minimal `/proc` filesystem with common self and system files.
+- Added `timerfd_create`, `timerfd_settime`, and `timerfd_gettime`.
+- Extended file descriptors with `TimerFd`.
+
+## 0.38.0 - 2026-10-18
+- Added root `/` VFS node support and working `opendir`/`readdir` on `/`.
+- Added compatibility syscalls/stubs: statfs, fstatfs, readlink, close_range, mincore, fallocate, sendfile, sync, getcpu, sched_setaffinity, mlock2, personality, nice, sync_file_range, xattr, fadvise, inotify/timerfd/signalfd stubs.
+- Implemented `fallocate` growth and descriptor-to-descriptor `sendfile`.
+
+## 0.37.0 - 2026-10-18
+- Added cwd-aware path resolution across VFS syscalls and process state.
+- Added filesystem syscalls: mkdir, rmdir, rename, chmod, fchmod, truncate, ftruncate, stat, lstat, unlink, dup.
+- Added process/session syscalls: setpgid, getpgid, setsid, getsid, prctl, sysinfo.
+- Added time/select/rlimit syscalls: gettimeofday, getrlimit, setrlimit, getrusage, times, select, pselect6, clock_getres, clock_nanosleep, utimensat.
+- Added read-only file-backed mmap support.
+- Extended libc wrappers and headers accordingly.
+
 # Changelog
 
 ## 0.36.0 - 2026-10-18

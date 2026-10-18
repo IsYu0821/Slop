@@ -33,6 +33,25 @@
 #define SYS_FACCESSAT 269
 #define SYS_FACCESSAT2 439
 #define SYS_READLINKAT 267
+#define SYS_CHDIR 80
+#define SYS_FCHDIR 81
+#define SYS_RENAME 82
+#define SYS_MKDIR 83
+#define SYS_RMDIR 84
+#define SYS_CHMOD 90
+#define SYS_TRUNCATE 76
+#define SYS_FTRUNCATE 77
+#define SYS_DUP 32
+#define SYS_GETTIMEOFDAY 96
+#define SYS_GETRLIMIT 97
+#define SYS_GETRUSAGE 98
+#define SYS_TIMES 100
+#define SYS_SELECT 23
+#define SYS_UTIMENSAT 280
+#define SYS_GETCWD 79
+#define SYS_FCHMOD 91
+#define SYS_SETRLIMIT 160
+#define SYS_MKDIRAT 258
 #define SYS_MUNMAP 11
 #define SYS_MREMAP 25
 #define SYS_MADVISE 28
@@ -163,3 +182,89 @@ void _exit(int status) {
     }
 }
 
+
+int chdir(const char *path) {
+    return (int)sys_fail(__slop_syscall6(SYS_CHDIR, (long)path, 0, 0, 0, 0, 0));
+}
+
+int fchdir(int fd) {
+    return (int)sys_fail(__slop_syscall6(SYS_FCHDIR, fd, 0, 0, 0, 0, 0));
+}
+
+char *getcwd(char *buf, size_t size) {
+    long r = __slop_syscall6(SYS_GETCWD, (long)buf, size, 0, 0, 0, 0);
+    if (r < 0) { errno = (int)-r; return NULL; }
+    return buf;
+}
+
+int mkdir(const char *path, int mode) {
+    return (int)sys_fail(__slop_syscall6(SYS_MKDIR, (long)path, mode, 0, 0, 0, 0));
+}
+
+int rmdir(const char *path) {
+    return (int)sys_fail(__slop_syscall6(SYS_RMDIR, (long)path, 0, 0, 0, 0, 0));
+}
+
+int rename(const char *old, const char *new) {
+    return (int)sys_fail(__slop_syscall6(SYS_RENAME, (long)old, (long)new, 0, 0, 0, 0));
+}
+
+int chmod(const char *path, int mode) {
+    return (int)sys_fail(__slop_syscall6(SYS_CHMOD, (long)path, mode, 0, 0, 0, 0));
+}
+
+int fchmod(int fd, int mode) {
+    return (int)sys_fail(__slop_syscall6(SYS_FCHMOD, fd, mode, 0, 0, 0, 0));
+}
+
+int truncate(const char *path, long length) {
+    return (int)sys_fail(__slop_syscall6(SYS_TRUNCATE, (long)path, length, 0, 0, 0, 0));
+}
+
+int ftruncate(int fd, long length) {
+    return (int)sys_fail(__slop_syscall6(SYS_FTRUNCATE, fd, length, 0, 0, 0, 0));
+}
+
+int dup(int oldfd) {
+    return (int)sys_fail(__slop_syscall6(SYS_DUP, oldfd, 0, 0, 0, 0, 0));
+}
+
+int gettimeofday(struct timeval *tv, struct timezone *tz) {
+    return (int)sys_fail(__slop_syscall6(SYS_GETTIMEOFDAY, (long)tv, (long)tz, 0, 0, 0, 0));
+}
+
+int getrlimit(int resource, struct rlimit *rlim) {
+    return (int)sys_fail(__slop_syscall6(SYS_GETRLIMIT, resource, (long)rlim, 0, 0, 0, 0));
+}
+
+int setrlimit(int resource, const struct rlimit *rlim) {
+    return (int)sys_fail(__slop_syscall6(SYS_SETRLIMIT, resource, (long)rlim, 0, 0, 0, 0));
+}
+
+int getrusage(int who, void *ru) {
+    return (int)sys_fail(__slop_syscall6(SYS_GETRUSAGE, who, (long)ru, 0, 0, 0, 0));
+}
+
+long times(void *buf) {
+    return (long)sys_fail(__slop_syscall6(SYS_TIMES, (long)buf, 0, 0, 0, 0, 0));
+}
+
+int select(int nfds, void *readfds, void *writefds, void *exceptfds, struct timeval *timeout) {
+    return (int)sys_fail(__slop_syscall6(SYS_SELECT, nfds, (long)readfds, (long)writefds, (long)exceptfds, (long)timeout, 0));
+}
+
+int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags) {
+    return (int)sys_fail(__slop_syscall6(SYS_UTIMENSAT, dirfd, (long)path, (long)times, flags, 0, 0));
+}
+
+int mkdirat(int dirfd, const char *path, int mode) {
+    return (int)sys_fail(__slop_syscall6(SYS_MKDIRAT, dirfd, (long)path, mode, 0, 0, 0));
+}
+
+int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+    return (int)sys_fail(__slop_syscall6(264, olddirfd, (long)oldpath, newdirfd, (long)newpath, 0, 0));
+}
+
+int fchmodat(int dirfd, const char *path, int mode, int flags) {
+    return (int)sys_fail(__slop_syscall6(268, dirfd, (long)path, mode, flags, 0, 0));
+}
