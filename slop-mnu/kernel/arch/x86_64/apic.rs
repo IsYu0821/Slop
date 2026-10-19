@@ -123,9 +123,9 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
 }
 
 #[unsafe(no_mangle)]
-pub extern "sysv64" fn apic_timer_rust() {
+pub extern "sysv64" fn apic_timer_rust(cs:u64) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    crate::task::on_timer_tick();
+    crate::task::on_timer_tick(cs & 3 != 0);
     crate::net::poll();
     unsafe { write(0xb0,0) }
 }

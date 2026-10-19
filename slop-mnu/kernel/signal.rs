@@ -2,7 +2,7 @@
 //! Per-process pending masks, blocked masks and handler slots live in Process.
 //! Frame rewriting for user-mode delivery lives in arch::x86_64::syscall.
 use crate::task;
-pub const SIGHUP:i32=1;pub const SIGINT:i32=2;pub const SIGQUIT:i32=3;pub const SIGILL:i32=4;pub const SIGTRAP:i32=5;pub const SIGABRT:i32=6;pub const SIGBUS:i32=7;pub const SIGFPE:i32=8;pub const SIGKILL:i32=9;pub const SIGUSR1:i32=10;pub const SIGSEGV:i32=11;pub const SIGUSR2:i32=12;pub const SIGPIPE:i32=13;pub const SIGALRM:i32=14;pub const SIGTERM:i32=15;pub const SIGCHLD:i32=17;pub const SIGCONT:i32=18;pub const SIGSTOP:i32=19;pub const SIGTSTP:i32=20;pub const SIGTTIN:i32=21;pub const SIGTTOU:i32=22;pub const SIGURG:i32=23;pub const SIGWINCH:i32=28;
+pub const SIGHUP:i32=1;pub const SIGINT:i32=2;pub const SIGQUIT:i32=3;pub const SIGILL:i32=4;pub const SIGTRAP:i32=5;pub const SIGABRT:i32=6;pub const SIGBUS:i32=7;pub const SIGFPE:i32=8;pub const SIGKILL:i32=9;pub const SIGUSR1:i32=10;pub const SIGSEGV:i32=11;pub const SIGUSR2:i32=12;pub const SIGPIPE:i32=13;pub const SIGALRM:i32=14;pub const SIGTERM:i32=15;pub const SIGCHLD:i32=17;pub const SIGCONT:i32=18;pub const SIGSTOP:i32=19;pub const SIGTSTP:i32=20;pub const SIGTTIN:i32=21;pub const SIGTTOU:i32=22;pub const SIGURG:i32=23;pub const SIGVTALRM:i32=26;pub const SIGPROF:i32=27;pub const SIGWINCH:i32=28;
 pub const SIG_DFL:u64=0;pub const SIG_IGN:u64=1;
 pub const SA_NOCLDSTOP:u64=1;pub const SA_NOCLDWAIT:u64=2;pub const SA_SIGINFO:u64=4;pub const SA_ONSTACK:u64=0x08000000;pub const SA_RESTORER:u64=0x04000000;pub const SA_RESTART:u64=0x10000000;pub const SA_NODEFER:u64=0x40000000;pub const SA_RESETHAND:u64=0x80000000;
 pub const BLOCK:u64=0;pub const UNBLOCK:u64=1;pub const SETMASK:u64=2;
@@ -60,5 +60,5 @@ pub fn handlers_dfl()->[Action;64]{[DFL;64]}
 pub fn default_terminates(sig:i32)->bool{
  matches!(sig,
   SIGHUP|SIGINT|SIGQUIT|SIGILL|SIGABRT|SIGBUS|SIGFPE|SIGKILL|SIGSEGV|
-  SIGPIPE|SIGALRM|SIGTERM|SIGUSR1|SIGUSR2)
+  SIGPIPE|SIGALRM|SIGTERM|SIGUSR1|SIGUSR2|SIGVTALRM|SIGPROF)
 }

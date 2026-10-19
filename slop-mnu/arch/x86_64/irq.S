@@ -21,6 +21,7 @@ apic_timer_entry:
     push %r14
     push %r15
     mov %rsp, %r15
+    mov 128(%r15), %rdi
     and $-16, %rsp
     call apic_timer_rust
     mov %r15, %rsp

@@ -246,9 +246,9 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
  const WNOHANG:u64=1;const WUNTRACED:u64=2;
  if options&!(WNOHANG|WUNTRACED)!=0{return errno::neg(errno::EINVAL)}
  loop{match crate::task::reap_child(pid,options&WNOHANG!=0){
-  Ok(crate::task::WaitOutcome::Reaped(cpid,status))=>{
+  Ok(crate::task::WaitOutcome::Reaped(cpid,status,utime,stime))=>{
    if status_ptr!=0{let s=status as i32;let r=copy_obj(status_ptr,&s);if r<0{return r}}
-   if rusage!=0{let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&zeros){return errno::neg(e)}}
+   if rusage!=0{let b=rusage_buf(utime,stime,0);if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&b){return errno::neg(e)}}
    return cpid as i64;
   }
   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
@@ -419,7 +419,9 @@ fn clock_ns(clock:u64)->Option<u64>{
  match clock{
   0|5|8|11=>Some(crate::time::realtime_ns()),
   1|4|6|7|9|10=>Some(crate::time::monotonic_ns()),
-  2|3=>Some(0),
+  /* Clone tasks are separate processes in this kernel, so the process and
+     thread CPU clocks coincide with the caller's own accounted ticks. */
+  2|3=>Some(crate::task::with_current_process(|p|crate::time::ticks_to_ns(p.utime_ticks.saturating_add(p.stime_ticks))).unwrap_or(0)),
   _=>None
  }
 }
@@ -610,7 +612,7 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
  let nohang=opts&WNOHANG!=0;
  loop{
   match crate::task::reap_child(selector,nohang){
-   Ok(crate::task::WaitOutcome::Reaped(pid,status))=>{
+   Ok(crate::task::WaitOutcome::Reaped(pid,status,_,_))=>{
     let si_code:u32=1;let si_status:u32=status as u32&0xff;let si_signo:u32=if status&0x7f!=0{status as u32&0x7f}else{17};
     let mut b=[0u8;128];
     b[0..4].copy_from_slice(&si_signo.to_ne_bytes());
@@ -1147,14 +1149,44 @@ fn sys_getrlimit(resource:u64,rlim:u64)->i64{
  copy_obj(rlim,&Rlimit{cur:u64::MAX/4,max:u64::MAX/4})
 }
 fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
-fn sys_getrusage(who:u64,ru:u64)->i64{let _=who;if ru==0{return errno::neg(errno::EFAULT)}let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(ru as usize,&zeros){return errno::neg(e)}0}
-fn sys_times(ptr:u64)->i64{if ptr!=0{let zeros=[0u8;32];let _=crate::usercopy::copy_to_user(ptr as usize,&zeros);}0}
+fn put_u64(b:&mut[u8;144],off:usize,v:u64){b[off..off+8].copy_from_slice(&v.to_le_bytes());}
+fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
+ let mut b=[0u8;144];
+ put_u64(&mut b,0,utime_ticks/1000);put_u64(&mut b,8,(utime_ticks%1000)*1000);
+ put_u64(&mut b,16,stime_ticks/1000);put_u64(&mut b,24,(stime_ticks%1000)*1000);
+ put_u64(&mut b,32,maxrss_kb);
+ b
+}
+fn sys_getrusage(who:u64,ru:u64)->i64{
+ if ru==0{return errno::neg(errno::EFAULT)}
+ let buf=if who==u64::MAX{
+  let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0));
+  rusage_buf(ut,st,0)
+ }else if who==0||who==1{
+  match crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.resident_pages()*4)){
+   Some((ut,st,rss))=>rusage_buf(ut,st,rss),
+   None=>return errno::neg(errno::ESRCH),
+  }
+ }else{return errno::neg(errno::EINVAL)};
+ if let Err(e)=crate::usercopy::copy_to_user(ru as usize,&buf){return errno::neg(e)}
+ 0
+}
+fn sys_times(ptr:u64)->i64{
+ if ptr!=0{
+  let (ut,st,cut,cst)=crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0,0,0));
+  let mut b=[0u8;32];
+  for(i,v)in[ut,st,cut,cst].iter().enumerate(){b[i*8..i*8+8].copy_from_slice(&(v/10).to_le_bytes());}
+  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&b){return errno::neg(e)}
+ }
+ (crate::time::monotonic_ns()/10_000_000)as i64
+}
 fn sys_clock_getres(clock:u64,ptr:u64)->i64{
- let ns=if let Some(v)=clock_ns(clock){if v==0&&matches!(clock,2|3){0}else{1_000_000}}else{return errno::neg(errno::EINVAL)};
+ let ns=if clock_ns(clock).is_some(){1_000_000}else{return errno::neg(errno::EINVAL)};
  if ptr!=0{copy_obj(ptr,&Timespec{tv_sec:0,tv_nsec:ns as i64})}else{0}
 }
 fn sys_clock_nanosleep(clock:u64,flags:u64,req:u64,rem:u64)->i64{
  if flags&!1!=0{return errno::neg(errno::EINVAL)}
+ if matches!(clock,2|3){return errno::neg(errno::EINVAL)}
  if clock_ns(clock).is_none(){return errno::neg(errno::EINVAL)}
  let mut ts=Timespec::default();
  let b=unsafe{core::slice::from_raw_parts_mut((&mut ts as*mut Timespec).cast::<u8>(),core::mem::size_of::<Timespec>())};
@@ -1508,23 +1540,26 @@ fn write_itimer_val(ptr:u64,rem_ticks:u64,iv_ticks:u64)->i64{
 fn sys_alarm(sec:u64)->i64{
  let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
  let active=sec!=0;let next=if active{now.saturating_add(sec.saturating_mul(1000))}else{0};
- match crate::posix_timer::alarm_set(pid,active,next,0,now){Ok((old_rem,_))=>((old_rem+999)/1000)as i64,Err(e)=>errno::neg(e)}
+ match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>((old_rem+999)/1000)as i64,Err(e)=>errno::neg(e)}
 }
 fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
- if which!=0{return errno::neg(errno::EINVAL)}
+ if which>2{return errno::neg(errno::EINVAL)}
  let val=match read_itimer::<ItimerVal>(newptr){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let iv_ns=match timer_ns(val.iv_sec,val.iv_sec2){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let v_ns=match timer_ns(val.v_sec,val.v_sec2){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
- let active=v_ns!=0;let next=if active{crate::time::ticks_after_ns(v_ns)}else{0};
+ let active=v_ns!=0;
+ /* REAL counts wall ticks (absolute deadline); VIRTUAL/PROF count down the
+    process's own CPU ticks. */
+ let next=if active{if which==0{crate::time::ticks_after_ns(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
  let interval=crate::time::ns_to_ticks_ceil(iv_ns);
- let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,which as u8,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  if oldptr!=0{return write_itimer_val(oldptr,old_rem,old_iv)}
  0
 }
 fn sys_getitimer(which:u64,ptr:u64)->i64{
- if which!=0{return errno::neg(errno::EINVAL)}
- let (rem,iv)=crate::posix_timer::alarm_get(crate::task::current_pid(),crate::arch::x86_64::apic::ticks());
+ if which>2{return errno::neg(errno::EINVAL)}
+ let (rem,iv)=crate::posix_timer::alarm_get(crate::task::current_pid(),which as u8,crate::arch::x86_64::apic::ticks());
  write_itimer_val(ptr,rem,iv)
 }
 fn sys_set_robust_list(head:u64,len:u64)->i64{

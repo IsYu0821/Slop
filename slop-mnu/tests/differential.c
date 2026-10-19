@@ -920,6 +920,138 @@ int main(int argc, char **argv) {
         printf("DIFF_ROBUSTFUTEX_OK\n");
     }
 
+    /* CPU-time accounting: process and thread CPU clocks track consumed CPU. */
+    {
+        struct timespec w0, c0, ct0;
+        if (clock_gettime(CLOCK_MONOTONIC, &w0) != 0) return fail("cputime mono0");
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &c0) != 0) return fail("cputime proc0");
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct0) != 0) return fail("cputime thr0");
+        volatile unsigned long spin = 0;
+        for (;;) {
+            struct timespec n;
+            spin++;
+            clock_gettime(CLOCK_MONOTONIC, &n);
+            if ((n.tv_sec - w0.tv_sec) * 1000 + (n.tv_nsec - w0.tv_nsec) / 1000000 >= 150)
+                break;
+        }
+        struct timespec w1, c1, ct1;
+        if (clock_gettime(CLOCK_MONOTONIC, &w1) != 0) return fail("cputime mono1");
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &c1) != 0) return fail("cputime proc1");
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct1) != 0) return fail("cputime thr1");
+        long long cms = (c1.tv_sec - c0.tv_sec) * 1000 + (c1.tv_nsec - c0.tv_nsec) / 1000000;
+        long long wms = (w1.tv_sec - w0.tv_sec) * 1000 + (w1.tv_nsec - w0.tv_nsec) / 1000000;
+        long long tms = (ct1.tv_sec - ct0.tv_sec) * 1000 + (ct1.tv_nsec - ct0.tv_nsec) / 1000000;
+        if (cms < 30) return fail("cputime process clock");
+        if (cms > wms + 50) return fail("cputime exceeds wall");
+        if (tms < 30) return fail("cputime thread clock");
+        struct rusage ru;
+        memset(&ru, 0, sizeof ru);
+        if (getrusage(RUSAGE_SELF, &ru) != 0) return fail("cputime rusage self");
+        long long rut = (long long)ru.ru_utime.tv_sec * 1000 + ru.ru_utime.tv_usec / 1000;
+        if (rut < 30) return fail("cputime rusage utime");
+        if (getrusage(RUSAGE_THREAD, &ru) != 0) return fail("cputime rusage thread");
+        /* /proc/self/stat fields 14/15 are utime/stime in USER_HZ ticks. */
+        int fd = open("/proc/self/stat", O_RDONLY);
+        if (fd < 0) return fail("cputime stat open");
+        char sbuf[1024];
+        ssize_t sn = read(fd, sbuf, sizeof(sbuf) - 1);
+        close(fd);
+        if (sn <= 0) return fail("cputime stat read");
+        sbuf[sn] = 0;
+        char *sp = strchr(sbuf, ')');
+        if (!sp) return fail("cputime stat close");
+        sp++;
+        while (*sp == ' ') sp++;
+        while (*sp && *sp != ' ') sp++;
+        long utime_ticks = 0, stime_ticks = 0;
+        for (int i = 0; i < 12; i++) {
+            while (*sp == ' ') sp++;
+            long v = strtol(sp, &sp, 10);
+            if (i == 10) utime_ticks = v;
+            if (i == 11) stime_ticks = v;
+        }
+        if (utime_ticks <= 0) return fail("cputime stat utime");
+        if (stime_ticks < 0) return fail("cputime stat stime");
+        printf("DIFF_CPUTIME_OK\n");
+    }
+
+    /* wait4 reports the child's CPU usage; RUSAGE_CHILDREN accumulates it. */
+    {
+        int pid = fork();
+        if (pid == 0) {
+            struct timespec s0;
+            clock_gettime(CLOCK_MONOTONIC, &s0);
+            volatile unsigned long x = 0;
+            for (;;) {
+                struct timespec n;
+                x++;
+                clock_gettime(CLOCK_MONOTONIC, &n);
+                if ((n.tv_sec - s0.tv_sec) * 1000 + (n.tv_nsec - s0.tv_nsec) / 1000000 >= 120)
+                    break;
+            }
+            _exit(0);
+        }
+        if (pid < 0) return fail("rusage fork");
+        struct rusage cru, chr;
+        memset(&cru, 0, sizeof cru);
+        int status = 0;
+        if (wait4(pid, &status, 0, &cru) != pid) return fail("rusage wait4");
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) return fail("rusage child status");
+        long long cut = (long long)cru.ru_utime.tv_sec * 1000 + cru.ru_utime.tv_usec / 1000;
+        if (cut < 20) return fail("rusage child utime");
+        memset(&chr, 0, sizeof chr);
+        if (getrusage(RUSAGE_CHILDREN, &chr) != 0) return fail("rusage children");
+        long long ct = (long long)chr.ru_utime.tv_sec * 1000 + chr.ru_utime.tv_usec / 1000;
+        if (ct < 20) return fail("rusage children utime");
+        printf("DIFF_RUSAGE_OK\n");
+    }
+
+    /* ITIMER_VIRTUAL/ITIMER_PROF fire SIGVTALRM/SIGPROF on consumed CPU. */
+    {
+        sigset_t set, oldset;
+        sigemptyset(&set);
+        sigaddset(&set, SIGVTALRM);
+        sigaddset(&set, SIGPROF);
+        if (sigprocmask(SIG_BLOCK, &set, &oldset) != 0) return fail("vtimer block");
+        struct itimerval it;
+        memset(&it, 0, sizeof it);
+        it.it_value.tv_usec = 30000;
+        if (setitimer(ITIMER_VIRTUAL, &it, NULL) != 0) return fail("vtimer set");
+        if (setitimer(3, &it, NULL) != -1 || errno != EINVAL) return fail("vtimer which");
+        struct timespec s0;
+        clock_gettime(CLOCK_MONOTONIC, &s0);
+        volatile unsigned long x = 0;
+        for (;;) {
+            struct timespec n;
+            x++;
+            clock_gettime(CLOCK_MONOTONIC, &n);
+            if ((n.tv_sec - s0.tv_sec) * 1000 + (n.tv_nsec - s0.tv_nsec) / 1000000 >= 120)
+                break;
+        }
+        struct timespec tw;
+        tw.tv_sec = 3;
+        tw.tv_nsec = 0;
+        if (sigtimedwait(&set, NULL, &tw) != SIGVTALRM) return fail("vtimer fire");
+        memset(&it, 0, sizeof it);
+        if (setitimer(ITIMER_VIRTUAL, &it, NULL) != 0) return fail("vtimer clear");
+        memset(&it, 0, sizeof it);
+        it.it_value.tv_usec = 30000;
+        if (setitimer(ITIMER_PROF, &it, NULL) != 0) return fail("prof set");
+        clock_gettime(CLOCK_MONOTONIC, &s0);
+        for (;;) {
+            struct timespec n;
+            x++;
+            clock_gettime(CLOCK_MONOTONIC, &n);
+            if ((n.tv_sec - s0.tv_sec) * 1000 + (n.tv_nsec - s0.tv_nsec) / 1000000 >= 120)
+                break;
+        }
+        if (sigtimedwait(&set, NULL, &tw) != SIGPROF) return fail("prof fire");
+        memset(&it, 0, sizeof it);
+        if (setitimer(ITIMER_PROF, &it, NULL) != 0) return fail("prof clear");
+        if (sigprocmask(SIG_SETMASK, &oldset, NULL) != 0) return fail("vtimer unblock");
+        printf("DIFF_VTIMER_OK\n");
+    }
+
     int memfd = memfd_create("diff", 0);
 
     if (memfd < 0) return fail("memfd_create");

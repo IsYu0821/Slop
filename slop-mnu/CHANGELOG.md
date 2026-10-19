@@ -1,3 +1,11 @@
+## 0.60.0 - 2026-10-19
+- Added per-process CPU-time accounting: the timer interrupt attributes each 1ms tick to user or kernel time from the interrupted CS.
+- Implemented CPU clocks: `clock_gettime(CLOCK_PROCESS_CPUTIME_ID/CLOCK_THREAD_CPUTIME_ID)` now return accounted CPU time and `clock_getres` reports the tick resolution.
+- Implemented real `getrusage` (`RUSAGE_SELF`, `RUSAGE_THREAD`, `RUSAGE_CHILDREN`) and `times()`, and `wait4` now returns the reaped child's usage in `struct rusage`, folded into the parent's children totals.
+- Made `ITIMER_VIRTUAL` and `ITIMER_PROF` functional: they count user (and kernel) ticks, fire `SIGVTALRM`/`SIGPROF` with interval reload, and `setitimer`/`getitimer` accept all three timers.
+- `/proc/<pid>/stat` reports utime/stime/cutime/cstime and fixes the priority/nice/num_threads field positions.
+- Expanded native/guest differential tests with CPU-clock, rusage and virtual-timer cases.
+
 ## 0.59.0 - 2026-10-19
 - Implemented POSIX record locks: `fcntl` `F_GETLK`/`F_SETLK`/`F_SETLKW` with per-process ownership, range replacement with trimming and splitting, owner pid reporting, blocking waits that return `EINTR` on signals, release when any descriptor of the inode closes and at process exit.
 - Implemented open-file-description locks `F_OFD_GETLK`/`F_OFD_SETLK`/`F_OFD_SETLKW`, owned by the description so `dup`/`fork` share them and the last close releases them.
