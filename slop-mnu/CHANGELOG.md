@@ -1,3 +1,10 @@
+## 0.59.0 - 2026-10-19
+- Implemented POSIX record locks: `fcntl` `F_GETLK`/`F_SETLK`/`F_SETLKW` with per-process ownership, range replacement with trimming and splitting, owner pid reporting, blocking waits that return `EINTR` on signals, release when any descriptor of the inode closes and at process exit.
+- Implemented open-file-description locks `F_OFD_GETLK`/`F_OFD_SETLK`/`F_OFD_SETLKW`, owned by the description so `dup`/`fork` share them and the last close releases them.
+- Added robust-futex death handling at task exit: the robust list is walked, still-owned words get `FUTEX_OWNER_DIED` with the TID cleared, and a waiter is woken when `FUTEX_WAITERS` was set, mirroring Linux.
+- Fixed `MAP_SHARED|MAP_ANONYMOUS` mappings so forked processes keep sharing the same frames instead of copy-on-write splitting.
+- Expanded native/guest differential tests with record-lock, OFD-lock and robust-futex cases.
+
 ## 0.58.0 - 2026-10-18
 - Implemented the POSIX timer family (`timer_create/settime/gettime/getoverrun/delete`) with signal notification, `si_value`, overrun counting and `TIMER_ABSTIME`.
 - Made `alarm`, `getitimer` and `setitimer` share a per-process `ITIMER_REAL` timer; `ITIMER_VIRTUAL`/`ITIMER_PROF` report `EINVAL` pending CPU-time accounting.

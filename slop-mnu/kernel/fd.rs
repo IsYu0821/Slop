@@ -28,8 +28,8 @@ impl FdTable{
  pub fn install(&mut self,id:u32)->Result<i32,i64>{self.install_from(0,id)}
  pub fn install_from(&mut self,min:usize,id:u32)->Result<i32,i64>{let fd=(min..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[fd]=id as i32;self.close_exec[fd]=0;Ok(fd as i32)}
  pub fn install_pair(&mut self,first:u32,second:u32)->Result<(i32,i32),i64>{let a=(0..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[a]=first as i32;self.close_exec[a]=0;let b=match (a+1..MAX_FDS).find(|&i|self.slots[i]<0){Some(b)=>b,None=>{self.slots[a]=FREE_FD;return Err(errno::EMFILE)}};self.slots[b]=second as i32;self.close_exec[b]=0;Ok((a as i32,b as i32))}
- pub fn replace(&mut self,fd:usize,id:u32)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}if self.slots[fd]>=0{release(self.slots[fd]as u32)}self.slots[fd]=id as i32;self.close_exec[fd]=0;Ok(())}
-   pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;self.close_exec[fd]=0;release(s as u32);Ok(())}
+ pub fn replace(&mut self,fd:usize,id:u32)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}if self.slots[fd]>=0{release_closed(self.slots[fd]as u32)}self.slots[fd]=id as i32;self.close_exec[fd]=0;Ok(())}
+   pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;self.close_exec[fd]=0;release_closed(s as u32);Ok(())}
    pub fn get_close_exec(&self,fd:usize)->Option<bool>{if fd>=MAX_FDS||self.slots[fd]<0{return None}Some(self.close_exec[fd]&FD_CLOEXEC!=0)}
    pub fn set_close_exec(&mut self,fd:usize,v:bool)->Result<(),i64>{if fd>=MAX_FDS||self.slots[fd]<0{return Err(errno::EBADF)}if v{self.close_exec[fd]|=FD_CLOEXEC}else{self.close_exec[fd]&=!FD_CLOEXEC}Ok(())}
    /* Closes every descriptor marked FD_CLOEXEC, as execve must. Sockets need
@@ -41,7 +41,7 @@ impl FdTable{
      let id=self.slots[i]as u32;
      let kind=kind(id);
      self.slots[i]=FREE_FD;self.close_exec[i]=0;
-     release(id);
+     release_closed(id);
      if let Some(OpenKind::Socket(s))=kind{crate::socket::close(s);}
      closed+=1;
     }
@@ -90,7 +90,17 @@ pub fn alloc_file_flags(kind:OpenKind,flags:u32)->Result<u32,i64>{
  Ok(id as u32)
 }
 pub fn incref(id:u32){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.refs+=1}}
-pub fn release(id:u32){let kind={let mut t=OPEN.lock();match t.get_mut(id as usize).and_then(Option::as_mut){None=>return,Some(f)=>{f.refs-=1;if f.refs>0{return}let k=f.kind;t[id as usize]=None;k}}};crate::flock::release(id);match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),_=>{}}}
+pub fn release(id:u32){release_inner(id,false)}
+/* A real close(2): drops the process's POSIX record locks on the inode even
+   while other descriptors keep the description alive (Linux semantics). */
+pub fn release_closed(id:u32){release_inner(id,true)}
+fn release_inner(id:u32,closed:bool){
+ let (kind,last)={let mut t=OPEN.lock();match t.get_mut(id as usize).and_then(Option::as_mut){None=>return,Some(f)=>{f.refs-=1;let last=f.refs==0;let k=f.kind;if last{t[id as usize]=None;}(k,last)}}};
+ if closed{if let OpenKind::Inode(n)=kind{crate::record_lock::on_close(crate::task::current_pid(),n.ino);}}
+ if !last{return}
+ crate::flock::release(id);crate::record_lock::release_ofd(id);
+ match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),_=>{}}
+}
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
 /* Per-open-file status flags (O_APPEND/O_NONBLOCK), shared by dup and fork. */
 pub fn flags(id:u32)->u32{OPEN.lock()[id as usize].map(|f|f.flags).unwrap_or(0)}

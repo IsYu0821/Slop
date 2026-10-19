@@ -721,7 +721,207 @@ int main(int argc, char **argv) {
         printf("DIFF_SIGPEND_OK\n");
     }
 
+    /* POSIX record locks: cross-process conflict, F_GETLK owner reporting,
+       blocking F_SETLKW wakeup, release on child exit and on any close. */
+    {
+        int fd = open("/tmp/slop-rlock", O_CREAT | O_RDWR | O_TRUNC, 0644);
+        if (fd < 0) return fail("rlock create");
+        char fill[128];
+        memset(fill, 'a', sizeof fill);
+        if (write(fd, fill, sizeof fill) != (ssize_t)sizeof fill) return fail("rlock fill");
+
+        struct flock fl;
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 10;
+        fl.l_len = 20;
+        if (fcntl(fd, F_SETLK, &fl) != 0) return fail("rlock set");
+        fl.l_type = F_WRLCK;
+        if (fcntl(fd, F_GETLK, &fl) != 0) return fail("rlock getlk self");
+        if (fl.l_type != F_UNLCK) return fail("rlock self conflict");
+
+        int sync_pipe[2];
+        if (pipe(sync_pipe) != 0) return fail("rlock pipe");
+        pid_t ch = fork();
+        if (ch < 0) return fail("rlock fork");
+        if (ch == 0) {
+            close(sync_pipe[0]);
+            struct flock c;
+            memset(&c, 0, sizeof c);
+            c.l_type = F_WRLCK;
+            c.l_whence = SEEK_SET;
+            c.l_start = 20;
+            c.l_len = 30;
+            errno = 0;
+            if (fcntl(fd, F_SETLK, &c) != -1 || errno != EAGAIN) _exit(1);
+            memset(&c, 0, sizeof c);
+            c.l_type = F_WRLCK;
+            if (fcntl(fd, F_GETLK, &c) != 0) _exit(2);
+            if (c.l_type != F_WRLCK || c.l_start != 10 || c.l_len != 20 ||
+                c.l_pid != getppid()) _exit(3);
+            /* Tell the parent we are about to park in F_SETLKW. */
+            if (write(sync_pipe[1], "1", 1) != 1) _exit(9);
+            memset(&c, 0, sizeof c);
+            c.l_type = F_WRLCK;
+            c.l_whence = SEEK_SET;
+            c.l_start = 10;
+            c.l_len = 20;
+            if (fcntl(fd, F_SETLKW, &c) != 0) _exit(4);
+            memset(&c, 0, sizeof c);
+            c.l_type = F_WRLCK;
+            if (fcntl(fd, F_SETLK, &c) != 0) _exit(5);
+            _exit(0);
+        }
+        close(sync_pipe[1]);
+        char sc;
+        if (read(sync_pipe[0], &sc, 1) != 1) return fail("rlock sync");
+        close(sync_pipe[0]);
+        usleep(100000);
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_UNLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 10;
+        fl.l_len = 20;
+        if (fcntl(fd, F_SETLK, &fl) != 0) return fail("rlock unlock");
+        int st;
+        if (waitpid(ch, &st, 0) != ch || !WIFEXITED(st) || WEXITSTATUS(st) != 0)
+            return fail("rlock child");
+
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        if (fcntl(fd, F_SETLK, &fl) != 0) return fail("rlock child release");
+        int fd2 = open("/tmp/slop-rlock", O_RDWR);
+        if (fd2 < 0) return fail("rlock reopen");
+        close(fd2);
+        pid_t ch2 = fork();
+        if (ch2 < 0) return fail("rlock fork2");
+        if (ch2 == 0) {
+            struct flock c;
+            memset(&c, 0, sizeof c);
+            c.l_type = F_WRLCK;
+            errno = 0;
+            if (fcntl(fd, F_SETLK, &c) != 0) _exit(6);
+            _exit(0);
+        }
+        if (waitpid(ch2, &st, 0) != ch2 || !WIFEXITED(st) || WEXITSTATUS(st) != 0)
+            return fail("rlock close release");
+        close(fd);
+        unlink("/tmp/slop-rlock");
+        printf("DIFF_RECORDLOCK_OK\n");
+    }
+
+    /* OFD locks: independent descriptions conflict in one process, dup shares
+       the owner, and the lock lives until the description's last close. */
+    {
+        int a = open("/tmp/slop-ofdlock", O_CREAT | O_RDWR | O_TRUNC, 0644);
+        int b = open("/tmp/slop-ofdlock", O_RDWR);
+        if (a < 0 || b < 0) return fail("ofd open");
+        char fill[128];
+        memset(fill, 'b', sizeof fill);
+        if (write(a, fill, sizeof fill) != (ssize_t)sizeof fill) return fail("ofd fill");
+        struct flock fl;
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = 50;
+        if (fcntl(a, F_OFD_SETLK, &fl) != 0) return fail("ofd set");
+        errno = 0;
+        if (fcntl(b, F_OFD_SETLK, &fl) != -1 || errno != EAGAIN) return fail("ofd conflict");
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_start = 0;
+        fl.l_len = 10;
+        if (fcntl(b, F_OFD_GETLK, &fl) != 0) return fail("ofd getlk");
+        if (fl.l_type != F_WRLCK || fl.l_start != 0 || fl.l_len != 50)
+            return fail("ofd getlk body");
+        int c = dup(a);
+        if (c < 0) return fail("ofd dup");
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_start = 0;
+        fl.l_len = 50;
+        if (fcntl(c, F_OFD_SETLK, &fl) != 0) return fail("ofd shared owner");
+        close(c);
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_start = 40;
+        fl.l_len = 5;
+        if (fcntl(b, F_OFD_GETLK, &fl) != 0) return fail("ofd getlk after dup close");
+        if (fl.l_type != F_WRLCK) return fail("ofd lock lost");
+        close(a);
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_start = 0;
+        fl.l_len = 10;
+        if (fcntl(b, F_OFD_GETLK, &fl) != 0) return fail("ofd getlk released");
+        if (fl.l_type != F_UNLCK) return fail("ofd last close release");
+        memset(&fl, 0, sizeof fl);
+        fl.l_type = F_WRLCK;
+        fl.l_start = 0;
+        fl.l_len = 10;
+        if (fcntl(b, F_OFD_SETLK, &fl) != 0) return fail("ofd reacquire");
+        close(b);
+        unlink("/tmp/slop-ofdlock");
+        printf("DIFF_OFDLOCK_OK\n");
+    }
+
+    /* Robust futexes: an exiting task marks still-owned words FUTEX_OWNER_DIED
+       and wakes a waiter blocked on the word. */
+    {
+        struct robust_list { struct robust_list *next; };
+        struct robust_list_head { struct robust_list list; long futex_offset; struct robust_list *list_op_pending; };
+        struct robust_area { struct robust_list elem; int word; int holder; } *sh;
+        sh = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        if (sh == MAP_FAILED) return fail("robust mmap");
+        memset(sh, 0, sizeof *sh);
+        int ready[2];
+        if (pipe(ready) != 0) return fail("robust pipe");
+        pid_t ch = fork();
+        if (ch < 0) return fail("robust fork");
+        if (ch == 0) {
+            close(ready[0]);
+            struct robust_list_head head;
+            long tid = syscall(SYS_gettid);
+            sh->holder = (int)tid;
+            sh->word = (int)tid;
+            sh->elem.next = &head.list;
+            head.list.next = &sh->elem;
+            head.futex_offset = (long)((char *)&sh->word - (char *)&sh->elem);
+            head.list_op_pending = NULL;
+            if (syscall(SYS_set_robust_list, &head, sizeof head) != 0) _exit(7);
+            char c = 'x';
+            if (write(ready[1], &c, 1) != 1) _exit(8);
+            usleep(150000);
+            _exit(0);
+        }
+        close(ready[1]);
+        char c;
+        if (read(ready[0], &c, 1) != 1) return fail("robust handshake");
+        int tid = sh->holder;
+        /* Contended robust waiters set FUTEX_WAITERS, as glibc does; the
+           kernel only wakes such waiters when marking OWNER_DIED. */
+        int expect = tid | 0x80000000;
+        sh->word = expect;
+        struct timespec to;
+        to.tv_sec = 2;
+        to.tv_nsec = 0;
+        errno = 0;
+        long r = syscall(SYS_futex, &sh->word, 0, expect, &to, NULL, 0);
+        if (r != 0 && errno == ETIMEDOUT) return fail("robust wake");
+        if (r != 0 && errno != EAGAIN) return fail("robust wait");
+        int st;
+        if (waitpid(ch, &st, 0) != ch || !WIFEXITED(st) || WEXITSTATUS(st) != 0)
+            return fail("robust child");
+        if ((sh->word & 0x3fffffff) != 0 || (sh->word & 0x40000000) == 0)
+            return fail("robust owner died");
+        munmap(sh, 4096);
+        printf("DIFF_ROBUSTFUTEX_OK\n");
+    }
+
     int memfd = memfd_create("diff", 0);
+
     if (memfd < 0) return fail("memfd_create");
     close(memfd);
 

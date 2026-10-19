@@ -87,6 +87,7 @@ impl Process{
  if !anon && !iouring &&(flags&MAP_SHARED!=0){return Err(crate::errno::ENODEV)}
   let size=Self::up(len as u64)?;
   let mut vf=Self::vm_flags(prot)?;
+  if !iouring&&flags&MAP_SHARED!=0{vf.0|=VmFlags::SHARED.0;}
   if iouring{if flags&MAP_SHARED==0||size!=PAGE as usize{return Err(crate::errno::EINVAL)}vf.0|=VmFlags::EXTERNAL.0;}
  let (vma_kind,vma_cow)=if iouring {
   (VmKind::Anon,false)
@@ -238,6 +239,12 @@ impl Process{
   let child=self.root().clone_bootstrap(&access,slots)?;
   for &slot in slots{if let Err(e)=share_slot(&self.root(),&access,&child,slot){for &done in slots{let _=child.destroy_private_slot(&access,done);}let _=crate::memory::free_frame(child.pml4);return Err(e)}}
   for &slot in slots{make_slot_readonly(&self.root(),&access,slot)}
+  /* MAP_SHARED pages were never meant to be copied: re-enable writes on
+     both sides so the shared frames stay shared (no COW on either side). */
+  self.vm.shared_writable_ranges(|s,e|{
+   writable_range(&access,&self.root(),s as u64,e as u64);
+   writable_range(&access,&child,s as u64,e as u64);
+  });
   /* Stale writable TLB entries would bypass the COW fault; reload CR3. */
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
@@ -262,6 +269,7 @@ impl Process{
    if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
    if let Err(e)=crate::memory::free_frame(self.cr3){crate::println!("warning: process PML4 recycle failed errno={}",e);cleanup_ok=false}
    if self.seccomp_filter!=0{if let Err(e)=seccomp_filter_release(self.seccomp_filter as u64){crate::println!("warning: seccomp filter release failed errno={}",e);cleanup_ok=false}self.seccomp_filter=0;self.seccomp_filter_len=0;}
+   crate::record_lock::release_pid(crate::task::current_pid());
    let closed_fds=self.fds.close_all();
    self.vm.clear();
    if closed_fds!=fd_descriptors||self.fds.descriptor_count()!=0||self.vm.resource_stats()!=crate::vm::ResourceStats::default(){cleanup_ok=false}
@@ -284,6 +292,31 @@ impl Process{
 impl Drop for Process{fn drop(&mut self){if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}}}
 pub fn fs_base()->u64{crate::task::fs_base()}
 pub fn set_fs_base(v:u64)->bool{if v<crate::usercopy::USER_MAX as u64{crate::task::set_current_fs_base(v);true}else{false}}
+/* Re-asserts WRITABLE on present leaves of [start,end) so shared anonymous
+   pages keep behaving like one frame in both address spaces. */
+fn writable_range(a:&Identity,root:&PageTableRoot,start:u64,end:u64){
+ use crate::arch::x86_64::paging::{PRESENT,WRITABLE,ADDR};
+ let pml4=unsafe{a.table(root.pml4)};
+ let mut va=start&!(4096-1);
+ while va<end{
+  let e4=pml4[(va>>39&511)as usize];
+  if e4&PRESENT!=0{
+   let pdpt=unsafe{a.table(e4&ADDR)};
+   let e3=pdpt[(va>>30&511)as usize];
+   if e3&PRESENT!=0&&e3&(1<<7)==0{
+    let pd=unsafe{a.table(e3&ADDR)};
+    let e2=pd[(va>>21&511)as usize];
+    if e2&PRESENT!=0&&e2&(1<<7)==0{
+     let pt=unsafe{a.table(e2&ADDR)};
+     let i1=(va>>12&511)as usize;
+     let e1=pt[i1];
+     if e1&PRESENT!=0{pt[i1]=e1|WRITABLE;}
+    }
+   }
+  }
+  va+=4096;
+ }
+}
 fn make_slot_readonly(root:&PageTableRoot,a:&Identity,slot:usize){
  let pml4=unsafe{a.table(root.pml4)};
  let top=pml4[slot];

@@ -296,6 +296,59 @@ fn sys_dup3(oldfd:usize,newfd:usize,flags:u64)->i64{
   Err(e)=>errno::neg(e),
  }
 }
+struct Flock{l_type:i16,l_whence:i16,l_start:i64,l_len:i64,l_pid:i32}
+fn read_flock(ptr:u64)->Result<Flock,i64>{
+ if ptr==0{return Err(errno::EFAULT)}
+ let mut b=[0u8;32];
+ crate::usercopy::copy_from_user(&mut b,ptr as usize)?;
+ Ok(Flock{l_type:i16::from_ne_bytes(b[0..2].try_into().unwrap()),l_whence:i16::from_ne_bytes(b[2..4].try_into().unwrap()),l_start:i64::from_ne_bytes(b[8..16].try_into().unwrap()),l_len:i64::from_ne_bytes(b[16..24].try_into().unwrap()),l_pid:i32::from_ne_bytes(b[24..28].try_into().unwrap())})
+}
+fn write_flock(ptr:u64,f:&Flock)->Result<(),i64>{
+ if ptr==0{return Err(errno::EFAULT)}
+ let mut b=[0u8;32];
+ b[0..2].copy_from_slice(&f.l_type.to_ne_bytes());b[2..4].copy_from_slice(&f.l_whence.to_ne_bytes());
+ b[8..16].copy_from_slice(&f.l_start.to_ne_bytes());b[16..24].copy_from_slice(&f.l_len.to_ne_bytes());
+ b[24..28].copy_from_slice(&f.l_pid.to_ne_bytes());
+ crate::usercopy::copy_to_user(ptr as usize,&b)
+}
+/* Resolves the würfl range against the file size and current offset. */
+fn flock_range(f:&Flock,size:u64,cur:u64)->Result<(u64,u64),i64>{
+ let base=match f.l_whence{0=>0i128,1=>cur as i128,2=>size as i128,_=>return Err(errno::EINVAL)};
+ let start=base+f.l_start as i128;
+ if start<0||start>u64::MAX as i128{return Err(errno::EOVERFLOW)}
+ if f.l_len==0{return Ok((start as u64,u64::MAX))}
+ let end=start+f.l_len as i128;
+ if end<0||end>u64::MAX as i128{return Err(errno::EINVAL)}
+ if f.l_len<0{Ok((end as u64,start as u64))}else{Ok((start as u64,end as u64))}
+}
+fn sys_fcntl_locks(fd:u64,cmd:u64,arg:u64)->i64{
+ use crate::record_lock::{F_RDLCK,F_WRLCK,F_UNLCK,Owner};
+ let ofd=cmd>=36;
+ let getlk=cmd==5||cmd==36;
+ let blocking=cmd==7||cmd==38;
+ let id=match fd_id(fd){Some(i)=>i,None=>return errno::neg(errno::EBADF)};
+ let (ino,size)=match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>(n.ino,crate::vfs::inode_size(n.ino).unwrap_or(n.size)),
+  _=>return errno::neg(errno::EINVAL),
+ };
+ let mut f=match read_flock(arg){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if f.l_type!=F_RDLCK&&f.l_type!=F_WRLCK&&f.l_type!=F_UNLCK{return errno::neg(errno::EINVAL)}
+ if getlk&&f.l_type==F_UNLCK{return errno::neg(errno::EINVAL)}
+ let (start,end)=match flock_range(&f,size,crate::fd::offset_get(id)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let pid=crate::task::current_pid();
+ let owner=if ofd{Owner::Ofd(id)}else{Owner::Pid(pid)};
+ if getlk{
+  let exclusive=f.l_type==F_WRLCK;
+  match crate::record_lock::query(ino,owner,exclusive,start,end){
+   None=>{f.l_type=F_UNLCK;f.l_pid=0;}
+   Some((rpid,rexcl,s,e))=>{f.l_type=if rexcl{F_WRLCK}else{F_RDLCK};f.l_whence=0;f.l_start=s as i64;f.l_len=if e==u64::MAX{0}else{(e-s)as i64};f.l_pid=rpid as i32;}
+  }
+  return match write_flock(arg,&f){Ok(())=>0,Err(e)=>errno::neg(e)};
+ }
+ if f.l_type==F_UNLCK{return match crate::record_lock::unlock(ino,owner,start,end){Ok(())=>0,Err(e)=>errno::neg(e)}}
+ let exclusive=f.l_type==F_WRLCK;
+ match crate::record_lock::set(ino,owner,exclusive,start,end,blocking){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
  let O_ACCMODE:u32=3;
  match cmd{
@@ -311,12 +364,7 @@ fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
    }
    None=>errno::neg(errno::EBADF)
   }, // F_SETFL
-  5=>{ // F_GETLK: no POSIX record locks exist, report unlocked
-   if arg!=0{let unlocked=2i16;if let Err(e)=crate::usercopy::copy_to_user(arg as usize,&unlocked.to_ne_bytes()){return errno::neg(e)}}
-   0
-  }
-  6=>0, // F_SETLK
-  7=>0, // F_SETLKW
+  5|6|7|36|37|38=>sys_fcntl_locks(fd as u64,cmd,arg), // F_GETLK/F_SETLK/F_SETLKW and F_OFD_*
   9=>fd_result(crate::fd::dup_from(fd,0)), // F_SETPIPE_SZ (unimplemented; reserve a slot low)
   10=>4096, // F_GETPIPE_SZ
   1030=>{ // F_DUPFD_CLOEXEC
@@ -1448,17 +1496,7 @@ fn sys_rt_sigpending(ptr:u64,setsize:u64)->i64{
 }
 fn sys_pause()->i64{
  loop{
-  let ready=crate::task::with_current_process(|p|{
-   let mut m=p.pending&!(p.sigmask&!crate::signal::unblockable_mask());
-   while m!=0{
-    let sig=m.trailing_zeros()as i32+1;
-    let h=p.handlers[sig as usize].handler;
-    if h!=crate::signal::SIG_IGN&&(h!=crate::signal::SIG_DFL||crate::signal::default_terminates(sig)){return true}
-    m&=!crate::signal::bit(sig);
-   }
-   false
-  }).unwrap_or(false);
-  if ready{return errno::neg(errno::EINTR)}
+  if crate::task::has_deliverable_signal(){return errno::neg(errno::EINTR)}
   crate::task::block_current();
  }
 }

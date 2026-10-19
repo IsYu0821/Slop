@@ -135,6 +135,26 @@ fn apply_ns_flags(p:&mut Process,flags:u64)->Result<(),i64>{
   Ok(())
 }
 pub fn finish_current(code:i32)->!{finish(code,0)}
+/* True when a pending signal is deliverable: it has a handler, or it is a
+   default action that terminates. Used by pause() and blocking fcntl locks. */
+pub fn has_deliverable_signal()->bool{
+ with_current_process(|p|{
+  let mut m=p.pending&!(p.sigmask&!crate::signal::unblockable_mask());
+  while m!=0{
+   let sig=m.trailing_zeros()as i32+1;
+   let h=p.handlers[sig as usize].handler;
+   if h!=crate::signal::SIG_IGN&&(h!=crate::signal::SIG_DFL||crate::signal::default_terminates(sig)){return true}
+   m&=!crate::signal::bit(sig);
+  }
+  false
+ }).unwrap_or(false)
+}
+/* Robust-futex list handling must run while the task's address space is
+   still active. */
+fn robust_exit(){
+ let head=with_current_process(|p|{let h=p.robust_list_head;p.robust_list_head=0;h}).unwrap_or(0);
+ if head!=0{crate::robust::process_exit(current_pid(),head);}
+}
 pub fn exit(code:i32)->!{
  let is_thread={let s=SCHED.lock();s.tasks[s.current].is_thread};
  if is_thread{
@@ -148,12 +168,13 @@ pub fn exit(code:i32)->!{
     let _=crate::futex::wake(ctid,1);
    }
   });
+  robust_exit();
   crate::println!("thread {} exited {}",current_pid(),code);
   finish(code,0);
  }
- crate::println!("task {} exited {}",current_pid(),code);with_current_process(|proc|{crate::println!("task exited status={}",code);proc.teardown_exit(code,0)});finish(code,0)}
+ robust_exit();crate::println!("task {} exited {}",current_pid(),code);with_current_process(|proc|{crate::println!("task exited status={}",code);proc.teardown_exit(code,0)});finish(code,0)}
 /* Kills the current task as if terminated by sig; wait status reports the signal. */
-pub fn exit_signal(sig:i32)->!{crate::println!("task {} terminated by signal {}",current_pid(),sig);with_current_process(|proc|proc.teardown_exit(128+sig,sig as u64));finish(128+sig,sig as u8)}
+pub fn exit_signal(sig:i32)->!{robust_exit();crate::println!("task {} terminated by signal {}",current_pid(),sig);with_current_process(|proc|proc.teardown_exit(128+sig,sig as u64));finish(128+sig,sig as u8)}
 pub fn stack_guard(){
  let r:u64;unsafe{core::arch::asm!("mov {}, rsp",out(reg)r,options(nostack,preserves_flags));}
  let top={let s=SCHED.lock();s.tasks[s.current].kernel_stack_top};
@@ -163,7 +184,7 @@ pub fn stack_guard(){
   crate::arch::halt();
  }
 }
-pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
+pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{robust_exit();crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
 fn schedule(blocked:bool){let(old_ptr,next)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}
  /* The user RSP is process-wide state in the syscall path; park the outgoing
     task's copy so a resuming thread restores its own. */

@@ -27,6 +27,8 @@ pub mod inotify;
 pub mod fd;
 pub mod flock;
 pub mod posix_timer;
+pub mod record_lock;
+pub mod robust;
 pub mod futex;
 pub mod vm;
 pub mod wait_queue;

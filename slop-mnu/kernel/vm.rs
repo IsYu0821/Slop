@@ -6,7 +6,7 @@ pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub areas:usize,pub bytes:usize,pub pages:usize}
 #[derive(Clone,Copy,Default,PartialEq,Eq)] pub struct VmFlags(pub u8);
-impl VmFlags { pub const READ:Self=Self(1);pub const WRITE:Self=Self(2);pub const EXEC:Self=Self(4);pub const USER:Self=Self(8);pub const ANON:Self=Self(16);pub const EXTERNAL:Self=Self(32);pub fn contains(self,x:Self)->bool{self.0&x.0==x.0} }
+impl VmFlags { pub const READ:Self=Self(1);pub const WRITE:Self=Self(2);pub const EXEC:Self=Self(4);pub const USER:Self=Self(8);pub const ANON:Self=Self(16);pub const EXTERNAL:Self=Self(32);pub const SHARED:Self=Self(64);pub fn contains(self,x:Self)->bool{self.0&x.0==x.0} }
 #[derive(Clone,Copy)] pub enum VmKind { Anon, File { inode: crate::vfs::Inode, offset: u64 }, Stack, Brk }
 impl Default for VmKind { fn default()->Self { VmKind::Anon } }
 #[derive(Clone,Copy,Default)] pub struct Area{pub start:usize,pub end:usize,pub flags:VmFlags,pub kind:VmKind,pub cow:bool,pub locked:bool}
@@ -69,6 +69,8 @@ impl Map{
   pub fn find_vma(&self,address:usize)->Option<Area>{self.areas[..self.len].iter().find(|a|address>=a.start&&address<a.end).copied()}
   pub fn set_cow(&mut self,start:usize,end:usize,cow:bool)->Result<(),i64>{let a=self.areas[..self.len].iter_mut().find(|a|a.start==start&&a.end==end).ok_or(crate::errno::EINVAL)?;a.cow=cow;Ok(())}
   pub fn set_locked_range(&mut self,addr:usize,len:usize,locked:bool)->Result<(),i64>{let end=addr.checked_add(len).ok_or(crate::errno::EINVAL)?;for a in self.areas[..self.len].iter_mut(){if a.start>=addr && a.end<=end {a.locked=locked}}Ok(())}
+  /* Ranges that must stay physically shared after fork. */
+  pub fn shared_writable_ranges(&self,mut cb:impl FnMut(usize,usize)){for a in &self.areas[..self.len]{if a.flags.contains(VmFlags::SHARED)&&a.flags.contains(VmFlags::WRITE){cb(a.start,a.end);}}}
   pub fn mark_all_cow(&mut self){for i in 0..self.len{if !self.areas[i].flags.contains(VmFlags::EXTERNAL){self.areas[i].cow=true;}}}
   pub fn clear(&mut self){self.areas=[Area{start:0,end:0,flags:VmFlags(0),kind:VmKind::Anon,cow:false,locked:false};MAX_AREAS];self.len=0;self.next_hint=MMAP_BASE;}
 }
