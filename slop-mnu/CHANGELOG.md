@@ -1,3 +1,12 @@
+## 0.61.0 - 2026-10-19
+- Made pthreads work end to end under musl: `pthread_create`/`pthread_join`, contended mutexes, condition variables, `pthread_kill` and per-thread TLS.
+- Implemented `CLONE_PARENT_SETTID`/`CLONE_CHILD_SETTID` tid writes (including correct `clone3` struct offsets), so musl's exiting threads release `__thread_list_lock` through the kernel's clear-child-tid write instead of deadlocking the first join.
+- Added a per-task `tgid`: threads inherit their creator's group id, `gettid` returns the task id while `getpid` returns the group id, and `tkill`/`tgkill` deliver `pthread_kill` to the addressed thread.
+- Fixed signal delivery from the syscall-exit path to use the live per-task stack frame, so a thread that blocked inside a syscall (for example in `nanosleep`) runs its handler instead of losing the signal against another task's stale frame.
+- Stopped sending `SIGCHLD` for thread exits and switched futex waiters to `(uaddr, pid)` identity so woken waiters cannot lose their wakeup to a recycled wait-table slot.
+- Reclaimed dead thread slots at the next thread spawn, folding each exited thread's CPU ticks into its thread-group leader like Linux does.
+- Expanded native/guest differential tests with pthread create/join, condvar, pthread_kill and TLS cases.
+
 ## 0.60.0 - 2026-10-19
 - Added per-process CPU-time accounting: the timer interrupt attributes each 1ms tick to user or kernel time from the interrupted CS.
 - Implemented CPU clocks: `clock_gettime(CLOCK_PROCESS_CPUTIME_ID/CLOCK_THREAD_CPUTIME_ID)` now return accounted CPU time and `clock_getres` reports the tick resolution.

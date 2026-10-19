@@ -22,6 +22,7 @@
 #include <sys/signalfd.h>
 #include <sys/sysinfo.h>
 #include <sys/syscall.h>
+#include <pthread.h>
 #include <poll.h>
 #include <signal.h>
 #include <dirent.h>
@@ -49,6 +50,52 @@ struct slop_io_params {
     struct slop_io_sq_off sq_off;
     struct slop_io_cq_off cq_off;
 };
+
+/* pthread section helpers. */
+static volatile long pt_counter;
+static pthread_mutex_t pt_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t pt_done_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pt_cond = PTHREAD_COND_INITIALIZER;
+static int pt_ready;
+static volatile sig_atomic_t pt_got_usr1, pt_got_tid;
+static __thread int pt_tls_slot;
+
+static void *pt_worker(void *arg) {
+    long n = (long)arg;
+    for (long i = 0; i < n; i++) {
+        pthread_mutex_lock(&pt_mtx);
+        pt_counter++;
+        pthread_mutex_unlock(&pt_mtx);
+    }
+    return (void *)(n * 2);
+}
+
+static void *pt_waiter(void *arg) {
+    (void)arg;
+    pthread_mutex_lock(&pt_done_mtx);
+    while (!pt_ready) pthread_cond_wait(&pt_cond, &pt_done_mtx);
+    pthread_mutex_unlock(&pt_done_mtx);
+    return (void *)42;
+}
+
+static void pt_usr1(int sig) {
+    (void)sig;
+    pt_got_usr1 = 1;
+    pt_got_tid = (sig_atomic_t)syscall(SYS_gettid);
+}
+
+static void *pt_sleeper(void *arg) {
+    (void)arg;
+    while (!pt_got_usr1) usleep(10000);
+    return (void *)(long)pt_got_tid;
+}
+
+static void *pt_tls_worker(void *arg) {
+    long n = (long)arg;
+    pt_tls_slot = (int)(n * 7);
+    for (int i = 0; i < 20; i++) usleep(2000);
+    return (void *)(long)pt_tls_slot;
+}
 
 static int fail(const char *what) {
     printf("DIFF_FAIL: %s (errno=%d)\n", what, errno);
@@ -1050,6 +1097,60 @@ int main(int argc, char **argv) {
         if (setitimer(ITIMER_PROF, &it, NULL) != 0) return fail("prof clear");
         if (sigprocmask(SIG_SETMASK, &oldset, NULL) != 0) return fail("vtimer unblock");
         printf("DIFF_VTIMER_OK\n");
+    }
+
+    /* pthreads: create/join, contended mutex, condvar, pthread_kill, TLS. */
+    {
+        pthread_t t[4];
+        long sums[4];
+        for (int i = 0; i < 4; i++) {
+            sums[i] = 100000 + i;
+            if (pthread_create(&t[i], 0, pt_worker, (void *)sums[i])) return fail("pthread create");
+        }
+        long total = 0, expect = 0;
+        for (int i = 0; i < 4; i++) {
+            void *r;
+            if (pthread_join(t[i], &r)) return fail("pthread join");
+            total += (long)r;
+            expect += sums[i] * 2;
+        }
+        if (total != expect) return fail("pthread retval");
+        if (pt_counter != 400006) return fail("pthread mutex");
+        printf("DIFF_PTHREAD_OK\n");
+
+        pthread_t w;
+        if (pthread_create(&w, 0, pt_waiter, 0)) return fail("cond create");
+        usleep(50000);
+        pthread_mutex_lock(&pt_done_mtx);
+        pt_ready = 1;
+        pthread_cond_signal(&pt_cond);
+        pthread_mutex_unlock(&pt_done_mtx);
+        void *r;
+        if (pthread_join(w, &r)) return fail("cond join");
+        if ((long)r != 42) return fail("cond retval");
+        printf("DIFF_COND_OK\n");
+
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = pt_usr1;
+        sa.sa_flags = SA_RESTART;
+        if (sigaction(SIGUSR1, &sa, 0)) return fail("kill sigaction");
+        pthread_t sl;
+        if (pthread_create(&sl, 0, pt_sleeper, 0)) return fail("kill create");
+        usleep(50000);
+        if (pthread_kill(sl, SIGUSR1)) return fail("kill send");
+        if (pthread_join(sl, &r)) return fail("kill join");
+        if (!pt_got_usr1 || (long)r <= 0) return fail("kill delivery");
+        printf("DIFF_KILL_OK\n");
+
+        pthread_t tt[3];
+        for (int i = 0; i < 3; i++)
+            if (pthread_create(&tt[i], 0, pt_tls_worker, (void *)(long)(i + 1))) return fail("tls create");
+        for (int i = 0; i < 3; i++) {
+            if (pthread_join(tt[i], &r)) return fail("tls join");
+            if ((long)r != (i + 1) * 7) return fail("tls value");
+        }
+        printf("DIFF_TLS_OK\n");
     }
 
     int memfd = memfd_create("diff", 0);

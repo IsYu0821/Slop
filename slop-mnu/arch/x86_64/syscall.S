@@ -49,7 +49,9 @@ syscall_entry:
        the register frame so SYSRET enters the user handler. The saved frame
        sits at an 8-mod-16 offset, so pad once to keep the SysV ABI stack
        16-byte aligned for the callee. */
-    mov SYSCALL_FRAME(%rip), %rdi
+    /* rsp is exactly the per-task frame base here; the SYSCALL_FRAME global
+       may belong to another task if this one blocked inside its syscall. */
+    mov %rsp, %rdi
     test %rdi, %rdi
     jz .Lcheck_sysret
     push %rax

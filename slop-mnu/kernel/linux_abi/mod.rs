@@ -30,7 +30,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::OPEN=>sys_open(a[0],a[1],a[2]), nr::CREAT=>sys_creat(a[0],a[1]),
     nr::FSYNC=>sys_fsync(a[0] as usize), nr::FDATASYNC=>sys_fsync(a[0] as usize),
     nr::EVENTFD2=>sys_eventfd2(a[0],a[1]), nr::TIMERFD_CREATE=>sys_timerfd_create(a[0] as i32,a[1]),
-    nr::TIME=>sys_time(a[0]), nr::TGKILL=>sys_tgkill(a[0] as u32,a[1] as u32,a[2] as i32), nr::TKILL=>sys_tgkill(crate::task::current_pid(),a[0] as u32,a[1] as i32),
+    nr::TIME=>sys_time(a[0]), nr::TGKILL=>sys_tgkill(a[0] as u32,a[1] as u32,a[2] as i32), nr::TKILL=>sys_tgkill(crate::task::current_tgid(),a[0] as u32,a[1] as i32),
     nr::RT_SIGPENDING=>sys_rt_sigpending(a[0],a[1]), nr::RT_SIGTIMEDWAIT=>sys_rt_sigtimedwait(a[0],a[1],a[2],a[3]),
     nr::GETPRIORITY=>0, nr::SETPRIORITY=>0, nr::PAUSE=>sys_pause(), nr::ALARM=>sys_alarm(a[0]),
     nr::GETITIMER=>sys_getitimer(a[0],a[1]), nr::SETITIMER=>sys_setitimer(a[0],a[1],a[2]),
@@ -42,7 +42,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
     nr::MPROTECT=>proc_unit(|p|p.mprotect(a[0] as usize,a[1] as usize,a[2])),
     nr::MUNMAP=>proc_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_u64(|p|Ok(p.brk(a[0]))),
-    nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID|nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
+    nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID=>crate::task::current_tgid() as i64, nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
     nr::EXECVE=>sys_execve(a[0],a[1],a[2]),
     nr::GETUID=>sys_getuid(), nr::GETGID=>sys_getgid(), nr::GETEUID=>sys_geteuid(), nr::GETEGID=>sys_getegid(),
     nr::SETUID=>sys_setuid(a[0] as u32), nr::SETGID=>sys_setgid(a[0] as u32), nr::SETREUID=>sys_setreuid(a[0] as u32,a[1] as u32),
@@ -234,7 +234,7 @@ fn sys_clone(a:[u64;6])->i64{
   if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
   if a[1]==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,a[1],a[4],a[3],flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::spawn_thread(frame,a[1],a[4],a[3],a[2],flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
   if flags & !(0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000)!=0{return errno::neg(errno::EINVAL)}
@@ -751,13 +751,14 @@ fn sys_clone3(args:u64)->i64{
  let mut b=[0u8;64];
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,args as usize)}{return errno::neg(e)}
  let flags=u64::from_ne_bytes(b[0..8].try_into().unwrap())&!17;
- let stack=u64::from_ne_bytes(b[24..32].try_into().unwrap());
- let tls=u64::from_ne_bytes(b[40..48].try_into().unwrap());
- let ctid=u64::from_ne_bytes(b[32..40].try_into().unwrap());
+ let ctid=u64::from_ne_bytes(b[16..24].try_into().unwrap());
+ let ptid=u64::from_ne_bytes(b[24..32].try_into().unwrap());
+ let stack=u64::from_ne_bytes(b[40..48].try_into().unwrap());
+ let tls=u64::from_ne_bytes(b[56..64].try_into().unwrap());
  if flags&0x100!=0{
   if stack==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,stack,tls,ctid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::spawn_thread(frame,stack,tls,ctid,ptid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if flags!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
@@ -1596,9 +1597,8 @@ fn sys_time(ptr:u64)->i64{
  sec
 }
 fn sys_tgkill(tgid:u32,pid:u32,sig:i32)->i64{
- if tgid!=pid{return errno::neg(errno::EINVAL)}
  if sig==0{return 0}
- match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
+ match crate::task::signal_task(tgid,pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 
 #[repr(C)] struct StatFs{f_type:i64,f_bsize:i64,f_blocks:u64,f_bfree:u64,f_bavail:u64,f_files:u64,f_ffree:u64,f_fsid:i64,f_namelen:i64,f_frsize:i64,f_flags:i64,f_spare:[i64;4]}

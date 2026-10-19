@@ -22,7 +22,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
   exit 1
 fi
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -85,7 +85,7 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1

@@ -46,13 +46,15 @@ fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
  };
  let pid=task::current_pid();
  loop{
-  let slot={let mut w=WAITERS.lock();
+  {let mut w=WAITERS.lock();
    if w.iter().any(|e|e.used&&e.uaddr==uaddr&&e.pid==pid){return Err(errno::EAGAIN)}
-   match w.iter().position(|e|!e.used){Some(i)=>{w[i]=Waiter{used:true,uaddr,pid};i},None=>return Err(errno::ENOMEM)}};
+   match w.iter().position(|e|!e.used){Some(i)=>{w[i]=Waiter{used:true,uaddr,pid}},None=>return Err(errno::ENOMEM)}};
   let res=block_until(deadline);
-  /* wake() clears the slot, so a cleared slot means we were woken. */
-  let woken={let mut w=WAITERS.lock();let held=w[slot].used;w[slot]=EMPTY;!held};
-  if woken{return Ok(0)}
+  /* wake() removes our entry; find it by identity rather than slot index,
+     since the slot may have been reused by another waiter meanwhile. */
+  let still_registered={let mut w=WAITERS.lock();
+   match w.iter().position(|e|e.used&&e.uaddr==uaddr&&e.pid==pid){Some(i)=>{w[i]=EMPTY;true},None=>false}};
+  if !still_registered{return Ok(0)}
   match res{Ok(())=>continue,Err(e)=>return Err(e)}
  }
 }
