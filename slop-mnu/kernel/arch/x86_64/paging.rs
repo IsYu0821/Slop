@@ -19,5 +19,31 @@ impl PageTableRoot{
     if let Err(e)=crate::memory::free_frame(pd_pa){return Err(e)}pdpt[i]=0;}
    if let Err(e)=crate::memory::free_frame(pdpt_pa){return Err(e)}pml4[slot]=0;Ok(())}
  pub unsafe fn activate(&self){unsafe{core::arch::asm!("mov cr3, {}",in(reg)self.pml4,options(nostack,preserves_flags));}}
+ /* Installs the kernel direct map: `slots` PML4 entries of 512 GiB each at
+    PHYS_BASE, backed by 1 GiB pages covering the whole physical address
+    space (RAM and MMIO alike). Runs before the kernel moves to the high
+    half, so it must be given an identity accessor. */
+ pub fn install_direct_map<A:PhysAccess>(&self,a:&A,slots:usize)->Result<(),&'static str>{
+  let base_slot=((crate::arch::x86_64::phys::PHYS_BASE>>39)&511)as usize;
+  for s in 0..slots{
+   if base_slot+s>=512{return Err("direct map exceeds PML4")}
+   let pdpt=memory::alloc_frame().ok_or("direct map allocation failed")?;
+   let t=unsafe{a.table(pdpt)};
+   for i in 0..512{t[i]=(((s*512+i)as u64)<<30)|PRESENT|WRITABLE|(1<<7);}
+   let p=unsafe{a.table(self.pml4)};
+   p[base_slot+s]=pdpt|PRESENT|WRITABLE;
+  }
+  Ok(())
+ }
+ /* Zeroes every PML4 entry except `keep`: used once after the move to the
+    high half to drop all firmware mappings in one step. */
+ pub unsafe fn keep_slots<A:PhysAccess>(&self,a:&A,keep:&[usize]){
+  let t=unsafe{a.table(self.pml4)};
+  for i in 0..512{if !keep.contains(&i){t[i]=0}}
+  unsafe{core::arch::asm!("mov cr3, {}",in(reg)self.pml4,options(nostack,preserves_flags));}
+ }
 }
 #[inline]pub unsafe fn invlpg(va:u64){unsafe{core::arch::asm!("invlpg [{}]",in(reg)va,options(nostack,preserves_flags));}}
+/* One-way move to the high half. `rsp` and `entry` are direct-map addresses;
+   the firmware page table stays active but already contains the direct map. */
+#[unsafe(naked)]pub unsafe extern "sysv64" fn enter_high(rsp:u64,entry:u64)->!{core::arch::naked_asm!("mov rsp, rdi","jmp rsi")}

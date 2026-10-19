@@ -37,7 +37,6 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
     a static ET_EXEC keeps its absolute entry-derived slot. */
  let image_slot=if interp.is_some(){((core::cmp::max(exe_base,LD_BASE)>>39)&511)as usize}else if is_pie{((exe_base>>39)&511)as usize}else{((parsed.header.entry>>39)&511)as usize};
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
- if image_slot==0{return Err("image must not share bootstrap identity slot")}
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;let root=firmware.clone_bootstrap(&access,&[image_slot,stack_slot,mmap_slot]).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){

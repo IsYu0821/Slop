@@ -1,5 +1,5 @@
 //! Allocation-free initramfs VFS with read/write support.
-use crate::{arch::x86_64::{paging::PhysAccess,phys::Identity},errno,sync::SpinLock,vm::VmFlags};
+use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
 pub type Result<T>=core::result::Result<T,i64>;
 pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
 #[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub npages:u8,pub name:[u8;NAME_MAX+1],pub name_len:usize}
@@ -136,8 +136,8 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
  if mode&0o170000==S_IFREG||mode&0o170000==S_IFLNK{
   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
   unsafe{Identity.table(frame).fill(0)}
-  if let Some(bytes)=data{unsafe{core::slice::from_raw_parts_mut(frame as*mut u8,bytes.len()).copy_from_slice(bytes)}size=bytes.len()as u64;}
-  pages[0]=frame;npages=1;capacity=4096;pointer=frame as*mut u8;
+  if let Some(bytes)=data{unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,bytes.len()).copy_from_slice(bytes)}size=bytes.len()as u64;}
+  pages[0]=phys_to_virt(frame);npages=1;capacity=4096;pointer=phys_to_virt(frame)as*mut u8;
  }
  let idx=store.len;let mut name=[0u8;NAME_MAX+1];name[..relative.len()].copy_from_slice(relative.as_bytes());
  let node=Inode{ino:tmpfs_ino(fs_id,idx+1),mode,size,capacity,data:pointer,rdev,pages,npages,name,name_len:relative.len()};
@@ -175,7 +175,7 @@ fn tmpfs_rmdir(fs_id:usize,relative:&str,visible:&str)->Result<()>{
 }
 fn tmpfs_write_inode(node:&mut Inode,off:u64,src:&[u8])->Result<usize>{
  let end=off.checked_add(src.len()as u64).ok_or(errno::EINVAL)?;let needed=((end as usize+4095)/4096).max(1);
- while(node.npages as usize)<needed&&(node.npages as usize)<8{let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;unsafe{Identity.table(frame).fill(0)}node.pages[node.npages as usize]=frame;node.npages+=1;node.capacity=node.npages as u64*4096;}
+ while(node.npages as usize)<needed&&(node.npages as usize)<8{let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;unsafe{Identity.table(frame).fill(0)}node.pages[node.npages as usize]=phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;}
  if end>node.capacity{return Err(errno::ENOSPC)}
  let mut done=0usize;while done<src.len(){let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=node.npages as usize{return Err(errno::ENOSPC)}let frame=node.pages[pi];let n=core::cmp::min(src.len()-done,4096-po);unsafe{core::slice::from_raw_parts_mut((frame as*mut u8).add(po),n).copy_from_slice(&src[done..done+n])};done+=n;}
  if end>node.size{node.size=end}Ok(src.len())
@@ -212,7 +212,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
   let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
   let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
   unsafe{Identity.table(frame).fill(0)}
-  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:frame as*mut u8,rdev:0,pages:[frame,0,0,0,0,0,0,0],npages:1,name,name_len};
+  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len};
   let idx=m.len; m.nodes[idx]=node;
   m.len+=1;
   crate::inotify::notify(path,crate::inotify::IN_CREATE);
@@ -590,10 +590,10 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
  let tb=target.as_bytes();
  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
  unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
-  unsafe{core::slice::from_raw_parts_mut(frame as*mut u8,tb.len()).copy_from_slice(tb)}
+  unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,tb.len()).copy_from_slice(tb)}
  let ino=(m.len+2)as u64 + 0x1000;
  let mut name=[0u8;NAME_MAX+1]; let nl=path.len(); name[..nl].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:frame as*mut u8,rdev:0,pages:[frame,0,0,0,0,0,0,0],npages:1,name,name_len:nl};
+ let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -782,7 +782,7 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  while (node.npages as usize) < needed && (node.npages as usize) < 8 {
   let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
   unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
-  node.pages[node.npages as usize]=frame;
+  node.pages[node.npages as usize]=phys_to_virt(frame);
   node.npages+=1;
   node.capacity=(node.npages as u64)*4096;
  }
@@ -866,8 +866,8 @@ fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
  unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
  if target.len()>4095{return Err(errno::ENAMETOOLONG)}
- unsafe{core::slice::from_raw_parts_mut(frame as*mut u8,target.len()).copy_from_slice(target)}
+ unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,target.len()).copy_from_slice(target)}
  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
  let ino=0x93000 + path.len() as u64;
- Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),size:target.len() as u64,capacity:target.len() as u64,data:frame as*mut u8,rdev:0,pages:[frame,0,0,0,0,0,0,0],npages:1})
+ Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),size:target.len() as u64,capacity:target.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1})
 }

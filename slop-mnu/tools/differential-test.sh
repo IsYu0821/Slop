@@ -11,12 +11,14 @@ cleanup() {
   cp "$BACKUP_DIR/minimal-linux.S" tests/minimal-linux.S
   cp "$BACKUP_DIR/build-initramfs.py" tools/build-initramfs.py
   rm -f tests/musl/differential
+  rm -f tests/musl/nopie-helper
   rm -rf "$BACKUP_DIR"
 }
 trap cleanup EXIT
 
 "$MUSL" -static -O1 -o build/differential-host tests/differential.c
 "$MUSL" -O1 -o build/differential tests/differential.c
+"$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
 
 if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
@@ -54,6 +56,7 @@ envp: .quad env0, 0
 # /bin/hello
 INNER_EOF
 cp build/differential tests/musl/differential
+cp build/nopie-helper tests/musl/nopie-helper
 python3 - <<'PY'
 from pathlib import Path
 p=Path('tools/build-initramfs.py')
@@ -61,7 +64,7 @@ s=p.read_text()
 needle="('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),"
 if needle not in s:
     raise SystemExit('could not locate hello-net initramfs entry')
-s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').read_bytes(),0o100755),",1)
+s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').read_bytes(),0o100755),('/bin/nopie-helper',Path('tests/musl/nopie-helper').read_bytes(),0o100755),",1)
 p.write_text(s)
 PY
 ./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
@@ -85,7 +88,7 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_NOPIE_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1

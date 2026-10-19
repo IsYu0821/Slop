@@ -1153,6 +1153,21 @@ int main(int argc, char **argv) {
         printf("DIFF_TLS_OK\n");
     }
 
+    if (access("/bin/nopie-helper", X_OK) == 0) {
+        pid_t pid = fork();
+        if (pid < 0) return fail("nopie fork");
+        if (pid == 0) {
+            char *args[] = { "/bin/nopie-helper", "fixed", 0 };
+            char *env[] = { "SLOP_MNU_NOPIE=1", 0 };
+            execve("/bin/nopie-helper", args, env);
+            _exit(71);
+        }
+        int st;
+        if (waitpid(pid, &st, 0) != pid) return fail("nopie waitpid");
+        if (!WIFEXITED(st) || WEXITSTATUS(st) != 17) return fail("nopie exec");
+        printf("DIFF_NOPIE_OK\n");
+    }
+
     int memfd = memfd_create("diff", 0);
 
     if (memfd < 0) return fail("memfd_create");

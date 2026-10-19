@@ -5,6 +5,7 @@
 //! after notifications (QEMU processes a notification synchronously when it
 //! is written, so the used ring is current by the time the port write
 //! returns).
+use crate::arch::x86_64::phys::virt_to_phys;
 use crate::arch::x86_64::port;
 use crate::sync::SpinLock;
 use core::sync::atomic::Ordering;
@@ -77,7 +78,7 @@ fn setup_queue(io:u16,q:u16,ring:*mut u8,min:usize)->Result<(),&'static str>{
   port::outw(io+QUEUE_SELECT,q);
   let size=port::inw(io+QUEUE_SIZE)as usize;
   if size<min{return Err("virtio queue smaller than requested")}
-  port::outl(io+QUEUE_ADDR,(ring as u64>>12)as u32);
+  port::outl(io+QUEUE_ADDR,(virt_to_phys(ring as u64)>>12)as u32);
  }
  Ok(())
 }
@@ -97,7 +98,7 @@ pub fn init()->Result<[u8;6],&'static str>{
  setup_queue(io,TXQ,tx_ring(),TX_BUFS)?;
  unsafe{
   for i in 0..6{net.mac[i]=port::inb(io+CONFIG_MAC+i as u16)}
-  for i in 0..RX_BUFS{desc_set(rx_ring(),i,rx_buf(i)as u64,BUF_SZ as u32,DESC_WRITE)}
+  for i in 0..RX_BUFS{desc_set(rx_ring(),i,virt_to_phys(rx_buf(i)as u64),BUF_SZ as u32,DESC_WRITE)}
   let ai=avail_idx(rx_ring());
   for i in 0..RX_BUFS{avail_slot(rx_ring(),i).write_volatile(i as u16)}
   ai.write_volatile(RX_BUFS as u16);
@@ -149,7 +150,7 @@ pub fn send_frame(frame:&[u8])->Result<(),i64>{
  unsafe{
   for b in 0..VNET_HDR{tx_buf(i).add(b).write_volatile(0)}
   core::ptr::copy_nonoverlapping(frame.as_ptr(),tx_buf(i).add(VNET_HDR),frame.len());
-  desc_set(tx_ring(),i,tx_buf(i)as u64,(frame.len()+VNET_HDR)as u32,0);
+  desc_set(tx_ring(),i,virt_to_phys(tx_buf(i)as u64),(frame.len()+VNET_HDR)as u32,0);
   post(net.io,TXQ,tx_ring(),i);
   let mut spins=0u32;
   loop{

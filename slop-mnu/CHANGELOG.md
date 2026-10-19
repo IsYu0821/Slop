@@ -1,3 +1,11 @@
+## 0.62.0 - 2026-10-19
+- Relocated the kernel to a high-half image base at boot: a pre-relocation stage clones the firmware PML4, maps the image at `0xffff_9000_0000_0000` and a 1 GiB direct map at `0xffff_8000_0000_0000`, copies the loaded PE image, applies its `DIR64` base relocations, jumps high and drops every other PML4 slot.
+- BootInfo ABI 2 reports the loader-chosen `image_base`/`image_size`, so self-relocation works regardless of where OVMF placed the image.
+- Added a physical-access abstraction (`EarlyPhys` identity during table construction, direct-map `Identity` afterwards, `phys_to_virt`, page-walking `virt_to_phys`) and converted virtio-net/virtio-blk DMA, APIC/IOAPIC MMIO, initrd and VFS/process/seccomp frame access to it.
+- Removed the `exec` slot-0 rejection: standard non-PIE static binaries linked at `0x400000` now run unmodified; user address-space clones keep the direct map and kernel image as supervisor mappings.
+- Test stubs and `/init` now link at `0x400000`, and a `-no-pie` musl helper (`DIFF_NOPIE_OK`) verifies fork+exec of a low-address `ET_EXEC` binary.
+- Fixed `virt_to_phys` to preserve the in-page offset, which had aliased DMA buffers within a page and broken ARP/network traffic.
+
 ## 0.61.0 - 2026-10-19
 - Made pthreads work end to end under musl: `pthread_create`/`pthread_join`, contended mutexes, condition variables, `pthread_kill` and per-thread TLS.
 - Implemented `CLONE_PARENT_SETTID`/`CLONE_CHILD_SETTID` tid writes (including correct `clone3` struct offsets), so musl's exiting threads release `__thread_list_lock` through the kernel's clear-child-tid write instead of deadlocking the first join.

@@ -1,4 +1,5 @@
 //! Legacy virtio-block (virtio 0.9.5) PCI driver.
+use crate::arch::x86_64::phys::virt_to_phys;
 use crate::arch::x86_64::port;
 use crate::sync::SpinLock;
 use core::sync::atomic::Ordering;
@@ -59,7 +60,7 @@ fn setup_queue(io:u16,ring:*mut u8)->Result<(),&'static str>{
   let qsize=size.min(MAX_Q);
   let used_off=((16*qsize + 4 + 2*qsize)+4095)&!4095;
   unsafe{USED_OFF=used_off;}
-  port::outl(io+QUEUE_ADDR,(ring as u64>>12)as u32);
+  port::outl(io+QUEUE_ADDR,(virt_to_phys(ring as u64)>>12)as u32);
  }
  Ok(())
 }
@@ -77,9 +78,9 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
   (hdr.add(8) as *mut u64).write_volatile(sector);
   BLK_STATUS.0[0]=0xff;
   // descriptors
-  desc_set(r,0,core::ptr::addr_of!(REQ.0) as u64,16,1);
-  desc_set(r,1,core::ptr::addr_of!(DATA.0) as u64,512, if typ==VIRTIO_BLK_T_IN {1} else {0}); // VRING_DESC_F_WRITE=2? Wait flags 2, not 1
-  desc_set(r,2,core::ptr::addr_of!(BLK_STATUS.0) as u64,1,2);
+  desc_set(r,0,virt_to_phys(core::ptr::addr_of!(REQ.0) as u64),16,1);
+  desc_set(r,1,virt_to_phys(core::ptr::addr_of!(DATA.0) as u64),512, if typ==VIRTIO_BLK_T_IN {1} else {0}); // VRING_DESC_F_WRITE=2? Wait flags 2, not 1
+  desc_set(r,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0) as u64),1,2);
   // fix flags
   let d1=r.add(16); (d1.add(12) as *mut u16).write_volatile(if typ==VIRTIO_BLK_T_IN {3} else {1});
   let d2=r.add(32); (d2.add(12) as *mut u16).write_volatile(2);

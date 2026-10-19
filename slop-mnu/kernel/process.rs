@@ -218,7 +218,7 @@ impl Process{
     let file_off=offset + (page as u64 - vma.start as u64);
     let mut buf=[0u8;4096];
     let _=crate::vfs::read_off(inode,file_off,&mut buf);
-    unsafe{core::slice::from_raw_parts_mut(frame as *mut u8,4096).copy_from_slice(&buf);}
+    unsafe{core::slice::from_raw_parts_mut(crate::arch::x86_64::phys::phys_to_virt(frame)as *mut u8,4096).copy_from_slice(&buf);}
     root.map_page(&phys,page as u64,frame,pf).map_err(|_|())?
    }
    _=>{

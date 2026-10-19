@@ -14,7 +14,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
   let (filter,len)=crate::task::with_current_process(|p|(p.seccomp_filter,p.seccomp_filter_len)).unwrap_or((0,0));
   if filter!=0 && len>0 {
    let data=SeccompData{nr:n as i32,arch:0xc000003e,ip:0,args:a};
-   let action=seccomp_eval(filter as *const SockFilter,len as usize,&data);
+   let action=seccomp_eval(crate::arch::x86_64::phys::phys_to_virt(filter as u64)as *const SockFilter,len as usize,&data);
     match action&0xffff0000 {
      0x80000000|0x00000000=>crate::task::exit_signal(9),
      0x00050000=>{let e=((action&0xffff)as i64).min(4095);return errno::neg(if e==0{errno::EPERM}else{e})},
@@ -1999,8 +1999,8 @@ fn sys_seccomp(op:u32,flags:u32,uargs:u64)->i64{
    let size=len*8;
    let mut buf=[0u8;4096];
    if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..size],fptr as usize){let _=crate::memory::free_frame(frame);return errno::neg(e)}
-   unsafe{core::slice::from_raw_parts_mut(frame as *mut u8,size).copy_from_slice(&buf[..size]);}
-     let filter=frame as *const SockFilter;
+   unsafe{core::slice::from_raw_parts_mut(crate::arch::x86_64::phys::phys_to_virt(frame)as *mut u8,size).copy_from_slice(&buf[..size]);}
+     let filter=crate::arch::x86_64::phys::phys_to_virt(frame)as *const SockFilter;
      if !seccomp_validate(filter,len){let _=crate::memory::free_frame(frame);return errno::neg(errno::EINVAL)}
      if let Err(e)=crate::process::seccomp_filter_register(frame){let _=crate::memory::free_frame(frame);return errno::neg(e)}
     let r=crate::task::with_current_process(|p|{
