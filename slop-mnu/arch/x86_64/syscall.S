@@ -37,8 +37,13 @@ syscall_entry:
     call syscall_dispatch_raw
     add $8, %rsp
     /* Park the dispatcher result in the saved-RAX slot so signal delivery and
-       rt_sigreturn can restore the interrupted syscall return value. */
+       rt_sigreturn can restore the interrupted syscall return value.
+       rt_sigreturn rewrote the whole frame with the interrupted context, so
+       parking our own result there would throw the syscall result away. */
+    cmpb $0, SIGRET_PENDING(%rip)
+    jne .Lno_park_rax
     mov %rax, 96(%rsp)
+.Lno_park_rax:
     cmpb $0, EXEC_PENDING(%rip)
     je .Lcheck_signal
     mov EXEC_RIP(%rip), %rdx

@@ -95,7 +95,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SCHED_GETAFFINITY=>sys_sched_getaffinity(a[0] as u32,a[1] as usize,a[2]),
     nr::POLL=>sys_poll(a[0],a[1] as i32,a[2] as i32),
     nr::PPOLL=>sys_ppoll(a[0],a[1] as i32,a[2],a[3]),
-    nr::RT_SIGSUSPEND=>{crate::signal::mask_op(crate::signal::SETMASK,a[0]).map(|_|crate::task::yield_now()).ok().map(|_|0).unwrap_or(errno::neg(errno::EFAULT));0},
+    nr::RT_SIGSUSPEND=>sys_rt_sigsuspend(a[0]),
     nr::SIGALTSTACK=>0,
     nr::GETDENTS=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::PREAD64=>sys_pread64(a[0],a[1],a[2] as i32,a[3] as i64),
@@ -107,6 +107,9 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::TIMER_CREATE=>sys_timer_create(a[0] as i32,a[1],a[2]), nr::TIMER_SETTIME=>sys_timer_settime(a[0] as u32,a[1],a[2],a[3]), nr::TIMER_GETTIME=>sys_timer_gettime(a[0] as u32,a[1]), nr::TIMER_GETOVERRUN=>sys_timer_getoverrun(a[0] as u32), nr::TIMER_DELETE=>sys_timer_delete(a[0] as u32),
     nr::CLONE3=>sys_clone3(a[0]),
     nr::FORK=>sys_fork(),
+    /* vfork shares the parent's stack in Linux; a copied child is a safe
+       equivalent for programs that exec immediately. */
+    nr::VFORK=>sys_fork(),
     nr::SOCKET=>sys_socket(a[0] as i32,a[1] as i32,a[2] as i32),
     nr::BIND=>sys_bind(a[0] as usize,a[1],a[2]),
     nr::SETSOCKOPT=>sys_setsockopt(a[0] as usize,a[1] as i32,a[2] as i32,a[3],a[4]),
@@ -202,7 +205,7 @@ fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
 fn sys_close(fd:u64)->i64{unit(crate::fd::close(fd as usize))}
 fn sys_fstat(fd:u64,ptr:u64)->i64 {let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};let mut st=Stat::default();
  match crate::fd::kind(id){
-  Some(crate::fd::OpenKind::Inode(n))=>{st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blocks=((n.size+511)/512)as i64;},
+  Some(crate::fd::OpenKind::Inode(n))=>{let live=crate::vfs::inode_size(n.ino).unwrap_or(n.size);st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=live as i64;st.st_blocks=((live+511)/512)as i64;},
   Some(crate::fd::OpenKind::Console)=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
   Some(crate::fd::OpenKind::PipeRead(_))|Some(crate::fd::OpenKind::PipeWrite(_))=>{st.st_mode=S_IFIFO|0o600;st.st_nlink=1;},
   Some(crate::fd::OpenKind::Socket(_))=>{st.st_mode=0o140000|0o600;st.st_nlink=1;},
@@ -252,8 +255,8 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
    return cpid as i64;
   }
   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
-  Ok(crate::task::WaitOutcome::Blocked)=>crate::task::block_current(),
-  Err(e)=>return errno::neg(e),
+  Ok(crate::task::WaitOutcome::Blocked)=>{crate::task::block_current()}
+  Err(e)=>{return errno::neg(e)},
  }}
 }
 fn sys_kill(pid:u32,sig:i32)->i64{
@@ -277,6 +280,21 @@ fn sys_rt_sigprocmask(how:u64,set:u64,old:u64)->i64{
  let new_mask=if set==0{0}else{match user_u64(set){Ok(v)=>v,Err(e)=>{return errno::neg(e)}}};
   let prev=match crate::signal::mask_op(how,new_mask){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&prev as*const u64).cast::<u8>(),8)};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0
+}
+/* rt_sigsuspend(sigset_size, newset, oldset): install the new mask, sleep
+   until a signal arrives, then restore the previous mask. */
+fn sys_rt_sigsuspend(newset:u64)->i64{
+ let new_mask=if newset==0{0}else{match user_u64(newset){Ok(v)=>v,Err(e)=>{return errno::neg(e)}}};
+ let prev=match crate::signal::mask_op(crate::signal::SETMASK,new_mask){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let _=prev;
+ /* Sleep until a signal is deliverable; the signal wakes this task. */
+ loop{
+  if crate::signal::pending().is_some(){break}
+  if !crate::task::block_current_until_signal(){break}
+ }
+ /* The suspend mask stays in effect: the signal that ends the sleep is
+    delivered at the syscall exit, and it must still be unblocked then. */
+ errno::neg(errno::EINTR)
 }
 fn sys_rt_sigreturn()->i64{unsafe{crate::arch::x86_64::syscall::signal_restore_frame()}}
 fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
@@ -406,7 +424,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let mut ev=["";EXEC_MAX_VEC];for i in 0..ec{ev[i]=match core::str::from_utf8(&eb[i][..el[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
- let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(_)=>return errno::neg(errno::ENOEXEC)};
+ let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
  crate::posix_timer::release_pid(crate::task::current_pid());
@@ -635,7 +653,8 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
 fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  const AT_FDCWD:i64=-100;
  if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
- let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ /* readlinkat reports the link itself: the last component is not followed. */
+ let (out,nr)=match resolve_path_ptr_nofollow(path){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
@@ -1039,7 +1058,7 @@ fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let input_str=if ilen>0 && input[0]!=0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
-  let n=crate::vfs::resolve(cwd_slice,input_str,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve_follow(cwd_slice,input_str,true,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
 }
 fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
@@ -1057,7 +1076,7 @@ fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let input_str=if ilen>0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
-  let n=crate::vfs::resolve_nofollow(cwd_slice,input_str,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve_follow(cwd_slice,input_str,false,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
 }
 fn sys_chdir(path_ptr:u64)->i64{

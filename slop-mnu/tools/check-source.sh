@@ -27,7 +27,7 @@ required={
  'kernel/arch/x86_64/apic.rs':['TIMER_VECTOR','write(0xb0,0)','1<<17','phys_to_virt'],
  'arch/x86_64/irq.S':['apic_timer_entry','mov 128(%r15), %rdi','call apic_timer_rust','iretq'],
  'kernel/sync.rs':['IrqSpinLock','irq_save','irq_restore'],
- 'kernel/task.rs':['struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
+ 'kernel/task.rs':['fpu_area','fpu_save_regs','struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
  'kernel/arch/x86_64/msr.rs':['IA32_FS_BASE','IA32_KERNEL_GS_BASE'],
  'kernel/arch/x86_64/descriptors.rs':['set_rsp0'],
  'kernel/arch/x86_64/syscall.rs':['set_kernel_stack'],
@@ -50,7 +50,7 @@ required={
  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
  'tests/hello-linux.S':['mov $9,%rax','mov $10,%rax','mov $11,%rax','mov $12,%rax','cmpq $1,(%rsp)','/bin/hello-c'],
- 'kernel/linux_abi/mod.rs':['sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill'],
+ 'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill'],
  'kernel/linux_abi/nr.rs':['CLONE:u64=56','WAIT4:u64=61','DUP2:u64=33','PIPE2:u64=293','GETPEERNAME:u64=52'],
  'kernel/arch/x86_64/port.rs':['pub unsafe fn inb','pub unsafe fn outb','pub unsafe fn inl','pub unsafe fn outl'],
  'kernel/driver/pci.rs':['pub struct Bdf','Cam','read_bars','pub fn count'],
@@ -60,7 +60,10 @@ required={
  'tools/run-qemu.sh':['virtio-net-pci','disable-modern=on','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
  'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net'],
- 'arch/x86_64/context.S':['switch_context','mov %rsp,(%rdi)','mov %rsi,%rsp'],
+ 'arch/x86_64/context.S':['switch_context','mov %rsp,(%rdi)','mov %rsi,%rsp','movups %xmm0'],
+ 'tests/bbtest.sh':['out shell-echo','out fs-cat','out proc-signal','BB|done|end'],
+ 'tools/busybox-test.sh':['busybox compat: PASS','build/busybox','tests/musl/busybox'],
+ 'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
 }
 for name,tokens in required.items():
     text=(r/name).read_text()

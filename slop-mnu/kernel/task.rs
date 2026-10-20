@@ -7,8 +7,8 @@ const MAX_TASKS:usize=8;const STACK_SIZE:usize=65536;
 pub struct ResourceStats{pub active:usize,pub zombies:usize,pub runnable:usize,pub sleeping:usize,pub unused:usize}
 #[repr(align(16))]struct Stack([u8;STACK_SIZE]);
 #[derive(Clone,Copy,PartialEq)]pub enum State{Unused,Running,Runnable,Sleeping,Zombie}
-#[derive(Clone,Copy)]pub struct Task{pub pid:u32,pub tgid:u32,pub ppid:u32,pub pgid:u32,pub sid:u32,pub state:State,pub rsp:u64,pub kernel_stack_top:u64,pub cr3:u64,pub fs_base:u64,pub wake_tick:u64,pub wake_pending:bool,pub exit_code:i32,pub term_signal:u8,pub is_thread:bool,pub user_rsp:u64}
-const EMPTY:Task=Task{pid:0,tgid:0,ppid:0,pgid:0,sid:0,state:State::Unused,rsp:0,kernel_stack_top:0,cr3:0,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};
+#[derive(Clone,Copy)]pub struct Task{pub fpu:u64,pub pid:u32,pub tgid:u32,pub ppid:u32,pub pgid:u32,pub sid:u32,pub state:State,pub rsp:u64,pub kernel_stack_top:u64,pub cr3:u64,pub fs_base:u64,pub wake_tick:u64,pub wake_pending:bool,pub exit_code:i32,pub term_signal:u8,pub is_thread:bool,pub user_rsp:u64}
+const EMPTY:Task=Task{fpu:0,pid:0,tgid:0,ppid:0,pgid:0,sid:0,state:State::Unused,rsp:0,kernel_stack_top:0,cr3:0,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};
 struct Scheduler{tasks:[Task;MAX_TASKS],current:usize,next_pid:u32}
 static SCHED:IrqSpinLock<Scheduler>=IrqSpinLock::new(Scheduler{tasks:[EMPTY;MAX_TASKS],current:0,next_pid:2});
 static NEXT_NS:AtomicU64=AtomicU64::new(2);
@@ -18,8 +18,22 @@ fn uts_init(){unsafe{UTS_NAMESPACES[1][..4].copy_from_slice(b"slop");}}
 static PROCS:IrqSpinLock<[Option<Process>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
 static mut STACKS:[Stack;MAX_TASKS]=[const{Stack([0;STACK_SIZE])};MAX_TASKS];
 static NEED_RESCHED:AtomicBool=AtomicBool::new(false);static PID:AtomicU32=AtomicU32::new(1);
-unsafe extern "sysv64"{fn switch_context(old:*mut u64,new:u64);}
-pub fn init(bootstrap_stack_top:u64){uts_init();let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{pid:1,tgid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
+unsafe extern "sysv64"{fn switch_context(old:*mut u64,new:u64,old_fpu:u64,new_fpu:u64);}
+/* FXSAVE/FXRSTOR helpers: the FPU context lives in a 512 byte area per task
+   so floating point and SSE registers survive a context switch. */
+const FPU_AREA:usize=256;
+/// Per-slot SSE register file, kept out of the task stacks so saving the
+/// registers can never overwrite a live stack.
+#[repr(align(16))]
+struct FpuArea([u8;FPU_AREA]);
+static mut FPU_AREAS:[FpuArea;MAX_TASKS]=[const{FpuArea([0;FPU_AREA])};MAX_TASKS];
+/* The FXSAVE area must be 16-byte aligned and must not straddle a page,
+   so it sits at the page-aligned bottom of the task stack, which the growing
+   stack reaches last. */
+fn fpu_area(slot:usize)->u64{unsafe{core::ptr::addr_of!(FPU_AREAS[slot])as u64}}
+unsafe extern "sysv64"{fn fpu_save_regs(area:*mut u8);}
+fn fpu_save(addr:u64){let _=addr;}
+pub fn init(bootstrap_stack_top:u64){uts_init();fpu_save(fpu_area(0));let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{fpu:fpu_area(0),pid:1,tgid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
 pub fn current_pid()->u32{PID.load(Ordering::Relaxed)}
 pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
 pub fn current_pgid()->u32{let s=SCHED.lock();s.tasks[s.current].pgid}
@@ -64,12 +78,12 @@ fn take_slot(s:&mut Scheduler)->Result<usize,i64>{
 }
 fn alloc_pid(s:&mut Scheduler)->u32{let pid=s.next_pid;s.next_pid=s.next_pid.wrapping_add(1).max(2);pid}
 fn build_kernel_stack(slot:usize,entry:u64)->u64{let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let mut sp=(top&!15)-8;unsafe{sp-=8;*(sp as*mut u64)=entry;for _ in 0..6{sp-=8;*(sp as*mut u64)=0;}}sp}
-pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;s.tasks[slot]=Task{pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
 static KERNEL_ENTRIES:IrqSpinLock<[Option<fn()>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static USER_STARTS:IrqSpinLock<[Option<crate::exec_runtime::Loaded>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static FORK_RESUMES:IrqSpinLock<[Option<crate::arch::x86_64::syscall::UserFrame>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
-pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot)?;proc.set_exec_meta(&loaded);let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
-pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;let fs_base=s.tasks[parent].fs_base;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot)?;proc.set_exec_meta(&loaded);let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;let fs_base=s.tasks[parent].fs_base;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
 pub fn fork_process(frame:crate::arch::x86_64::syscall::UserFrame,flags:u64)->Result<u32,i64>{let child_cr3=match with_current_process(|p|p.clone_address_space()){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};let mut child=match with_current_process(|p|p.fork_child(child_cr3)){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};if let Err(e)=apply_ns_flags(&mut child,flags){child.abandon();return Err(e)}spawn_fork(child,frame)}
 extern "sysv64" fn user_thread_trampoline()->!{let slot=SCHED.lock().current;let loaded=USER_STARTS.lock()[slot].take().unwrap();crate::println!("task: entering user pid={} rip={:#x} rsp={:#x}",current_pid(),loaded.entry,loaded.rsp);unsafe{crate::arch::x86_64::user::enter(loaded.entry,loaded.rsp)}}
 /* Spawns a CLONE_VM thread: shares the caller's address space and descriptor
@@ -85,9 +99,9 @@ pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u6
  let mut s=SCHED.lock();
  let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>return Err(e)};
  let pid=alloc_pid(&mut s);let parent=s.current;let tgid=s.tasks[parent].tgid;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;
- let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);
+ let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
  FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);
- s.tasks[slot]=Task{pid,tgid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:true,user_rsp:child_stack};
+ s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:true,user_rsp:child_stack};
  drop(s);
  /* CLONE_PARENT_SETTID: store the child TID in the parent's memory (same
     address space here); CLONE_CHILD_SETTID: store it in the child's copy. */
@@ -109,6 +123,14 @@ pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
 pub fn sleep_until(tick:u64){let mut s=SCHED.lock();let current=s.current;if s.tasks[current].wake_pending{s.tasks[current].wake_pending=false;return}s.tasks[current].wake_tick=tick;s.tasks[current].state=State::Sleeping;drop(s);schedule(true)}
 fn wake_sleepers(now:u64){let mut s=SCHED.lock();for t in &mut s.tasks{if t.state==State::Sleeping&&t.wake_pending{t.wake_pending=false;t.state=State::Runnable}else if t.state==State::Sleeping&&t.wake_tick<=now{t.state=State::Runnable;}}}
 pub fn block_current(){let mut s=SCHED.lock();let current=s.current;if s.tasks[current].wake_pending{s.tasks[current].wake_pending=false;return}s.tasks[current].state=State::Sleeping;s.tasks[current].wake_tick=u64::MAX;drop(s);schedule(true)}
+/* Sleep until a signal is deliverable. Returns true when a signal is
+   pending after the sleep, false when the task woke for another reason. */
+pub fn block_current_until_signal()->bool{
+ let mut s=SCHED.lock();let current=s.current;
+ if s.tasks[current].wake_pending{s.tasks[current].wake_pending=false;return crate::signal::pending().is_some()}
+ s.tasks[current].state=State::Sleeping;s.tasks[current].wake_tick=u64::MAX;drop(s);schedule(true);
+ crate::signal::pending().is_some()
+}
 pub fn wake_pid(pid:u32)->bool{let mut s=SCHED.lock();if let Some(t)=s.tasks.iter_mut().find(|t|t.pid==pid&&t.state!=State::Unused&&t.state!=State::Zombie){if t.state==State::Sleeping{t.state=State::Runnable}else{t.wake_pending=true}true}else{false}}
 pub fn current_tgid()->u32{let s=SCHED.lock();s.tasks[s.current].tgid}
 /* Marks sig pending on the thread-group member (tgid,pid) and wakes it. */
@@ -221,11 +243,11 @@ pub fn stack_guard(){
  }
 }
 pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{robust_exit();crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
-fn schedule(blocked:bool){let(old_ptr,next)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}
+fn schedule(blocked:bool){let(old_ptr,next,old_fpu,next_fpu)= {let mut s=SCHED.lock();let old=s.current;if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;}
  /* The user RSP is process-wide state in the syscall path; park the outgoing
     task's copy so a resuming thread restores its own. */
  if s.tasks[old].state!=State::Unused{s.tasks[old].user_rsp=unsafe{crate::arch::x86_64::syscall::read_user_rsp()};}
- let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{s.tasks[old].state=State::Running;return}s.tasks[next].state=State::Running;s.current=next;(&mut s.tasks[old].rsp as*mut u64,s.tasks[next])};PID.store(next.pid,Ordering::Relaxed);unsafe{crate::arch::x86_64::syscall::write_user_rsp(next.user_rsp);apply_arch_state(next);switch_context(old_ptr,next.rsp)}}
+ let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{s.tasks[old].state=State::Running;return}s.tasks[next].state=State::Running;s.current=next;(&mut s.tasks[old].rsp as*mut u64,s.tasks[next],s.tasks[old].fpu,s.tasks[next].fpu)};PID.store(next.pid,Ordering::Relaxed);unsafe{crate::arch::x86_64::syscall::write_user_rsp(next.user_rsp);apply_arch_state(next);switch_context(old_ptr,next.rsp,old_fpu,next_fpu)}}
 
 pub fn set_current_fs_base(value:u64){let mut s=SCHED.lock();let current=s.current;s.tasks[current].fs_base=value;drop(s);unsafe{crate::arch::x86_64::msr::wrmsr(crate::arch::x86_64::msr::IA32_FS_BASE,value)}}
 pub fn fs_base()->u64{let s=SCHED.lock();s.tasks[s.current].fs_base}

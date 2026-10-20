@@ -30,8 +30,7 @@ pub fn send_self(sig:i32)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
  task::with_current_process(|p|{if unblockable(sig){p.sigmask&=!bit(sig)}p.pending|=bit(sig);Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
  Ok(())
-}
-pub fn action_get(sig:i32)->Result<Action,i64>{
+}pub fn debug_mask()->u64{task::with_current_process(|p|p.sigmask).unwrap_or(0)}pub fn action_get(sig:i32)->Result<Action,i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
  task::with_current_process(|p|{Ok(p.handlers[sig as usize])}).ok_or(crate::errno::ESRCH)?
 }

@@ -18,7 +18,9 @@ fn pack_vec(out:&mut [u8],out_len:&mut usize,items:&[&str]){
 }
 #[derive(Clone,Copy)]struct Owned{va:u64,pa:u64}const EMPTY:Owned=Owned{va:0,pa:0};
 struct Transaction<'a>{root:&'a PageTableRoot,phys:&'a Identity,pages:[Owned;MAX_COMMITTED],len:usize,committed:bool}
-impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{Self{root,phys,pages:[EMPTY;MAX_COMMITTED],len:0,committed:false}}fn page(&mut self,va:u64,flags:u64)->Result<u64,&'static str>{if let Some(pa)=self.root.translate(self.phys,va){return Ok(pa&!(PAGE-1))}if self.len==MAX_COMMITTED{return Err("ELF transaction page limit")}let pa=memory::alloc_frame().ok_or("out of physical frames")?;unsafe{self.phys.bytes(pa,PAGE as usize).fill(0)};if self.root.map_page(self.phys,va,pa,flags).is_err(){let _=memory::free_frame(pa);return Err("map_page failed")}self.pages[self.len]=Owned{va,pa};self.len+=1;Ok(pa)}fn commit(mut self){self.committed=true;}}
+impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{Self{root,phys,pages:[EMPTY;MAX_COMMITTED],len:0,committed:false}}fn page(&mut self,va:u64,flags:u64)->Result<u64,&'static str>{/* Always map a fresh frame: the address may still hold the old image's
+           page, and the exec teardown releases those frames afterwards. */
+ if self.len==MAX_COMMITTED{return Err("ELF transaction page limit")}let pa=memory::alloc_frame().ok_or("out of physical frames")?;unsafe{self.phys.bytes(pa,PAGE as usize).fill(0)};if self.root.map_page(self.phys,va,pa,flags).is_err(){let _=memory::free_frame(pa);return Err("map_page failed")}self.pages[self.len]=Owned{va,pa};self.len+=1;Ok(pa)}fn commit(mut self){self.committed=true;}}
 impl Drop for Transaction<'_>{fn drop(&mut self){if self.committed{return}for p in self.pages[..self.len].iter().rev(){let _=self.root.unmap_page(self.phys,p.va);let _=memory::free_frame(p.pa);}}}
 pub unsafe fn load_static(image:&[u8])->Result<Loaded,&'static str>{unsafe{load_static_args(image,&["/init"],&[],"/init",PageTableRoot::current().pml4)}}
 pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str,bootstrap_cr3:u64)->Result<Loaded,&'static str>{

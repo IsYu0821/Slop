@@ -1,3 +1,13 @@
+## 0.63.0 - 2026-10-20
+- Measured Linux compatibility with a real userspace: a static, non-PIE BusyBox 1.36.1 (musl) now runs in the guest and its output is compared byte for byte with the same binary on Linux (`tools/busybox-test.sh`, 115 checks over shell builtins, the filesystem, the text tools and process control).
+- Fixed the syscall result being lost when a signal arrived: `rt_sigreturn` restores the interrupted register frame, but the dispatcher overwrote it, so `wait4` returned 0 and shells lost the exit status of their children.
+- Path resolution now follows symlinks in every component, absolute link targets resolve from the root, and `readlinkat` reports the link itself instead of its target.
+- Fixed short reads on regular files, which truncated every initramfs file to its first page.
+- Implemented `rt_sigsuspend` properly (x86-64 passes the mask pointer in `rdi`; the old code stored the pointer as the mask) so shells waiting for children wake up, and added the missing `vfork` syscall.
+- Fixed `execve` reusing the frames of the image it replaced (the teardown then freed the new image), and made `create` fail with `ENOENT` when the parent directory is missing.
+- Made the initramfs files read-only so a write can no longer corrupt the kernel image, and made `fstat` report the live file size.
+- Preserved the SSE register file across context switches (the sixteen XMM registers are saved per task) and enabled `CR4.OSFXSR`.
+
 ## 0.62.0 - 2026-10-19
 - Relocated the kernel to a high-half image base at boot: a pre-relocation stage clones the firmware PML4, maps the image at `0xffff_9000_0000_0000` and a 1 GiB direct map at `0xffff_8000_0000_0000`, copies the loaded PE image, applies its `DIR64` base relocations, jumps high and drops every other PML4 slot.
 - BootInfo ABI 2 reports the loader-chosen `image_base`/`image_size`, so self-relocation works regardless of where OVMF placed the image.

@@ -7,6 +7,10 @@ unsafe impl Send for Inode{} unsafe impl Sync for Inode{}
 const EMPTY:Inode=Inode{ino:0,mode:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name:[0;NAME_MAX+1],name_len:0};
 struct Mount{nodes:[Inode;MAX_NODES],len:usize,mounted:bool}
 static ROOT:SpinLock<Mount>=SpinLock::new(Mount{nodes:[EMPTY;MAX_NODES],len:0,mounted:false});
+/* Byte range of the initramfs image inside the kernel image: files carried in
+   it are read-only, like a real initramfs root. */
+static INITRAMFS_SPAN:SpinLock<(u64,u64)>=SpinLock::new((0,0));
+fn in_initramfs(addr:u64)->bool{let(a,b)=*INITRAMFS_SPAN.lock();a!=0&&addr>=a&&addr<b}
 const MAX_MOUNTS:usize=16;
 const TMPFS_INO_TAG:u64=0x1000_0000_0000_0000;
 #[derive(Clone,Copy,PartialEq,Eq)]enum MountKind{Tmpfs,Ext2}
@@ -183,14 +187,20 @@ fn tmpfs_write_inode(node:&mut Inode,off:u64,src:&[u8])->Result<usize>{
 fn u16le(b:&[u8],o:usize)->Result<u16>{let x=b.get(o..o+2).ok_or(errno::EINVAL)?;Ok(u16::from_le_bytes([x[0],x[1]]))}
 fn u32le(b:&[u8],o:usize)->Result<u32>{let x=b.get(o..o+4).ok_or(errno::EINVAL)?;Ok(u32::from_le_bytes([x[0],x[1],x[2],x[3]]))}
 fn align8(v:usize)->Result<usize>{v.checked_add(7).map(|x|x&!7).ok_or(errno::EINVAL)}
-pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],npages:1,name,name_len:nl};p=align8(p+size)?;}m.len=count;m.mounted=true;Ok(count)}
+pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],npages:1,name,name_len:nl};p=align8(p+size)?;}*INITRAMFS_SPAN.lock()=(image.as_ptr()as u64,image.as_ptr()as u64+image.len()as u64);m.len=count;m.mounted=true;Ok(count)}
 pub fn read(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
   read_off(inode,off,dst)
 }
 
 fn read_inode_data(inode:&Inode,off:u64,dst:&mut[u8])->Result<usize>{
  if off>=inode.size{return Ok(0)}
- if inode.npages==0{let n=core::cmp::min(dst.len(),(inode.size-off)as usize);if n>0{if inode.data.is_null(){return Err(errno::EIO)}let src=unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)};dst[..n].copy_from_slice(src)}return Ok(n)}
+ /* A file whose data is one contiguous run (an initramfs image entry) is
+    not limited to the first page: a short read would truncate the file. */
+ if inode.npages==0||(inode.npages==1&&inode.pages[0]==inode.data as u64){
+  let n=core::cmp::min(dst.len(),(inode.size-off)as usize);
+  if n>0{if inode.data.is_null(){return Err(errno::EIO)}let src=unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)};dst[..n].copy_from_slice(src)}
+  return Ok(n)
+ }
  let mut done=0usize;
  while done<dst.len()&&off as usize+done<inode.size as usize{let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=inode.npages as usize{return Ok(done)}let n=core::cmp::min(dst.len()-done,core::cmp::min(4096-po,inode.size as usize-poff));if n==0{break}let src=unsafe{core::slice::from_raw_parts((inode.pages[pi]as*const u8).add(po),n)};dst[done..done+n].copy_from_slice(src);done+=n;}
  Ok(done)
@@ -202,6 +212,10 @@ pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 pub fn create(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  /* The parent directory must exist, like on Linux. */
+  if let Some(parent)=path.rfind('/').map(|i|&path[..i]).filter(|p|!p.is_empty()){
+   if lookup(parent).map(|n|n.mode&0o170000!=S_IFDIR).unwrap_or(true){return Err(errno::ENOENT)}
+  }
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
@@ -710,6 +724,15 @@ fn resolve_inner(cwd:&[u8],input:&str,follow_last:bool,out:&mut [u8;128],depth:u
      let mut target=[0u8;128];
      if tlen>0 {target[..tlen].copy_from_slice(unsafe{core::slice::from_raw_parts(inode.data,tlen)});}
      let tstr=core::str::from_utf8(&target[..tlen]).map_err(|_|errno::EINVAL)?;
+     if tstr.starts_with('/'){
+      /* An absolute link target is resolved from the root, not from the
+         directory that holds the link. */
+      let mut tmp=[0u8;128];
+      let newlen=resolve_inner(b"/",tstr,true,&mut tmp,depth+1)?;
+      out[..newlen].copy_from_slice(&tmp[..newlen]);
+      outlen=newlen;
+      continue;
+     }
      if outlen>1{
       if out[outlen-1]==b'/' {outlen-=1;}
       while outlen>1 && out[outlen-1]!=b'/' {outlen-=1;}
@@ -776,6 +799,9 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
  let node=&mut m.nodes[idx];
+ /* Files carried in the initramfs image live in the kernel image itself and
+    stay read-only, exactly like a real initramfs root. */
+ if node.data!=core::ptr::null_mut()&&in_initramfs(node.data as u64){return Err(errno::EROFS)}
  if node.npages==0 { node.pages[0]=node.data as u64; node.npages=1; node.capacity=node.capacity.max(4096); }
  let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
  let needed=((end as usize+4095)/4096).max(1);

@@ -26,7 +26,8 @@ pub unsafe fn init(kernel_stack_top:u64){
 pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a5:u64,a6:u64)->i64{
  if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
  crate::task::stack_guard();
- linux_abi::dispatch(nr,[a1,a2,a3,a4,a5,a6])
+ let r=linux_abi::dispatch(nr,[a1,a2,a3,a4,a5,a6]);
+ r
 }
 #[unsafe(no_mangle)]pub extern "sysv64" fn bad_sysret(rip:u64,rsp:u64)->!{crate::println!("rejected SYSRET rip={:#x} rsp={:#x}",rip,rsp);crate::arch::halt()}
 
@@ -48,8 +49,7 @@ fn canonical_user(v:u64)->bool{v>=crate::usercopy::USER_MIN as u64&&v<crate::use
    frame was rewritten so SYSRET enters a user signal handler. */
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn signal_setup_frame(frame:*mut u64)->u64{
- let f=frame;if f.is_null(){return 0}
- let sig=match crate::signal::pending(){Some(s)=>s,None=>return 0};
+ let f=frame;if f.is_null(){return 0} let sig=match crate::signal::pending(){Some(s)=>s,None=>return 0};
 
   let act=match crate::signal::action_get(sig as i32){Ok(a)=>a,Err(_)=>return 0};
   let (handler,flags,restorer,_mask)=match act.handler{
@@ -60,8 +60,7 @@ pub extern "sysv64" fn signal_setup_frame(frame:*mut u64)->u64{
    h=>(h,act.flags,act.restorer,act.mask),
   };
   unsafe{
-   let user_rsp=SYSCALL_USER_RSP;
-   if !canonical_user(user_rsp)||!canonical_user(handler)||!canonical_user(restorer){
+   let user_rsp=SYSCALL_USER_RSP;   if !canonical_user(user_rsp)||!canonical_user(handler)||!canonical_user(restorer){
     crate::task::exit_signal(crate::signal::SIGSEGV);
    }
    /* Layout, low to high: handler push area, restorer return slot, sigframe.
