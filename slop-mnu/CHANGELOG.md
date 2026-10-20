@@ -1,3 +1,8 @@
+## 0.64.0 - 2026-10-20
+- Made `mmap` with `MAP_FIXED` replace the previous mapping instead of failing with `EEXIST`, as Linux does; BusyBox's allocator relies on it to place a guard page below its heap.
+- Made the program break grow repeatedly: the heap area is now replaced when it grows, so the second and later `brk` extensions succeed instead of failing with `EEXIST`.
+- Fixed BusyBox's own allocator dying inside `malloc` after a failed heap setup; a sixty-command `sed` loop in the guest went from eight crashes to two.
+
 ## 0.63.0 - 2026-10-20
 - Measured Linux compatibility with a real userspace: a static, non-PIE BusyBox 1.36.1 (musl) now runs in the guest and its output is compared byte for byte with the same binary on Linux (`tools/busybox-test.sh`, 115 checks over shell builtins, the filesystem, the text tools and process control).
 - Fixed the syscall result being lost when a signal arrived: `rt_sigreturn` restores the interrupted register frame, but the dispatcher overwrote it, so `wait4` returned 0 and shells lost the exit status of their children.

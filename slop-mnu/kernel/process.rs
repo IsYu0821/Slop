@@ -74,7 +74,8 @@ impl Process{
   fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{match root.unmap_page(&phys,va){Ok(pa)=>{if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::release_frame(pa)?}}Err(e)=>{if e!=crate::errno::ENOENT{return Err(e)}}}va+=PAGE;}Ok(())}
   fn unmap_external_mappings(root:&PageTableRoot,vm:&Map){let access=Identity;for i in 0..vm.resource_stats().areas{if let Some(area)=vm.area(i){if !area.flags.contains(VmFlags::EXTERNAL){continue}let mut va=area.start as u64;while va<area.end as u64{if let Ok(frame)=root.unmap_page(&access,va){crate::fd::iouring_mapping_release(frame)}va+=PAGE;}}}}
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
- pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};if self.vm.insert(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
+ pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};/* The heap area grows: replace the old brk area instead of colliding with it. */
+  if self.vm.replace(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{
   const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;const MAP_POPULATE:u64=0x8000;
   if len==0{return Err(crate::errno::EINVAL)}
@@ -100,7 +101,10 @@ impl Process{
   if prot&2!=0{return Err(crate::errno::ENODEV)}
   (VmKind::File{inode,offset}, flags&MAP_PRIVATE!=0)
  };
- let start=if flags&MAP_FIXED!=0{if addr&4095!=0{return Err(crate::errno::EINVAL)}self.vm.insert(addr,size,vf,vma_kind,vma_cow)?;addr}else{self.vm.allocate(size,vf,vma_kind,vma_cow)?};
+ let start=if flags&MAP_FIXED!=0{if addr&4095!=0{return Err(crate::errno::EINVAL)}
+  /* MAP_FIXED replaces the previous mapping, so the old pages go first. */
+  self.unmap_pages(addr as u64,size as u64)?;
+  self.vm.replace(addr,size,vf,vma_kind,vma_cow)?;addr}else{self.vm.allocate(size,vf,vma_kind,vma_cow)?};
  if iouring{
   let id=self.fds.get(fd as usize).ok_or(crate::errno::EBADF)?;
   let frame=match offset as u64 {0=>crate::fd::iouring_sq_ring(id),0x8000000=>crate::fd::iouring_cq_ring(id),0x10000000=>crate::fd::iouring_sqes(id),_=>0};

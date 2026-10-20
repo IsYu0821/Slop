@@ -22,6 +22,21 @@ impl Map{
   for i in (at..self.len).rev(){self.areas[i+1]=self.areas[i]} self.areas[at]=Area{start,end,flags,kind,cow,locked:false};self.len+=1;Ok(())
  }
   pub fn allocate(&mut self,len:usize,flags:VmFlags,kind:VmKind,cow:bool)->Result<usize,i64>{let size=align_up(len)?;let mut p=self.next_hint;loop{let candidate_end=p.checked_add(size).ok_or(crate::errno::ENOMEM)?;let mut collision=None;for a in &self.areas[..self.len]{if p<a.end&&a.start<candidate_end{collision=Some(a.end);break}}match collision{Some(n)=>{p=align_up(n)?;if p.checked_add(size).filter(|e|*e<=crate::usercopy::USER_MAX).is_none(){return Err(crate::errno::ENOMEM)}},None=>break}}self.insert(p,size,flags,kind,cow)?;self.next_hint=p+size;Ok(p)}
+ /* MAP_FIXED replaces whatever was mapped there: the overlapping parts of
+    the old areas are dropped and the new area takes their place. */
+ pub fn replace(&mut self,start:usize,len:usize,flags:VmFlags,kind:VmKind,cow:bool)->Result<(),i64>{
+  if start%PAGE_SIZE!=0||len==0{return Err(crate::errno::EINVAL)}
+  let end=start.checked_add(align_up(len)?).ok_or(crate::errno::ENOMEM)?;
+  let mut out=[Area::default();MAX_AREAS];let mut n=0usize;
+  for i in 0..self.len{
+   let a=self.areas[i];
+   if a.end<=start||a.start>=end{out[n]=a;n+=1;continue}
+   if a.start<start{out[n]=Area{end:start,..a};n+=1}
+   if a.end>end{out[n]=Area{start:end,..a};n+=1}
+  }
+  self.areas=out;self.len=n;
+  self.insert(start,len,flags,kind,cow)
+ }
  pub fn remove(&mut self,start:usize,len:usize)->Result<(),i64>{
   if start%PAGE_SIZE!=0{return Err(crate::errno::EINVAL)}
   let end=start.checked_add(align_up(len)?).ok_or(crate::errno::EINVAL)?;

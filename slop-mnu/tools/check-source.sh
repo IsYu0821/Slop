@@ -43,6 +43,7 @@ required={
  'tools/build-libc-test.sh':['libc/start.S','hello-c.c','hello-posix.c','ld.lld','hello-c.elf','hello-posix.elf'],
  'kernel/wait_queue.rs':['struct WaitQueue','pub fn register','wake_one','wake_all'],
  'kernel/vfs.rs':['mount_initramfs','pub fn lookup','pub fn image'],
+ 'kernel/vm.rs':['pub fn replace','pub fn insert','pub fn allocate','pub fn remove'],
  'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2'],
  
  'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ticks'],
