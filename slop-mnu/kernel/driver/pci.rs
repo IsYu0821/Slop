@@ -12,7 +12,7 @@ pub trait ConfigAccess:Sync{fn read32(&self,bdf:Bdf,offset:u16)->u32;fn write32(
 // Linux driver compatibility belongs in generated adapters above this native API, never in core structs.
 
 pub const CFG_VENDOR:u16=0x00;pub const CFG_COMMAND:u16=0x04;pub const CFG_CLASS:u16=0x08;
-pub const CFG_HEADER:u16=0x0c;pub const CFG_BAR0:u16=0x10;
+pub const CFG_HEADER:u16=0x0c;pub const CFG_BAR0:u16=0x10;pub const CFG_CAP:u16=0x34;
 pub const CMD_IO:u16=1;pub const CMD_MEM:u16=2;pub const CMD_BUS_MASTER:u16=4;
 
 /* Configuration space via the CAM I/O ports (works on QEMU's q35 bridge). */

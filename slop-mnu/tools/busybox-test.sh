@@ -93,7 +93,7 @@ run_guest() {
     -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
     -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
     -drive format=raw,file=fat:rw:build/efi \
-    -device virtio-net-pci,netdev=net0,disable-modern=on -netdev user,id=net0 \
+    -device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
     -serial file:"$LOG" -display none -no-reboot -no-shutdown >/dev/null 2>&1
   guest_status=$?

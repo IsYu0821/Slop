@@ -1,3 +1,9 @@
+## 0.66.0 - 2026-10-21
+- Added a virtio transport that speaks both device interfaces: the legacy port I/O device (version 0.9.5) and the modern memory mapped device (virtio 1.0). The modern interface is negotiated with the `VIRTIO_F_VERSION_1` feature and confirmed through the `FEATURES_OK` status bit.
+- The virtio-block and virtio-net drivers now use that transport, so a default `virtio-blk-pci` or `virtio-net-pci` device model works. Before this the drivers only understood the legacy interface, so every device had to be started with `disable-modern=on`.
+- The test harness no longer asks the emulator for a legacy device: the acceptance, differential and BusyBox batteries now run against the modern device models.
+- Fixed the split virtqueue offsets: the available and used rings start with a flags word, so the index follows it.
+
 ## 0.65.0 - 2026-10-21
 - Implemented the published x86-64 `rt_sigframe`: the restorer slot, the `ucontext_t` with the machine context in the published `REG_*` order and the `siginfo_t` with the sender in the `_kill` member. A handler with `SA_SIGINFO` now receives the signal number, the siginfo pointer and the ucontext pointer, like Linux.
 - Replaced the `sysretq` syscall return with an `iretq` return: `SYSRET` loads RFLAGS from RAX, so the old path replaced the user flags with the syscall result. The user flags and the syscall result now both survive the call, and a signal handler is entered with the published argument registers.

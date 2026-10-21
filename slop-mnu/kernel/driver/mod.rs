@@ -1,4 +1,5 @@
 pub mod pci;
+pub mod virtio;
 pub mod virtio_net;
 pub mod virtio_blk;
 pub trait Driver:Sync { fn name(&self)->&'static str; fn probe(&self,dev:&Device)->bool; fn attach(&self,dev:&Device)->Result<(),()>; }

@@ -47,4 +47,12 @@ Memory ABI facts (v0.65.0):
 - `rseq` reports `ENOSYS` when the kernel does not implement it, so a C library falls back to a registration-free thread-local storage path: public Linux man-pages for `rseq`. Implementer: opencode. Reviewer: pending. Tests: the musl differential program starts without a registration.
 
 
+Driver facts (v0.66.0):
+- The virtio 1.0 device interface describes itself through vendor specific PCI capabilities (identifier 0x09) that name the common configuration, the notification area and the device configuration: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the kernel brings up a default `virtio-blk-pci` and `virtio-net-pci` device model.
+- The common configuration registers are the device feature select and word, the driver feature select and word, the queue count, the device status, the queue select, the queue size, the queue enable, the queue notification offset and the three queue addresses: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the block and network drivers read the capacity, the hardware address and the queue state through it.
+- A modern virtio device is used only after the driver asked for the `VIRTIO_F_VERSION_1` feature (bit 32) and the device confirmed the result with the `FEATURES_OK` status bit: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the drivers refuse to start a device that does not confirm.
+- The notification register of a queue sits at the notification offset multiplied by the notification multiplier, two bytes per queue: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the UDP and TCP echo acceptance program moves packets through the network driver.
+- A split virtqueue starts with the descriptor table, followed by the available ring with its flags word, and the used ring at the next page boundary: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the block driver reads and writes a sector over both interfaces.
+
+
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.

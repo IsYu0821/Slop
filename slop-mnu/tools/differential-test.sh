@@ -76,7 +76,7 @@ if timeout 40 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
   -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
   -drive format=raw,file=fat:rw:build/efi \
-  -device virtio-net-pci,netdev=net0,disable-modern=on -netdev user,id=net0 \
+  -device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   -serial file:build/differential-serial.log -display none -no-reboot -no-shutdown >/dev/null 2>&1; then
   guest_status=0
