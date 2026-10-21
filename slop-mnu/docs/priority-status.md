@@ -37,11 +37,17 @@
 
 ## Open defects
 
-- The allocator metadata of a musl program is overwritten now and then: the
-  BusyBox and differential batteries fail intermittently with an allocator
-  assertion. The failure predates this work and is not yet understood; the
-  reproducer is `tools/differential-test.sh`, which fails in the dynamic
-  linker before the program starts.
+- The allocator metadata of a musl program is still overwritten now and
+  then: the BusyBox battery fails intermittently with an allocator assertion
+  and the differential battery stops at the pending-signal check. The address
+  layout fix removed the page table collision that made the corruption
+  common, but a second source is left. The differential battery now runs
+  through twenty-five checks instead of five, which makes it the better
+  reproducer.
+- A `tkill` with a stale thread identifier reports `ESRCH` like Linux does,
+  but a C library that caches its thread identifier across a fork then
+  signals the wrong thread. The pending-signal check in the differential
+  battery fails for that reason.
 
 ## Next in line for the Linux ABI
 

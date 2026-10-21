@@ -34,7 +34,10 @@ fn fpu_area(slot:usize)->u64{unsafe{core::ptr::addr_of!(FPU_AREAS[slot])as u64}}
 unsafe extern "sysv64"{fn fpu_save_regs(area:*mut u8);}
 fn fpu_save(addr:u64){let _=addr;}
 pub fn init(bootstrap_stack_top:u64){uts_init();fpu_save(fpu_area(0));let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{fpu:fpu_area(0),pid:1,tgid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
-pub fn current_pid()->u32{PID.load(Ordering::Relaxed)}
+/* The identifier of the running task. The scheduler is the single source of
+   truth: a cached copy could name a task that ran in between, and a signal
+   aimed at the wrong thread would be lost. */
+pub fn current_pid()->u32{let s=SCHED.lock();s.tasks[s.current].pid}
 pub fn current_ppid()->u32{let s=SCHED.lock();s.tasks[s.current].ppid}
 pub fn current_pgid()->u32{let s=SCHED.lock();s.tasks[s.current].pgid}
 pub fn current_sid()->u32{let s=SCHED.lock();s.tasks[s.current].sid}
@@ -135,6 +138,7 @@ pub fn wake_pid(pid:u32)->bool{let mut s=SCHED.lock();if let Some(t)=s.tasks.ite
 pub fn current_tgid()->u32{let s=SCHED.lock();s.tasks[s.current].tgid}
 /* Marks sig pending on the thread-group member (tgid,pid) and wakes it. */
 pub fn signal_task(tgid:u32,pid:u32,sig:i32)->Result<(),i64>{
+
  let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.tgid==tgid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
  {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
  p.pending|=crate::signal::bit(sig);

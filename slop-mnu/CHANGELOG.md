@@ -1,3 +1,6 @@
+## 0.68.0 - 2026-10-21
+- The running task identifier now comes from the scheduler instead of a cached copy, so a signal or a wait that names the current task cannot name a task that ran in between.
+
 ## 0.67.0 - 2026-10-21
 - Fixed the user address layout: the program break, the anonymous mappings, the dynamic linker and the position independent image shared page table entries, so a mapping in one region overwrote the page table entry of another. The program break now lives in page table slot 131, the anonymous mappings in slot 130, the image in slot 129 and the linker in slot 128, and every region is alone in its slot.
 - The loader accepts a dynamic image whose interpreter and main image live in different page table slots.
