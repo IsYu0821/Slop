@@ -6,7 +6,10 @@ const MAX_SECCOMP_FILTERS:usize=64;
 const EMPTY_SECCOMP_FILTER:SeccompFilterRef=SeccompFilterRef{frame:0,refs:0};
 static SECCOMP_FILTER_REFS:crate::sync::SpinLock<[SeccompFilterRef;MAX_SECCOMP_FILTERS]>=crate::sync::SpinLock::new([EMPTY_SECCOMP_FILTER;MAX_SECCOMP_FILTERS]);
 /* Slot 129 keeps the heap and anonymous mappings out of the firmware identity map. */
-pub const BRK_BASE:u64=0x0000_4080_0000_0000;
+/* The program break lives in PML4 slot 131, alone in its page table
+   slot: the anonymous mappings use slot 130 and the images slot 128 and
+   129, so the regions never share a page table entry. */
+pub const BRK_BASE:u64=0x0000_4180_0000_0000;
 pub fn slot_of(va:u64)->usize{((va>>39)&511)as usize}
 pub fn seccomp_filter_register(frame:u64)->Result<(),i64>{
  let mut refs=SECCOMP_FILTER_REFS.lock();let slot=refs.iter().position(|entry|entry.frame==0).ok_or(crate::errno::ENOMEM)?;refs[slot]=SeccompFilterRef{frame,refs:1};Ok(())

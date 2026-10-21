@@ -3,10 +3,14 @@
 //! and enter through its entry point with AT_BASE set.
 use crate::{arch::x86_64::{paging::{self,PageTableRoot},phys::Identity},elf,linux_abi::stack,memory};
 const PAGE:u64=4096;const MAX_COMMITTED:usize=512;const USER_STACK_PAGES:u64=8;
-/* Load bias for the dynamic linker; the PIE main image sits above it in the
-   same PML4 slot. */
+/* Load bias for the dynamic linker and for the PIE main image. Every user
+   region sits alone in a page table slot: the linker in slot 128, the image
+   in slot 129, the anonymous mappings in slot 130 and the program break in
+   slot 131. Regions that share a slot also share the lower level indices,
+   so a mapping in one of them would overwrite the page table entry of the
+   other. */
 const LD_BASE:u64=0x0000_4000_0000_0000;
-const EXE_BASE:u64=0x0000_4001_0000_0000;
+const EXE_BASE:u64=0x0000_4080_0000_0000;
 /* One committed PT_LOAD range, kept for /proc/<pid>/maps. */
 #[derive(Clone,Copy,Default)]pub struct MapSeg{pub start:u64,pub end:u64,pub flags:u32}
 pub const MAX_MAP_SEGS:usize=8;
@@ -35,16 +39,20 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let is_pie=parsed.header.kind==elf::ET_DYN;
  let exe_base=if is_pie{EXE_BASE}else{0};
  let entry=match interp.as_ref(){Some(ip)=>LD_BASE+ip.header.entry,None=>exe_base+parsed.header.entry};
- /* Dynamic images load the interpreter and a PIE main image in the same slot;
-    a static ET_EXEC keeps its absolute entry-derived slot. */
- let image_slot=if interp.is_some(){((core::cmp::max(exe_base,LD_BASE)>>39)&511)as usize}else if is_pie{((exe_base>>39)&511)as usize}else{((parsed.header.entry>>39)&511)as usize};
+ /* The interpreter and the main image live in page table slots of their own,
+    so a mapping in one of them never overwrites the page table entry of the
+    other. A static ET_EXEC keeps its absolute entry-derived slot. */
+ let image_slot=if is_pie{((exe_base>>39)&511)as usize}else{((parsed.header.entry>>39)&511)as usize};
+ let interp_slot=((LD_BASE>>39)&511)as usize;
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
- let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;let root=firmware.clone_bootstrap(&access,&[image_slot,stack_slot,mmap_slot]).map_err(|_|"private CR3 allocation failed")?;
+ let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;
+ let mut private=[image_slot,stack_slot,mmap_slot,interp_slot];
+ let root=firmware.clone_bootstrap(&access,&private).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){
   let bytes=interp_bytes.ok_or("interpreter image lost")?;
   for seg in &ip.segments[..ip.segment_count]{
-   if ((LD_BASE+seg.vaddr>>39)&511)as usize!=image_slot{return Err("interpreter crosses private PML4 slot")}
+   if ((LD_BASE+seg.vaddr>>39)&511)as usize!=interp_slot{return Err("interpreter crosses private PML4 slot")}
    map_segment(&mut tx,&root,&access,bytes,LD_BASE,seg)?;
   }
  }

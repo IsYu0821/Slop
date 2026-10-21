@@ -54,3 +54,26 @@ device models.
 3. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
    Linux)`.
 4. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## The user address layout
+
+The milestone also fixed the user address layout. The program break, the
+anonymous mappings, the dynamic linker and the position independent image
+were placed at addresses that are a multiple of 64 gigabytes apart, so they
+shared the same page table slot and, with it, the same lower level indices.
+A mapping in one of the regions therefore overwrote the page table entry of
+another, and a program that used both the heap and an anonymous mapping lost
+the heap contents.
+
+Every region now lives alone in a page table slot:
+
+| region | address | page table slot |
+| --- | --- | --- |
+| the dynamic linker | `0x4000_0000_0000` | 128 |
+| the position independent image | `0x4080_0000_0000` | 129 |
+| the anonymous mappings | `0x4100_0000_0000` | 130 |
+| the program break | `0x4180_0000_0000` | 131 |
+
+The loader accepts a dynamic image whose interpreter and main image live in
+different slots, and the differential battery now runs far past the point
+where it used to fail.

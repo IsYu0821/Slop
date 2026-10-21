@@ -1,8 +1,10 @@
 //! Architecture-neutral virtual-memory area ledger. Hardware PTE work stays in arch.
 pub const PAGE_SIZE:usize=4096; pub const MAX_AREAS:usize=128;
-// Anonymous mappings live in PML4 slot 129: the 64 GiB firmware identity
-// map in slot 0 and the ELF/stack slots stay untouched.
-pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
+// Anonymous mappings live in PML4 slot 130. The region is alone in its
+// page table slot: two regions that share a slot also share the lower
+// level indices, so a mapping in one of them would overwrite the page
+// table entry of the other.
+pub const MMAP_BASE:usize=0x0000_4100_0000_0000;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub areas:usize,pub bytes:usize,pub pages:usize}
 #[derive(Clone,Copy,Default,PartialEq,Eq)] pub struct VmFlags(pub u8);

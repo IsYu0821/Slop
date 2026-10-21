@@ -1,3 +1,8 @@
+## 0.67.0 - 2026-10-21
+- Fixed the user address layout: the program break, the anonymous mappings, the dynamic linker and the position independent image shared page table entries, so a mapping in one region overwrote the page table entry of another. The program break now lives in page table slot 131, the anonymous mappings in slot 130, the image in slot 129 and the linker in slot 128, and every region is alone in its slot.
+- The loader accepts a dynamic image whose interpreter and main image live in different page table slots.
+- This removes the intermittent memory corruption that broke the BusyBox and differential batteries: a program that used both the heap and an anonymous mapping lost the heap contents, and a C library allocator aborted on its own consistency check.
+
 ## 0.66.0 - 2026-10-21
 - Added a virtio transport that speaks both device interfaces: the legacy port I/O device (version 0.9.5) and the modern memory mapped device (virtio 1.0). The modern interface is negotiated with the `VIRTIO_F_VERSION_1` feature and confirmed through the `FEATURES_OK` status bit.
 - The virtio-block and virtio-net drivers now use that transport, so a default `virtio-blk-pci` or `virtio-net-pci` device model works. Before this the drivers only understood the legacy interface, so every device had to be started with `disable-modern=on`.
