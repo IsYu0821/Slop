@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.29.0 - 2026-10-21
+- Replaced the `sysretq` syscall return with an `iretq` return: `SYSRET` loads RFLAGS from RAX, so the old path replaced the user flags with the syscall result and faulted the user process.
+- Made the syscall entry state per task: the user stack pointer and the register frame now travel with the task, so a task that blocks inside a syscall resumes with its own context instead of the context of the task that ran in between.
+- Added real Linux signal delivery: the published x86-64 `rt_sigframe` is built on the user stack with the restorer, the `ucontext_t` and the `siginfo_t`, and `rt_sigreturn` restores the interrupted context.
+- Added `SA_SIGINFO`, `SA_NODEFER`, `SA_RESETHAND`, `SA_RESTORER` enforcement and the `k_sigaction` field order to `rt_sigaction`; `rt_sigprocmask` now reads the mask from the user pointer.
+- Added `rt_sigpending`, per-signal sender tracking for `si_pid`, and default actions: ignore, terminate and stop.
+- `kill` now reaches the requested process or process group instead of the caller; `SIGCONT` resumes a stopped task.
+- Added `EINTR` for a blocking `wait4` or pipe read that is interrupted by a queued signal.
+- `fork` clears the pending set of the child and `execve` clears the pending set and the mask.
+- Added `libc/signal.c` and `libc/sigreturn.S` with the `sigaction`, `sigprocmask`, `sigpending`, `raise` and set helpers, the signal restorer trampoline and the `siginfo_t`/`ucontext_t` definitions.
+- Added `/bin/hello-signal` to the acceptance chain and the signal markers to the acceptance gate.
+- Added `tools/check-abi.py`, a compiler-free gate that checks the published `k_sigaction`, `sigcontext`, `ucontext_t` and `siginfo_t` layouts and the `REG_*` index list against the kernel structures and the libc header.
+- Added `tools/check-source.ps1`, a host-side mirror of the source consistency gate, and `tools/make-snapshot.py`, which regenerates `SOURCE_SNAPSHOT.txt` from the working tree.
+
 ## 0.28.0 - 2026-10-18
 - Added a Linux signal ABI foundation: `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn` syscalls in `kernel/signal.rs`.
 - Added per-process pending and blocked signal masks to `Process`; `fork` preserves them, `execve` resets them.

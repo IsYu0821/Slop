@@ -38,26 +38,21 @@ syscall_entry:
     add $8, %rsp
     cmpb $0, EXEC_PENDING(%rip)
     je .Lcheck_signal
+    /* An execve redirects the return to the new image. */
     mov EXEC_RIP(%rip), %rdx
     mov %rdx, 104(%rsp)
     movb $0, EXEC_PENDING(%rip)
 .Lcheck_signal:
-    /* Signal delivery is not yet wired into the syscall exit path. */
-    jmp .Lcheck_sysret
-    /* If a signal is pending, build a sigframe and enter the handler. */
+    /* A queued signal is delivered before the process returns to user mode.
+       The handler rewrites the user context in the frame above. */
     call signal_pending_check
     test %rax, %rax
-    jz .Lcheck_sysret
-    /* signal_pending_check returned the signal number in %rax, handler in %rdx. */
-    mov %rax, %rdi
-    mov %rdx, %rsi
-    mov SYSCALL_USER_RSP(%rip), %rdx
-    mov 112(%rsp), %rcx
-    mov 104(%rsp), %r8
-    call signal_deliver_asm
-.Lcheck_sysret:
-    /* SYSRET requires canonical lower-half addresses. The checks run while the
-       user register frame is still on the kernel stack so RDX stays untouched. */
+    jz .Lreturn_user
+.Lreturn_user:
+    /* SYSRET loads RFLAGS from RAX, so a SYSRET return would replace the user
+       flags with the syscall result. The return uses IRETQ instead: it
+       restores RIP, CS, RFLAGS, RSP and SS and leaves RAX alone, which keeps
+       the syscall result and the user flags intact. */
     mov 104(%rsp), %rdx
     shr $47, %rdx
     jne .Lbad_pre
@@ -76,19 +71,24 @@ syscall_entry:
     pop %rdx
     pop %rsi
     pop %rdi
-    /* RAX returns the dispatcher result; the saved user RAX is dropped. */
+    /* The saved user RAX is dropped; RAX keeps the dispatcher result. */
     add $8, %rsp
     pop %rcx
     pop %r11
-    mov SYSCALL_USER_RSP(%rip), %rsp
-    sysretq
+    /* IRETQ frame, pushed in reverse pop order: SS, RSP, RFLAGS, CS, RIP. */
+    push USER_SS(%rip)
+    push SYSCALL_USER_RSP(%rip)
+    push %r11
+    push USER_CS(%rip)
+    push %rcx
+    iretq
 .Lbad_pre:
     mov 104(%rsp), %rcx
-    mov SYSCALL_USER_RSP(%rip), %rsp
+    mov SYSCALL_USER_RSP(%rip), %rdx
     jmp .Lbad
 .Lbad:
     mov %rcx, %rdi
-    mov %rsp, %rsi
+    mov %rdx, %rsi
     mov SYSCALL_KERNEL_RSP(%rip), %rsp
     and $-16, %rsp
     call bad_sysret

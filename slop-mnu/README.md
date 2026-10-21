@@ -63,6 +63,8 @@ The runner uses one emulated CPU and serial output because the current syscall t
 
 This verifies the nightly Rust toolchain, Clang/LLD utilities, LLVM binary tools, Python, and critical source-level ABI connections before the UEFI build starts.
 
+`./tools/check-source.sh` runs the source consistency gate and `tools/check-abi.py`, a compiler-free check of the published Linux layouts that the kernel and the in-tree libc publish. `./tools/make-snapshot.py` regenerates `SOURCE_SNAPSHOT.txt` from the working tree.
+
 ## Automated Linux ELF acceptance gate
 
 ```sh
@@ -96,3 +98,9 @@ Anonymous private `mmap` and upward `brk` growth now allocate zeroed physical fr
 ## Signal ABI foundation (v0.28)
 
 The kernel accepts `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn`. Per-process pending and blocked signal masks live in `kernel/signal.rs`; `Process` carries the mask fields so `fork` preserves them and `execve` resets them. `libc/signal.c` provides `kill`, `sigaction`, `sigprocmask` and `sigreturn` wrappers. `signal_pending_check` runs before `SYSRET`; full handler-frame delivery lands in the next milestone.
+
+## Signal delivery and a correct syscall return (v0.29)
+
+The syscall return path now uses `iretq` instead of `sysretq`. `SYSRET` loads RFLAGS from RAX, so the previous path replaced the user flags with the syscall result and faulted the user process; `iretq` restores RIP, CS, RFLAGS, RSP and SS and leaves the result in RAX.
+
+Signals are delivered for real. The kernel builds the published x86-64 `rt_sigframe` on the user stack: the restorer address at the bottom, then the `ucontext_t` with the machine context in the published `REG_*` order, then the `siginfo_t`. The handler runs with the signal number, the siginfo and the ucontext in RDI, RSI and RDX, and `rt_sigreturn` restores the interrupted context, the flags and the signal mask. `SA_SIGINFO`, `SA_NODEFER`, `SA_RESETHAND` and the `SA_RESTORER` requirement are enforced, `kill` reaches the requested process or process group, a blocked signal stays pending, and a blocking wait reports `EINTR`. `/bin/hello-signal` covers the handler, the ignored signal, the blocked signal, the default action and the stop/continue path.

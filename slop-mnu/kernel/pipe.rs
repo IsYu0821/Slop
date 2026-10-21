@@ -26,6 +26,7 @@ pub fn read(id:u8,dst:&mut[u8])->Result<usize,i64>{
    if p.writers==0{return Ok(0)}
    p.readq.register().is_ok()};
   if !registered{return Err(crate::errno::EAGAIN)}
+  if crate::signal::has_pending(){return Err(crate::errno::EINTR)}
   crate::task::block_current();
  }
 }
@@ -38,6 +39,7 @@ pub fn write(id:u8,src:&[u8])->Result<usize,i64>{
    if p.len<CAPACITY{let n=core::cmp::min(CAPACITY-p.len,src.len()-done);copy_into(&mut p,&src[done..],n);p.len+=n;done+=n;p.readq.wake_all();false}else{p.writeq.register().is_ok()}};
   if done==src.len(){break}
   if !registered{return Err(crate::errno::EAGAIN)}
+  if crate::signal::has_pending(){return Err(crate::errno::EINTR)}
   crate::task::block_current();
  }
  Ok(done)

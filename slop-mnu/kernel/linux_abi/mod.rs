@@ -15,10 +15,11 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 { match n {
     nr::GETUID|nr::GETGID|nr::GETEUID|nr::GETEGID=>0, nr::UNAME=>sys_uname(a[0]), nr::ARCH_PRCTL=>sys_arch_prctl(a[0],a[1]),
     nr::SET_TID_ADDRESS=>sys_set_tid_address(a[0]),
     nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
-    nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
+    nr::KILL=>sys_kill(a[0] as i64,a[1] as i32),
     nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
     nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
     nr::RT_SIGRETURN=>sys_rt_sigreturn(),
+    nr::RT_SIGPENDING=>sys_rt_sigpending(a[0],a[1]),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
     nr::DUP2=>fd_result(crate::fd::dup2(a[0] as usize,a[1] as usize)), nr::DUP3=>sys_dup3(a[0] as usize,a[1] as usize,a[2]),
     nr::FCNTL=>sys_fcntl(a[0] as usize,a[1],a[2]),
@@ -88,20 +89,54 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
    return cpid as i64;
   }
   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
-  Ok(crate::task::WaitOutcome::Blocked)=>crate::task::block_current(),
+  Ok(crate::task::WaitOutcome::Blocked)=>{if crate::signal::has_pending(){return errno::neg(errno::EINTR)}crate::task::block_current()},
   Err(e)=>return errno::neg(e),
  }}
 }
-fn sys_kill(pid:u32,sig:i32)->i64{match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}}
+fn sys_kill(pid:i64,sig:i32)->i64{match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}}
 fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
- if act==0{let a=match crate::signal::action_get(sig){Ok(v)=>v,Err(e)=>return errno::neg(e)};if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&a as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
- else{let mut a=crate::signal::Action{handler:0,mask:0,flags:0,restorer:0};let b=unsafe{core::slice::from_raw_parts_mut((&mut a as*mut crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_from_user(b,act as usize){return errno::neg(e)}if let Err(e)=crate::signal::action_set(sig,a){return errno::neg(e)}if old!=0{let d=match crate::signal::action_get(sig){Ok(v)=>v,Err(_)=>crate::signal::Action{handler:0,mask:0,flags:0,restorer:0}};let bytes=unsafe{core::slice::from_raw_parts((&d as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0}
+ if sig<1||sig>=64{return errno::neg(errno::EINVAL)}
+ if act!=0{
+  let mut a=crate::signal::Action::default();
+  let bytes=unsafe{core::slice::from_raw_parts_mut((&mut a as*mut crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};
+  if let Err(e)=crate::usercopy::copy_from_user(bytes,act as usize){return errno::neg(e)}
+  /* x86-64 needs a restorer for every installed handler: the handler returns
+     into it and the restorer performs the rt_sigreturn syscall. */
+  if a.handler!=crate::signal::SIG_DFL&&a.handler!=crate::signal::SIG_IGN{
+   if a.flags&crate::signal::SA_RESTORER==0{return errno::neg(errno::EINVAL)}
+   if a.restorer<0x1000||a.restorer>=crate::usercopy::USER_MAX as u64{return errno::neg(errno::EINVAL)}
+  }
+  if let Err(e)=crate::signal::action_set(sig,a){return errno::neg(e)}
+ }
+ if old!=0{
+  let a=match crate::signal::action_get(sig){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let bytes=unsafe{core::slice::from_raw_parts((&a as*const crate::signal::Action).cast::<u8>(),core::mem::size_of::<crate::signal::Action>())};
+  if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}
+ }
+ 0
 }
-fn sys_rt_sigprocmask(how:u64,set:u64,old:u64)->i64{
+fn sys_rt_sigprocmask(how:u64,set_ptr:u64,old_ptr:u64)->i64{
+ let mut set=0u64;
+ if set_ptr!=0{
+  let mut b=[0u8;8];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,set_ptr as usize){return errno::neg(e)}
+  set=u64::from_ne_bytes(b);
+ }
  let prev=match crate::signal::mask_op(how,set){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- if old!=0{let bytes=unsafe{core::slice::from_raw_parts((&prev as*const u64).cast::<u8>(),8)};if let Err(e)=crate::usercopy::copy_to_user(old as usize,bytes){return errno::neg(e)}}0
+ if old_ptr!=0{
+  if let Err(e)=crate::usercopy::copy_to_user(old_ptr as usize,&prev.to_ne_bytes()){return errno::neg(e)}
+ }
+ 0
 }
-fn sys_rt_sigreturn()->i64{0}
+fn sys_rt_sigreturn()->i64{
+ match crate::signal::restore_frame(){Ok(())=>0,Err(_)=>crate::task::exit_with_signal(crate::signal::SIGSEGV)}
+}
+fn sys_rt_sigpending(set_ptr:u64,size:u64)->i64{
+ if size!=8{return errno::neg(errno::EINVAL)}
+ let mask=crate::signal::pending_mask();
+ if let Err(e)=crate::usercopy::copy_to_user(set_ptr as usize,&mask.to_ne_bytes()){return errno::neg(e)}
+ 0
+}
 fn sys_pipe(ptr:u64,flags:u64)->i64{let(r,w)=match crate::fd::pipe2(flags){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let pair=[r as u32,w as u32];let bytes=unsafe{core::slice::from_raw_parts(pair.as_ptr()as*const u8,8)};
  match crate::usercopy::copy_to_user(ptr as usize,bytes){Ok(())=>0,Err(e)=>{let _=crate::fd::close(r as usize);let _=crate::fd::close(w as usize);errno::neg(e)}}}
@@ -111,7 +146,7 @@ fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.l
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0o77777!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};match crate::fd::open(p){Ok(fd)=>fd as i64,Err(e)=>errno::neg(e)}}
 fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::EINVAL)}let mut b=[0u8;128];let p=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};let n=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=n.size as i64;st.st_blksize=4096;st.st_blocks=((n.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
-fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.27.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
+fn sys_uname(ptr:u64)->i64{let u=UtsName{sysname:field("Linux"),nodename:field("slop"),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.29.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
 fn sys_prlimit(a:[u64;6])->i64{if a[0]!=0&&a[0]!=crate::task::current_pid() as u64{return errno::neg(errno::ESRCH)} if a[2]!=0{return errno::neg(errno::EPERM)} if a[3]!=0{copy_obj(a[3],&Rlimit{cur:u64::MAX,max:u64::MAX})}else{0}}
 fn copy_obj<T>(dst:u64,obj:&T)->i64{let bytes=unsafe{core::slice::from_raw_parts((obj as *const T).cast::<u8>(),size_of::<T>())};match crate::usercopy::copy_to_user(dst as usize,bytes){Ok(())=>0,Err(e)=>errno::neg(e)}}

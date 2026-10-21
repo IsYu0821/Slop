@@ -67,5 +67,11 @@ int main(int argc, char **argv, char **envp) {
         return 1;
     }
     puts("posix: fork, pipe, dup2 and wait4 passed");
-    return 0;
+    {
+        char *av[] = {"hello-signal", "from-posix", 0};
+        char *ev[] = {"SLOP_MNU_SIGNAL=1", 0};
+        execve("/bin/hello-signal", av, ev);
+    }
+    puts("posix: failed: execve /bin/hello-signal");
+    return 1;
 }

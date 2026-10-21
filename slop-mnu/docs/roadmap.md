@@ -20,3 +20,6 @@ Machine-readable API inventory; per-kernel-version generated C facade; semantic 
 
 ## Increment 2A, delivered in milestone 2
 Versioned firmware-to-kernel BootInfo ABI, bounded physical-frame range allocator, spin lock, canonical userspace-range checks, chunked copyin/copyout use in `write` and `uname`, and x86-64 MSR access primitives. The remaining 2B work is the PE32+ UEFI image, final memory-map retry loop, page-table takeover, descriptors, interrupts and ring-3 transition.
+
+## Increment 3A, delivered in milestone 29
+A correct syscall return path (`iretq` instead of `sysretq`), Linux signal delivery with the published `rt_sigframe` layout, `SA_SIGINFO` and the ucontext, per-process pending and blocked masks, `kill` to a process or a process group, `EINTR` for an interrupted blocking wait, and stop/continue for `SIGSTOP` and `SIGCONT`. The remaining 3B work is a real-time signal range, `sigaltstack`, `sigqueue`, `signalfd`, the stopped-child wait status and the floating-point state in the ucontext.

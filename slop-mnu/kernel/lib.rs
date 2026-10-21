@@ -44,7 +44,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let irq_stack=unsafe { core::ptr::addr_of!(IRQ_STACK.0) as u64 + 65536 };
     let irq_info=match unsafe { acpi::interrupt_info(bi.rsdp) }{Ok(v)=>v,Err(e)=>{println!("ACPI interrupt discovery failed: {}",e);arch::halt()}};
     unsafe { arch::x86_64::descriptors::init(rsp0,ist,irq_stack); arch::x86_64::idt::init(); arch::x86_64::apic::init(irq_info).unwrap_or_else(|e|{println!("APIC init failed: {}",e);arch::halt()}); arch::x86_64::syscall::init(rsp0); }
-    println!("Slop/MNU 0.27.0: BootInfo accepted, {} free pages",pages);
+    println!("Slop/MNU 0.29.0: BootInfo accepted, {} free pages",pages);
     println!("interrupts: lapic={:#x} ioapic={:#x} timer-vector={:#x}",irq_info.lapic,irq_info.ioapic,arch::x86_64::apic::TIMER_VECTOR);
     let first_tick=match arch::x86_64::apic::self_test(){Ok(v)=>v,Err(e)=>{println!("APIC timer self-test failed: {}",e);arch::halt()}};
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);

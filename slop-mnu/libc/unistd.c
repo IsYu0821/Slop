@@ -1,23 +1,20 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <signal.h>
+#include <time.h>
 #include <sys/mman.h>
 #include "slop_internal.h"
 
 #define SYS_READ 0
 #define SYS_WRITE 1
-#define SYS_RT_SIGACTION 13
-#define SYS_RT_SIGPROCMASK 14
-#define SYS_RT_SIGRETURN 15
 #define SYS_CLOSE 3
 #define SYS_MMAP 9
 #define SYS_DUP2 33
+#define SYS_NANOSLEEP 35
 #define SYS_GETPID 39
 #define SYS_CLONE 56
 #define SYS_EXECVE 59
 #define SYS_WAIT4 61
-#define SYS_KILL 62
 #define SYS_GETPPID 110
 #define SYS_OPENAT 257
 #define SYS_EXIT_GROUP 231
@@ -83,24 +80,12 @@ pid_t waitpid(pid_t pid, int *status, int options) {
     return (pid_t)sys_fail(__slop_syscall6(SYS_WAIT4, pid, (long)status, options, 0, 0, 0));
 }
 
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+    return (int)sys_fail(__slop_syscall6(SYS_NANOSLEEP, (long)req, (long)rem, 0, 0, 0, 0));
+}
+
 void _exit(int status) {
     __slop_syscall6(SYS_EXIT_GROUP, status, 0, 0, 0, 0, 0);
     for (;;) {
     }
-}
-
-int kill(pid_t pid, int sig) {
-    return (int)sys_fail(__slop_syscall6(SYS_KILL, (long)pid, sig, 0, 0, 0, 0));
-}
-
-int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGACTION, sig, (long)act, (long)oldact, 0, 0, 0));
-}
-
-int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGPROCMASK, how, (long)set, (long)oldset, 0, 0, 0));
-}
-
-int sigreturn(void) {
-    return (int)sys_fail(__slop_syscall6(SYS_RT_SIGRETURN, 0, 0, 0, 0, 0, 0));
 }

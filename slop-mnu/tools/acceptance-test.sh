@@ -32,6 +32,9 @@ for text in \
   'execve: committed /bin/hello-posix' \
   'posix: main entered' \
   'posix: fork, pipe, dup2 and wait4 passed' \
+  'execve: committed /bin/hello-signal' \
+  'signals: main entered' \
+  'signals: handler, mask, ignore, default and stop/continue passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
