@@ -1,8 +1,9 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
-#include <signal.h>
 #include <sys/wait.h>
 
 static int failures;
@@ -15,94 +16,155 @@ static int failures;
         }                                       \
     } while (0)
 
-static volatile sig_atomic_t usr1_seen;
-static volatile sig_atomic_t usr2_seen;
+/* The handler records what the kernel delivered. The variables are volatile
+   because the handler runs in an asynchronous context. */
+static volatile sig_atomic_t usr1_hits;
+static volatile sig_atomic_t usr1_signo;
+static volatile sig_atomic_t usr1_code;
+static volatile pid_t usr1_sender;
+static volatile unsigned long usr1_rip;
 
-static void usr1_handler(int sig) {
-    usr1_seen = sig;
+static void usr1_handler(int sig, siginfo_t *si, void *uc) {
+    usr1_signo = sig;
+    if (si) {
+        usr1_code = si->si_code;
+        usr1_sender = si->_sifields._kill.si_pid;
+    }
+    if (uc) {
+        ucontext_t *ctx = (ucontext_t *)uc;
+        usr1_rip = (unsigned long)ctx->uc_mcontext.gregs[REG_RIP];
+    }
+    usr1_hits++;
 }
 
-static void usr2_handler(int sig) {
-    usr2_seen = sig;
+static void sleep_ms(long ms) {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = ms * 1000000L;
+    nanosleep(&ts, 0);
 }
 
 int main(int argc, char **argv, char **envp) {
     struct sigaction sa;
-    struct sigaction old;
-    sigset_t set;
-    sigset_t oldset;
+    sigset_t block;
+    sigset_t saved;
+    sigset_t pending;
     pid_t pid;
+    pid_t r;
     int status;
+    int hits;
+    int i;
 
-    (void)argc; (void)argv; (void)envp;
     puts("signals: main entered");
+    CHECK(argc == 2 && argv[1] != 0 && strcmp(argv[1], "from-posix") == 0, "argv");
+    (void)envp;
 
-    /* 1. rt_sigaction installs a handler and reports the previous one. */
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = usr1_handler;
-    CHECK(sigaction(SIGUSR1, &sa, &old) == 0, "sigaction");
-    CHECK(old.sa_handler == SIG_DFL, "sigaction reports SIG_DFL");
-    CHECK(old.sa_flags == 0, "sigaction old flags");
-    CHECK(old.sa_mask == 0, "sigaction old mask");
-    /* The wrapper installs the return trampoline automatically. */
-    CHECK(sigaction(SIGUSR1, 0, &old) == 0, "sigaction query");
-    CHECK(old.sa_handler == usr1_handler, "sigaction handler stored");
-    CHECK(old.sa_restorer != 0, "sigaction restorer installed");
+    /* A handler installed with SA_SIGINFO receives the siginfo and the
+       machine context of the interrupted code. */
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = (void (*)(int))usr1_handler;
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_restorer = 0;
+    CHECK(sigaction(SIGUSR1, &sa, 0) == 0, "sigaction");
 
-    /* 2. A signal sent to ourselves is delivered at a syscall boundary. */
-    usr1_seen = 0;
-    CHECK(kill(getpid(), SIGUSR1) == 0, "kill self");
-    /* Delivery happens at the syscall boundary right after kill returns. */
-    puts("signals: boundary");
-    CHECK(usr1_seen == SIGUSR1, "handler ran at boundary");
-
-    /* 3. Blocked signals stay pending until unblocked. */
-    set = 1UL << (SIGUSR1 - 1);
-    CHECK(sigprocmask(SIG_BLOCK, &set, &oldset) == 0, "sigprocmask block");
-    usr1_seen = 0;
-    CHECK(kill(getpid(), SIGUSR1) == 0, "kill self blocked");
-    puts("signals: blocked");
-    CHECK(usr1_seen == 0, "blocked signal not delivered");
-    CHECK(sigprocmask(SIG_SETMASK, &oldset, 0) == 0, "sigprocmask restore");
-    puts("signals: unblocked");
-    CHECK(usr1_seen == SIGUSR1, "signal delivered after unblock");
-
-    /* 4. A parent signal reaches a blocked child, which then exits 7. */
     pid = fork();
     CHECK(pid >= 0, "fork");
     if (pid == 0) {
-        struct sigaction csa;
-        memset(&csa, 0, sizeof(csa));
-        csa.sa_handler = usr2_handler;
-        CHECK(sigaction(SIGUSR2, &csa, 0) == 0, "child sigaction");
-        for (int i = 0; i < 50 && !usr2_seen; i++) {
-            struct timespec ts = {0, 1000000};
-            nanosleep(&ts, 0);
-        }
-        if (usr2_seen != SIGUSR2) _exit(9);
-        _exit(7);
+        kill(getppid(), SIGUSR1);
+        _exit(0);
     }
-    CHECK(kill(pid, SIGUSR2) == 0, "kill child");
-    CHECK(waitpid(pid, &status, 0) == pid, "waitpid child");
-    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 7, "child ran handler");
+    /* The queued signal interrupts the wait. The handler runs before the
+       syscall returns to user space, so the checks below see it. */
+    status = 0;
+    r = waitpid(pid, &status, 0);
+    if (r != pid) {
+        status = 0;
+        r = waitpid(pid, &status, 0);
+    }
+    CHECK(r == pid, "child reaped");
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0, "child exit status");
+    if (usr1_hits == 0) sleep_ms(2);
+    CHECK(usr1_hits == 1, "handler ran once");
+    CHECK(usr1_signo == SIGUSR1, "handler signal number");
+    CHECK(usr1_code == SI_USER, "siginfo code");
+    CHECK(usr1_sender == pid, "siginfo sender");
+    CHECK(usr1_rip != 0, "ucontext instruction pointer");
 
-    /* 5. Default action: SIGTERM terminates the child. */
+    /* A signal whose action is SIG_IGN is discarded. */
+    hits = usr1_hits;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = (void (*)(int))SIG_IGN;
+    sa.sa_flags = 0;
+    sa.sa_restorer = 0;
+    CHECK(sigaction(SIGUSR2, &sa, 0) == 0, "sigaction ignore");
     pid = fork();
-    CHECK(pid >= 0, "fork for default");
+    CHECK(pid >= 0, "fork ignore");
     if (pid == 0) {
-        kill(getpid(), SIGTERM);
-        puts("signals: unreachable");
-        _exit(9);
+        kill(getppid(), SIGUSR2);
+        _exit(0);
     }
-    CHECK(waitpid(pid, &status, 0) == pid, "waitpid default");
-    CHECK(WIFSIGNALED(status), "default terminated by signal");
-    CHECK(WTERMSIG(status) == SIGTERM, "default terminated by SIGTERM");
+    status = 0;
+    r = waitpid(pid, &status, 0);
+    CHECK(r == pid, "ignored child reaped");
+    CHECK(usr1_hits == hits, "ignored signal discarded");
+
+    /* A blocked signal stays pending until the mask allows the delivery. */
+    hits = usr1_hits;
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR1);
+    CHECK(sigprocmask(SIG_BLOCK, &block, &saved) == 0, "sigprocmask block");
+    pid = fork();
+    CHECK(pid >= 0, "fork blocked");
+    if (pid == 0) {
+        kill(getppid(), SIGUSR1);
+        _exit(0);
+    }
+    status = 0;
+    r = waitpid(pid, &status, 0);
+    CHECK(r == pid, "blocked child reaped");
+    CHECK(usr1_hits == hits, "blocked signal not delivered");
+    CHECK(sigpending(&pending) == 0, "sigpending");
+    CHECK(sigismember(&pending, SIGUSR1) == 1, "blocked signal pending");
+    CHECK(sigprocmask(SIG_SETMASK, &saved, 0) == 0, "sigprocmask restore");
+    CHECK(usr1_hits == hits + 1, "queued signal delivered after unblock");
+
+    /* The default action of SIGKILL terminates the child. */
+    pid = fork();
+    CHECK(pid >= 0, "fork killed");
+    if (pid == 0) {
+        raise(SIGKILL);
+        _exit(0);
+    }
+    status = 0;
+    r = waitpid(pid, &status, 0);
+    CHECK(r == pid, "killed child reaped");
+    CHECK(WIFSIGNALED(status), "child killed by a signal");
+    CHECK(WTERMSIG(status) == SIGKILL, "child signal number");
+
+    /* A stopped process continues when SIGCONT arrives. The parent keeps
+       sending SIGCONT because the signal may race with the stop. */
+    pid = fork();
+    CHECK(pid >= 0, "fork stopped");
+    if (pid == 0) {
+        raise(SIGSTOP);
+        _exit(3);
+    }
+    status = 0;
+    r = 0;
+    for (i = 0; i < 500; i++) {
+        kill(pid, SIGCONT);
+        sleep_ms(1);
+        r = waitpid(pid, &status, WNOHANG);
+        if (r == pid) break;
+    }
+    CHECK(r == pid, "continued child reaped");
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 3, "stopped child continued");
 
     if (failures) {
         printf("signals: %d checks failed\n", failures);
         return 1;
     }
-    puts("signals: handler delivery, mask and default action passed");
+    puts("signals: handler, mask, ignore, default and stop/continue passed");
     {
         char *av[] = {"hello-file", "from-signal", 0};
         char *ev[] = {"SLOP_MNU_FILE=1", 0};

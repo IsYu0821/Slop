@@ -7,6 +7,7 @@
 #define SYS_RT_SIGPROCMASK 14
 #define SYS_RT_SIGRETURN 15
 #define SYS_KILL 62
+#define SYS_RT_SIGPENDING 127
 
 /* POSIX wrapper convention: report -1 and stash the raw errno value. */
 static long sig_fail(long r) {
@@ -29,8 +30,10 @@ int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
 
     if (act) {
         kact.handler = act->sa_handler;
-        kact.flags = act->sa_flags;
-        kact.restorer = act->sa_restorer ? act->sa_restorer : __slop_sigrestore;
+        /* The x86-64 ABI needs a restorer: the handler returns into it and
+           it performs the rt_sigreturn syscall. */
+        kact.flags = act->sa_flags | SA_RESTORER;
+        kact.restorer = act->sa_restorer ? act->sa_restorer : __slop_sigreturn_trampoline;
         kact.mask = act->sa_mask;
         kactp = &kact;
     }
@@ -54,8 +57,42 @@ int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
                                          (long)oldset, 0, 0, 0));
 }
 
-/* Installed as sa_restorer for every handler; the kernel rewrites the saved
-   context and returns to the interrupted point through rt_sigreturn. */
-void __slop_sigrestore(void) {
+/* The restorer trampoline lives in sigreturn.S: it must enter the kernel
+   without touching the stack, because the kernel reads the signal frame
+   from the stack pointer the handler returned with. */
+void __slop_sigreturn_trampoline(void);
+
+int raise(int sig) {
+    return kill(getpid(), sig);
+}
+
+int sigpending(sigset_t *set) {
+    long r = sig_fail(__slop_syscall6(SYS_RT_SIGPENDING, (long)set, 8, 0, 0, 0, 0));
+    return (int)r;
+}
+
+int sigemptyset(sigset_t *set) {
+    *set = 0;
+    return 0;
+}
+
+int sigaddset(sigset_t *set, int sig) {
+    if (sig < 1 || sig > 63) return -1;
+    *set |= 1UL << (sig - 1);
+    return 0;
+}
+
+int sigdelset(sigset_t *set, int sig) {
+    if (sig < 1 || sig > 63) return -1;
+    *set &= ~(1UL << (sig - 1));
+    return 0;
+}
+
+int sigismember(const sigset_t *set, int sig) {
+    if (sig < 1 || sig > 63) return -1;
+    return (int)((*set >> (sig - 1)) & 1UL);
+}
+
+void sigreturn(void) {
     __slop_syscall6(SYS_RT_SIGRETURN, 0, 0, 0, 0, 0, 0);
 }

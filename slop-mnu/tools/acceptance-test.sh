@@ -51,7 +51,7 @@ for text in \
   'posix: fork, pipe, dup2 and wait4 passed' \
   'execve: committed /bin/hello-signal' \
   'signals: main entered' \
-  'signals: handler delivery, mask and default action passed' \
+  'signals: handler, mask, ignore, default and stop/continue passed' \
   'execve: committed /bin/hello-file' \
   'file: main entered' \
   'file: create, write, read, unlink, getdents64 and futex passed' \

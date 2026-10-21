@@ -1,5 +1,18 @@
 # One-Linux-program priority status
 
+## Implemented and covered by the acceptance gate
+
+- the published x86-64 `rt_sigframe` with the `ucontext_t` and the `siginfo_t`
+- the `iretq` syscall return, so the user flags and the syscall result both
+  survive a call
+- `rt_sigaction` with the Linux `k_sigaction` field order, `SA_SIGINFO`,
+  `SA_NODEFER`, `SA_RESETHAND` and the restorer requirement
+- `EINTR` for a blocking `wait4` or `waitid` that a handled signal interrupts
+- 1024 descriptors per process and 512 open file descriptions
+- a virtual-memory area ledger that merges adjacent areas and reuses a
+  released range
+- the Linux `madvise` advice set and `rseq` reporting `ENOSYS`
+
 ## Implemented in source, pending build/runtime validation
 
 - UEFI application source and `BOOTX64.EFI` build command
@@ -21,6 +34,14 @@
   `ucontext_t` and `siginfo_t`, `rt_sigreturn`, `SA_SIGINFO`, `SA_NODEFER`,
   `SA_RESETHAND`, the `SA_RESTORER` requirement, `kill` to a process or a
   process group, `rt_sigpending` and `EINTR` for an interrupted blocking wait
+
+## Open defects
+
+- The allocator metadata of a musl program is overwritten now and then: the
+  BusyBox and differential batteries fail intermittently with an allocator
+  assertion. The failure predates this work and is not yet understood; the
+  reproducer is `tools/differential-test.sh`, which fails in the dynamic
+  linker before the program starts.
 
 ## Next in line for the Linux ABI
 

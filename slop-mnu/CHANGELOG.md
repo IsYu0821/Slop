@@ -1,3 +1,15 @@
+## 0.65.0 - 2026-10-21
+- Implemented the published x86-64 `rt_sigframe`: the restorer slot, the `ucontext_t` with the machine context in the published `REG_*` order and the `siginfo_t` with the sender in the `_kill` member. A handler with `SA_SIGINFO` now receives the signal number, the siginfo pointer and the ucontext pointer, like Linux.
+- Replaced the `sysretq` syscall return with an `iretq` return: `SYSRET` loads RFLAGS from RAX, so the old path replaced the user flags with the syscall result. The user flags and the syscall result now both survive the call, and a signal handler is entered with the published argument registers.
+- The delivered signal leaves the pending set, the pre-handler mask is restored on return, and `SA_RESETHAND`, `SA_NODEFER` and `SA_SIGINFO` behave like Linux.
+- A blocking `wait4` or `waitid` reports `EINTR` for a signal with a handler, while a signal with the default "ignore" disposition (`SIGCHLD`) no longer interrupts the wait.
+- A fatal signal that a process sends to itself ends the process before the syscall returns, but only when the default disposition is in effect.
+- Raised the descriptor limits to the Linux values: 1024 descriptors per process and 512 open file descriptions, with a bitmap for the close-on-exec flags.
+- The virtual-memory area ledger merges adjacent areas, reuses a released range and stores the inode number instead of a whole inode, so a process stays small and a long-running program no longer exhausts the table.
+- `madvise` follows the Linux advice set (`MADV_DONTNEED` drops the pages, `MADV_FREE` keeps them, an unknown advice reports `EINVAL`) and `rseq` reports `ENOSYS` so a C library does not assume a registration that never happened.
+- Added `tests/heap.c` and `tools/heap-test.sh`, a heap stress program that reproduces the allocator setup of a C library inside the guest.
+- The firmware runner picks the first OVMF image pair that exists, so the acceptance gate works on distributions that only ship the 4 MiB build.
+
 ## 0.64.0 - 2026-10-20
 - Made `mmap` with `MAP_FIXED` replace the previous mapping instead of failing with `EEXIST`, as Linux does; BusyBox's allocator relies on it to place a guard page below its heap.
 - Made the program break grow repeatedly: the heap area is now replaced when it grows, so the second and later `brk` extensions succeed instead of failing with `EEXIST`.

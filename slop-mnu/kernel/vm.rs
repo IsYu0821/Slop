@@ -1,5 +1,5 @@
 //! Architecture-neutral virtual-memory area ledger. Hardware PTE work stays in arch.
-pub const PAGE_SIZE:usize=4096; pub const MAX_AREAS:usize=64;
+pub const PAGE_SIZE:usize=4096; pub const MAX_AREAS:usize=128;
 // Anonymous mappings live in PML4 slot 129: the 64 GiB firmware identity
 // map in slot 0 and the ELF/stack slots stay untouched.
 pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
@@ -7,9 +7,11 @@ pub const MMAP_BASE:usize=0x0000_40c0_0000_0000;
 pub struct ResourceStats{pub areas:usize,pub bytes:usize,pub pages:usize}
 #[derive(Clone,Copy,Default,PartialEq,Eq)] pub struct VmFlags(pub u8);
 impl VmFlags { pub const READ:Self=Self(1);pub const WRITE:Self=Self(2);pub const EXEC:Self=Self(4);pub const USER:Self=Self(8);pub const ANON:Self=Self(16);pub const EXTERNAL:Self=Self(32);pub const SHARED:Self=Self(64);pub fn contains(self,x:Self)->bool{self.0&x.0==x.0} }
-#[derive(Clone,Copy)] pub enum VmKind { Anon, File { inode: crate::vfs::Inode, offset: u64 }, Stack, Brk }
+#[derive(Clone,Copy)] pub enum VmKind { Anon, File { ino: u64, offset: u64 }, Stack, Brk }
+/* Two file mappings are the same when they refer to the same inode and offset. */
+impl PartialEq for VmKind{fn eq(&self,other:&Self)->bool{match (self,other){(VmKind::Anon,VmKind::Anon)=>true,(VmKind::File{ino:ai,offset:ao},VmKind::File{ino:bi,offset:bo})=>ai==bi&&ao==bo,(VmKind::Stack,VmKind::Stack)=>true,(VmKind::Brk,VmKind::Brk)=>true,_=>false}}}
 impl Default for VmKind { fn default()->Self { VmKind::Anon } }
-#[derive(Clone,Copy,Default)] pub struct Area{pub start:usize,pub end:usize,pub flags:VmFlags,pub kind:VmKind,pub cow:bool,pub locked:bool}
+#[derive(Clone,Copy,Default,PartialEq)] pub struct Area{pub start:usize,pub end:usize,pub flags:VmFlags,pub kind:VmKind,pub cow:bool,pub locked:bool}
 #[derive(Clone)] pub struct Map{areas:[Area;MAX_AREAS],len:usize,next_hint:usize}
 impl Map{
  pub const fn new()->Self{Self{areas:[Area{start:0,end:0,flags:VmFlags(0),kind:VmKind::Anon,cow:false,locked:false};MAX_AREAS],len:0,next_hint:MMAP_BASE}}

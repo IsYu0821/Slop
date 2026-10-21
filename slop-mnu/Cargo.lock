@@ -4,4 +4,4 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.27.0"
+version = "0.65.0"

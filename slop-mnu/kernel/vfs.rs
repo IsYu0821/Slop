@@ -542,7 +542,7 @@ fn proc_fill(subject:ProcSubject,file:&str)->usize{
       let mut perm=[0u8;4];vma_perms(a.flags,&mut perm);
       let mut nbuf=[0u8;128];let mut nlen=0usize;
       let (offset,ino):(u64,u64)=match a.kind{
-       crate::vm::VmKind::File{inode,offset}=>{nlen=core::cmp::min(inode.name_len,nbuf.len());nbuf[..nlen].copy_from_slice(&inode.name[..nlen]);(offset,inode.ino)}
+       crate::vm::VmKind::File{ino,offset}=>{if let Some(inode)=inode_by_ino(ino){nlen=core::cmp::min(inode.name_len,nbuf.len());nbuf[..nlen].copy_from_slice(&inode.name[..nlen]);}(offset,ino)}
        crate::vm::VmKind::Brk=>{nbuf[..6].copy_from_slice(b"[heap]");nlen=6;(0,0)}
        _=>(0,0),
       };
@@ -784,6 +784,14 @@ pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
  let m=ROOT.lock();
  let node=m.nodes[..m.len].iter().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
  read_inode_data(node,off,dst)
+}
+/* Looks an inode up by number; the virtual-memory ledger stores numbers so
+   that a process stays small. */
+pub fn inode_by_ino(ino:u64)->Option<Inode>{
+ if let Some(fs_id)=tmpfs_fs_id(ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==ino)?;return Some(*node)}
+ let m=ROOT.lock();
+ let node=m.nodes[..m.len].iter().find(|n|n.ino==ino)?;
+ Some(*node)
 }
 /* Current live size for an inode; Inode values held by open files are
    snapshots whose size field goes stale after another description writes. */

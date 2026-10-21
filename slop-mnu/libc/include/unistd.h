@@ -17,7 +17,10 @@ struct dirent64 {
 #define DT_REG 8
 #define DT_DIR 4
 
+#ifndef _SLOP_TIMESPEC_DEFINED
+#define _SLOP_TIMESPEC_DEFINED
 struct timespec { long tv_sec; long tv_nsec; };
+#endif
 struct timeval { long tv_sec; long tv_usec; };
 struct timezone { int tz_minuteswest; int tz_dsttime; };
 typedef long ssize_t;

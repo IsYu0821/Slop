@@ -147,6 +147,8 @@ pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
  let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
  {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
  p.pending|=crate::signal::bit(sig);
+ /* Remember the sender so the delivered siginfo can report it. */
+ p.pending_from[sig as usize]=current_pid();
  p.si_code[sig as usize]=0;p.si_value[sig as usize]=0;p.si_overrun[sig as usize]=0;}
  wake_pid(pid);
  Ok(())

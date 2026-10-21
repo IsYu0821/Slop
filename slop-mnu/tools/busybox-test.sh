@@ -42,7 +42,7 @@ if ! grep -q '^BB|done|end$' "$HOSTOUT"; then
 fi
 
 # Guest run: BusyBox replaces the test init and the battery is injected.
-cp tests/bbtest.sh tests/musl/bbtest.sh
+cp "${BBTEST:-tests/bbtest.sh}" tests/musl/bbtest.sh
 python3 - <<'PY'
 from pathlib import Path
 p=Path('tools/build-initramfs.py')

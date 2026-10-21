@@ -7,7 +7,7 @@ from pathlib import Path
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
- 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','sysretq','signal_setup_frame'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS'],
  'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
  'kernel/lib.rs':['spawn_user(loaded)','wait_child(user_pid)','scheduler: user process reaped','kmain_high_continue','apply_relocations','keep_slots','KIMAGE_BASE'],
@@ -29,6 +29,9 @@ required={
  'kernel/sync.rs':['IrqSpinLock','irq_save','irq_restore'],
  'kernel/task.rs':['fpu_area','fpu_save_regs','struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
  'kernel/arch/x86_64/msr.rs':['IA32_FS_BASE','IA32_KERNEL_GS_BASE'],
+ 'kernel/signal.rs':['prepare_delivery','build_frame','restore_frame','UContext','SigInfo','MachineContext','REG_RIP','frame_size'],
+ 'libc/include/signal.h':['ucontext_t','mcontext_t','gregset_t','siginfo_t','kernel_sigaction','SA_SIGINFO'],
+ 'libc/sigreturn.S':['__slop_sigreturn_trampoline','rt_sigreturn'],
  'kernel/arch/x86_64/descriptors.rs':['set_rsp0'],
  'kernel/arch/x86_64/syscall.rs':['set_kernel_stack'],
  'libc/start.S':['call main','environ','syscall'],
@@ -70,6 +73,6 @@ for name,tokens in required.items():
     text=(r/name).read_text()
     for token in tokens:
         assert token in text,(name,token)
-assert (r/'Cargo.toml').read_text().count('version = "0.27.0"')==1
+assert (r/'Cargo.toml').read_text().count('version = "0.65.0"')==1
 print('source consistency checks passed')
 PY

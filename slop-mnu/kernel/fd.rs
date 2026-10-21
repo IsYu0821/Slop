@@ -1,7 +1,9 @@
 //! Open-file descriptions and per-process descriptor tables.
 //! dup and fork share descriptions, mirroring the Unix file-description model.
 use crate::{errno,sync::SpinLock,vfs};
-pub const MAX_FDS:usize=32;const MAX_OPEN:usize=64;
+/* Linux allows 1024 descriptors per process and a far larger system-wide
+   table; the old 32/64 limits made ordinary shells fail with EMFILE. */
+pub const MAX_FDS:usize=1024;const MAX_OPEN:usize=512;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub descriptors:usize,pub open_descriptions:usize,pub open_references:usize}
 #[derive(Clone,Copy)]pub enum OpenKind{Console,Inode(vfs::Inode),PipeRead(u8),PipeWrite(u8),Socket(u8),EventFd(u64,u8),Epoll,TimerFd(u64,u64),CharDevice(u64),BlockDevice(u64),Inotify,SignalFd(u64),Netlink,IoUring,PidFd(u32)}
@@ -21,26 +23,32 @@ static mut IOURING_MAP_REFS:[u32;MAX_OPEN]=[0;MAX_OPEN];
 static mut IOURING_CLOSING:[bool;MAX_OPEN]=[false;MAX_OPEN];
 
 const FREE_FD:i32=-1;
-pub struct FdTable{slots:[i32;MAX_FDS],close_exec:[u8;MAX_FDS]}
+/* The close-on-exec flags are a bitmap: a descriptor table with a thousand
+   entries must still fit in a kernel stack. */
+const CLOSE_WORDS:usize=MAX_FDS/64;
+pub struct FdTable{slots:[i32;MAX_FDS],close_exec:[u64;CLOSE_WORDS]}
 impl FdTable{
- pub fn stdio()->Result<Self,i64>{let mut t=Self{slots:[FREE_FD;MAX_FDS],close_exec:[0;MAX_FDS]};for fd in 0..3{let id=alloc_file(OpenKind::Console)?;t.slots[fd]=id as i32;}Ok(t)}
+ pub fn stdio()->Result<Self,i64>{let mut t=Self{slots:[FREE_FD;MAX_FDS],close_exec:[0;CLOSE_WORDS]};for fd in 0..3{let id=alloc_file(OpenKind::Console)?;t.slots[fd]=id as i32;}Ok(t)}
  pub fn get(&self,fd:usize)->Option<u32>{if fd>=MAX_FDS{return None}if self.slots[fd]<0{None}else{Some(self.slots[fd]as u32)}}
+ fn clear_close(&mut self,fd:usize){self.close_exec[fd/64]&=!(1u64<<(fd%64));}
+ fn set_close_bit(&mut self,fd:usize){self.close_exec[fd/64]|=1u64<<(fd%64);}
+ fn close_bit(&self,fd:usize)->bool{self.close_exec[fd/64]&(1u64<<(fd%64))!=0}
  pub fn install(&mut self,id:u32)->Result<i32,i64>{self.install_from(0,id)}
- pub fn install_from(&mut self,min:usize,id:u32)->Result<i32,i64>{let fd=(min..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[fd]=id as i32;self.close_exec[fd]=0;Ok(fd as i32)}
- pub fn install_pair(&mut self,first:u32,second:u32)->Result<(i32,i32),i64>{let a=(0..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[a]=first as i32;self.close_exec[a]=0;let b=match (a+1..MAX_FDS).find(|&i|self.slots[i]<0){Some(b)=>b,None=>{self.slots[a]=FREE_FD;return Err(errno::EMFILE)}};self.slots[b]=second as i32;self.close_exec[b]=0;Ok((a as i32,b as i32))}
- pub fn replace(&mut self,fd:usize,id:u32)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}if self.slots[fd]>=0{release_closed(self.slots[fd]as u32)}self.slots[fd]=id as i32;self.close_exec[fd]=0;Ok(())}
-   pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;self.close_exec[fd]=0;release_closed(s as u32);Ok(())}
-   pub fn get_close_exec(&self,fd:usize)->Option<bool>{if fd>=MAX_FDS||self.slots[fd]<0{return None}Some(self.close_exec[fd]&FD_CLOEXEC!=0)}
-   pub fn set_close_exec(&mut self,fd:usize,v:bool)->Result<(),i64>{if fd>=MAX_FDS||self.slots[fd]<0{return Err(errno::EBADF)}if v{self.close_exec[fd]|=FD_CLOEXEC}else{self.close_exec[fd]&=!FD_CLOEXEC}Ok(())}
+ pub fn install_from(&mut self,min:usize,id:u32)->Result<i32,i64>{let fd=(min..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[fd]=id as i32;self.clear_close(fd);Ok(fd as i32)}
+ pub fn install_pair(&mut self,first:u32,second:u32)->Result<(i32,i32),i64>{let a=(0..MAX_FDS).find(|&i|self.slots[i]<0).ok_or(errno::EMFILE)?;self.slots[a]=first as i32;self.clear_close(a);let b=match (a+1..MAX_FDS).find(|&i|self.slots[i]<0){Some(b)=>b,None=>{self.slots[a]=FREE_FD;return Err(errno::EMFILE)}};self.slots[b]=second as i32;self.clear_close(b);Ok((a as i32,b as i32))}
+ pub fn replace(&mut self,fd:usize,id:u32)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}if self.slots[fd]>=0{release_closed(self.slots[fd]as u32)}self.slots[fd]=id as i32;self.clear_close(fd);Ok(())}
+   pub fn close(&mut self,fd:usize)->Result<(),i64>{if fd>=MAX_FDS{return Err(errno::EBADF)}let s=self.slots[fd];if s<0{return Err(errno::EBADF)}self.slots[fd]=FREE_FD;self.clear_close(fd);release_closed(s as u32);Ok(())}
+   pub fn get_close_exec(&self,fd:usize)->Option<bool>{if fd>=MAX_FDS||self.slots[fd]<0{return None}Some(self.close_bit(fd))}
+   pub fn set_close_exec(&mut self,fd:usize,v:bool)->Result<(),i64>{if fd>=MAX_FDS||self.slots[fd]<0{return Err(errno::EBADF)}if v{self.set_close_bit(fd)}else{self.clear_close(fd)}Ok(())}
    /* Closes every descriptor marked FD_CLOEXEC, as execve must. Sockets need
       the extra peer teardown that close(2) performs. */
    pub fn close_on_exec(&mut self)->usize{
     let mut closed=0;
     for i in 0..MAX_FDS{
-     if self.close_exec[i]&FD_CLOEXEC==0||self.slots[i]<0{continue}
+     if !self.close_bit(i)||self.slots[i]<0{continue}
      let id=self.slots[i]as u32;
      let kind=kind(id);
-     self.slots[i]=FREE_FD;self.close_exec[i]=0;
+     self.slots[i]=FREE_FD;self.clear_close(i);
      release_closed(id);
      if let Some(OpenKind::Socket(s))=kind{crate::socket::close(s);}
      closed+=1;
@@ -55,7 +63,7 @@ impl FdTable{
    for &slot in &self.slots{if slot<0||ids[..count].contains(&slot){continue}ids[count]=slot;count+=1;}
    count
   }
-  pub fn close_all(&mut self)->usize{let mut closed=0;for (i,s) in self.slots.iter_mut().enumerate(){if *s>=0{release(*s as u32);*s=FREE_FD;self.close_exec[i]=0;closed+=1}}closed}
+  pub fn close_all(&mut self)->usize{let mut closed=0;for i in 0..MAX_FDS{let s=self.slots[i];if s>=0{release(s as u32);self.slots[i]=FREE_FD;self.clear_close(i);closed+=1}}closed}
 }
 impl Drop for FdTable{fn drop(&mut self){let _=self.close_all();}}
 

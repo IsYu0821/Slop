@@ -29,7 +29,7 @@ pub fn read(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
    if nonblock{return Err(crate::errno::EAGAIN)}
    p.readq.register().is_ok()};
   if !registered{return Err(crate::errno::EAGAIN)}
-  if crate::signal::has_pending(){return Err(crate::errno::EINTR)}
+  if crate::task::has_deliverable_signal(){return Err(crate::errno::EINTR)}
   crate::task::block_current();
  }
 }
@@ -42,7 +42,7 @@ pub fn write(id:u8,src:&[u8],nonblock:bool)->Result<usize,i64>{
    if p.len<CAPACITY{let n=core::cmp::min(CAPACITY-p.len,src.len()-done);copy_into(&mut p,&src[done..],n);p.len+=n;done+=n;p.readq.wake_all();false}else if nonblock{return if done>0{Ok(done)}else{Err(crate::errno::EAGAIN)}}else{p.writeq.register().is_ok()}};
   if done==src.len(){break}
   if !registered{return Err(crate::errno::EAGAIN)}
-  if crate::signal::has_pending(){return Err(crate::errno::EINTR)}
+  if crate::task::has_deliverable_signal(){return Err(crate::errno::EINTR)}
   crate::task::block_current();
  }
  Ok(done)

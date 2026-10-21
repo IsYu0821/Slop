@@ -84,7 +84,9 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::MREMAP=>proc_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64,a[4])),
     nr::MADVISE=>proc_result(|p|p.madvise(a[0] as usize,a[1] as usize,a[2])),
     nr::MEMBARRIER=>0,
-    nr::RSEQ=>0,
+    /* rseq is not implemented: Linux reports ENOSYS so libc falls back to a
+       registration-free thread-local storage path. */
+    nr::RSEQ=>errno::neg(errno::ENOSYS),
     nr::PKEY_ALLOC=>0,
     nr::WAITID=>sys_waitid(a[0] as i32,a[1],a[2],a[3] as i32,a[4]),
     nr::READLINKAT=>sys_readlinkat(a[0] as i64,a[1],a[2],a[3]),
@@ -255,14 +257,24 @@ fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
    return cpid as i64;
   }
   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
-  Ok(crate::task::WaitOutcome::Blocked)=>{crate::task::block_current()}
+  Ok(crate::task::WaitOutcome::Blocked)=>{
+   /* A queued signal interrupts the wait, exactly like Linux. */
+   if crate::task::has_deliverable_signal(){return errno::neg(errno::EINTR)}
+   crate::task::block_current();
+  }
   Err(e)=>{return errno::neg(e)},
  }}
 }
 fn sys_kill(pid:u32,sig:i32)->i64{
  /* sig 0 only probes for the existence of the target. */
  if sig==0{let exists=crate::task::sched_pids().iter().any(|&p|p==pid);return if exists{0}else{errno::neg(errno::ESRCH)}}
- match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
+ match crate::signal::send(pid,sig){Ok(())=>{
+  /* A fatal signal aimed at the caller ends the caller before the syscall
+     returns, exactly like Linux. A signal with a handler is delivered
+     normally, so the check only applies to the default disposition. */
+  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  0
+ } Err(e)=>errno::neg(e)}
 }
 fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
  /* Linux reports the previous disposition in oldact before installing the new one. */
@@ -645,7 +657,7 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
     return 0;
    }
    Ok(crate::task::WaitOutcome::NoHang)=>return 0,
-   Ok(crate::task::WaitOutcome::Blocked)=>crate::task::block_current(),
+   Ok(crate::task::WaitOutcome::Blocked)=>{if crate::task::has_deliverable_signal(){return errno::neg(errno::EINTR)}crate::task::block_current()},
    Err(e)=>return errno::neg(e),
   }
  }
@@ -1617,7 +1629,13 @@ fn sys_time(ptr:u64)->i64{
 }
 fn sys_tgkill(tgid:u32,pid:u32,sig:i32)->i64{
  if sig==0{return 0}
- match crate::task::signal_task(tgid,pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
+ match crate::task::signal_task(tgid,pid,sig){Ok(())=>{
+  /* A fatal signal aimed at the caller ends the caller before the syscall
+     returns, exactly like Linux. A signal with a handler is delivered
+     normally, so the check only applies to the default disposition. */
+  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  0
+ } Err(e)=>errno::neg(e)}
 }
 
 #[repr(C)] struct StatFs{f_type:i64,f_bsize:i64,f_blocks:u64,f_bfree:u64,f_bavail:u64,f_files:u64,f_ffree:u64,f_fsid:i64,f_namelen:i64,f_frsize:i64,f_flags:i64,f_spare:[i64;4]}
@@ -2408,7 +2426,13 @@ fn sys_pidfd_send_signal(fd:usize,sig:i32,info:u64,flags:u64)->i64{
  let id=match crate::task::with_current_process(|p|p.fds.get(fd)).flatten(){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
  let pid=match crate::fd::kind(id){Some(crate::fd::OpenKind::PidFd(p))=>p,_=>return errno::neg(errno::EBADF)};
  if sig==0{return 0}
- match crate::signal::send(pid,sig){Ok(())=>0,Err(e)=>errno::neg(e)}
+ match crate::signal::send(pid,sig){Ok(())=>{
+  /* A fatal signal aimed at the caller ends the caller before the syscall
+     returns, exactly like Linux. A signal with a handler is delivered
+     normally, so the check only applies to the default disposition. */
+  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  0
+ } Err(e)=>errno::neg(e)}
 }
 
 #[repr(C)] #[derive(Clone,Copy)] struct SockFilter{code:u16,jt:u8,jf:u8,k:u32}
