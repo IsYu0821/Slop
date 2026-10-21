@@ -6,6 +6,7 @@
 typedef uint64_t EFI_STATUS; typedef void *EFI_HANDLE; typedef uint16_t CHAR16; typedef uint64_t UINTN;
 #define EFI_SUCCESS 0
 #define EFI_BUFFER_TOO_SMALL 0x8000000000000005ULL
+#define EFI_UNSUPPORTED 0x8000000000000003ULL
 #define EFI_ERROR(x) (((x)>>63)!=0)
 typedef struct { uint32_t Type; uint32_t Pad; uint64_t PhysicalStart,VirtualStart,NumberOfPages,Attribute; } EFI_MEMORY_DESCRIPTOR;
 typedef struct { uint64_t Signature;uint32_t Revision,HeaderSize,Crc32,Reserved; } EFI_TABLE_HEADER;

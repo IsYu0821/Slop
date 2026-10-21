@@ -5,7 +5,7 @@ PHDRS {
   data PT_LOAD FLAGS(6);
 }
 SECTIONS {
-  . = 0x0000040000000000 + SIZEOF_HEADERS;
+  . = 0x0000000000400000 + SIZEOF_HEADERS;
   .text : { *(.text .text.*) *(.ltext .ltext.*) } :text
   . = ALIGN(4096);
   .rodata : { *(.rodata .rodata.*) } :rodata

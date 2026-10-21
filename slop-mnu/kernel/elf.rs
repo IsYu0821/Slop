@@ -11,8 +11,8 @@ pub struct ProgramHeader { pub kind:u32,pub flags:u32,pub offset:u64,pub vaddr:u
 #[derive(Clone,Copy,Default)]
 pub struct LoadSegment { pub file_offset:u64,pub vaddr:u64,pub file_size:u64,pub memory_size:u64,pub flags:u32 }
 #[derive(Clone,Copy)]
-pub struct LoadPlan { pub header:Header,pub segments:[LoadSegment;MAX_LOAD_SEGMENTS],pub segment_count:usize,pub has_interpreter:bool,pub image_start:u64,pub image_end:u64 }
-impl Default for LoadPlan { fn default()->Self{Self{header:Header::default(),segments:[LoadSegment::default();MAX_LOAD_SEGMENTS],segment_count:0,has_interpreter:false,image_start:u64::MAX,image_end:0}} }
+pub struct LoadPlan { pub header:Header,pub segments:[LoadSegment;MAX_LOAD_SEGMENTS],pub segment_count:usize,pub has_interpreter:bool,pub interp_offset:u64,pub interp_len:u64,pub image_start:u64,pub image_end:u64 }
+impl Default for LoadPlan { fn default()->Self{Self{header:Header::default(),segments:[LoadSegment::default();MAX_LOAD_SEGMENTS],segment_count:0,has_interpreter:false,interp_offset:0,interp_len:0,image_start:u64::MAX,image_end:0}} }
 
 pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
     if image.len()<64{return Err("ELF header truncated")}
@@ -29,7 +29,7 @@ pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
     for i in 0..h.phnum as u64 {
         let off=h.phoff.checked_add(i*(h.phentsize as u64)).ok_or("program header overflow")? as usize;
         let p=ProgramHeader{kind:u32at(image,off)?,flags:u32at(image,off+4)?,offset:u64at(image,off+8)?,vaddr:u64at(image,off+16)?,filesz:u64at(image,off+32)?,memsz:u64at(image,off+40)?,align:u64at(image,off+48)?};
-        if p.kind==PT_INTERP{out.has_interpreter=true}
+        if p.kind==PT_INTERP{out.has_interpreter=true;out.interp_offset=p.offset;out.interp_len=p.filesz;}
         if p.kind!=PT_LOAD{continue}
         if out.segment_count==MAX_LOAD_SEGMENTS{return Err("too many load segments")}
         if p.filesz>p.memsz{return Err("segment filesz exceeds memsz")}
@@ -44,6 +44,13 @@ pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
     if out.segment_count==0{return Err("ELF has no load segments")}
     if h.entry<out.image_start || h.entry>=out.image_end{return Err("entry outside image")}
     Ok(out)
+}
+/* Reads the NUL-terminated PT_INTERP path recorded by plan(). */
+pub fn interp_path<'a>(image:&'a [u8],plan:&LoadPlan)->Result<&'a str,&'static str>{
+ if plan.interp_len==0{return Err("no PT_INTERP segment")}
+ let seg=image.get(plan.interp_offset as usize..(plan.interp_offset+plan.interp_len)as usize).ok_or("interp truncated")?;
+ let end=seg.iter().position(|&b|b==0).ok_or("interp not NUL-terminated")?;
+ core::str::from_utf8(&seg[..end]).map_err(|_|"interp not utf8")
 }
 fn get<const N:usize>(b:&[u8],o:usize)->Result<[u8;N],&'static str>{b.get(o..o+N).ok_or("field truncated")?.try_into().map_err(|_|"field truncated")}
 fn u16at(b:&[u8],o:usize)->Result<u16,&'static str>{Ok(u16::from_le_bytes(get(b,o)?))}

@@ -12,5 +12,7 @@
 #define MAP_ANONYMOUS 0x20
 
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, long offset);
+int mprotect(void *addr, size_t len, int prot);
+int munmap(void *addr, size_t len);
 
 #endif

@@ -10,6 +10,19 @@ if ! ./tools/build-uefi.sh; then
   printf 'acceptance: build failed\n' >&2
   exit 1
 fi
+rm -f build/net-echo.ready
+python3 tools/net-echo.py >build/net-echo.log 2>&1 &
+ECHO_PID=$!
+trap '[ -n "${ECHO_PID:-}" ] && kill "$ECHO_PID" 2>/dev/null' EXIT
+waited=0
+while [ ! -f build/net-echo.ready ] && [ "$waited" -lt 50 ]; do
+  sleep 0.1
+  waited=$((waited+1))
+done
+if [ ! -f build/net-echo.ready ]; then
+  printf 'acceptance: net-echo server did not become ready\n' >&2
+  exit 1
+fi
 set +e
 timeout "$TIMEOUT" ./tools/run-qemu.sh >"$LOG" 2>&1
 status=$?
@@ -22,8 +35,12 @@ if [ "$status" -ne 33 ]; then
 fi
 for text in \
   'local APIC timer and EOI passed' \
+  'resources: fd accounting self-test passed' \
+  'resources: mmap ledger self-test passed' \
   'scheduler: context, FS base and zombie reap self-test passed' \
+  'resources: tasks active=1 zombies=0 unused=7' \
   'vfs: path lookup and file read self-test passed' \
+  'vfs: tmpfs mount and namespace self-test passed' \
   'execve: committed /bin/hello' \
   'argv, envp, VFS, VM, time, random and EFAULT passed' \
   'execve: committed /bin/hello-c' \
@@ -34,7 +51,24 @@ for text in \
   'posix: fork, pipe, dup2 and wait4 passed' \
   'execve: committed /bin/hello-signal' \
   'signals: main entered' \
-  'signals: handler, mask, ignore, default and stop/continue passed' \
+  'signals: handler delivery, mask and default action passed' \
+  'execve: committed /bin/hello-file' \
+  'file: main entered' \
+  'file: create, write, read, unlink, getdents64 and futex passed' \
+  'execve: committed /bin/hello-syscall' \
+  'syscalls: main entered' \
+  'syscalls: iov, positional io, access, readlink and mremap passed' \
+  'execve: committed /bin/hello-dyn' \
+  'dyn: dynamic linking works' \
+  'execve: committed /bin/hello-thread' \
+  'thread: main entered' \
+  'thread: create, join and mutex passed' \
+  'execve: committed /bin/hello-socket' \
+  'sock: main entered' \
+  'sock: socketpair and stream listen/connect/accept passed' \
+  'execve: committed /bin/hello-net' \
+  'net: main entered' \
+  'net: udp and tcp echo passed' \
   'task exited status=0' \
   'process address space reclaimed status=0 vector=0'; do
   if ! grep -F "$text" "$LOG" >/dev/null; then
@@ -42,7 +76,7 @@ for text in \
     exit 1
   fi
 done
-if grep -F 'acceptance failed' "$LOG" >/dev/null || grep -F 'kernel exception' "$LOG" >/dev/null; then
+if grep -F 'acceptance failed' "$LOG" >/dev/null || grep -F 'kernel exception' "$LOG" >/dev/null || grep -F 'resources: cleanup incomplete' "$LOG" >/dev/null; then
   printf 'acceptance: failure marker found\n' >&2
   exit 1
 fi

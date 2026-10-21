@@ -1,18 +1,188 @@
+## 0.64.0 - 2026-10-20
+- Made `mmap` with `MAP_FIXED` replace the previous mapping instead of failing with `EEXIST`, as Linux does; BusyBox's allocator relies on it to place a guard page below its heap.
+- Made the program break grow repeatedly: the heap area is now replaced when it grows, so the second and later `brk` extensions succeed instead of failing with `EEXIST`.
+- Fixed BusyBox's own allocator dying inside `malloc` after a failed heap setup; a sixty-command `sed` loop in the guest went from eight crashes to two.
+
+## 0.63.0 - 2026-10-20
+- Measured Linux compatibility with a real userspace: a static, non-PIE BusyBox 1.36.1 (musl) now runs in the guest and its output is compared byte for byte with the same binary on Linux (`tools/busybox-test.sh`, 115 checks over shell builtins, the filesystem, the text tools and process control).
+- Fixed the syscall result being lost when a signal arrived: `rt_sigreturn` restores the interrupted register frame, but the dispatcher overwrote it, so `wait4` returned 0 and shells lost the exit status of their children.
+- Path resolution now follows symlinks in every component, absolute link targets resolve from the root, and `readlinkat` reports the link itself instead of its target.
+- Fixed short reads on regular files, which truncated every initramfs file to its first page.
+- Implemented `rt_sigsuspend` properly (x86-64 passes the mask pointer in `rdi`; the old code stored the pointer as the mask) so shells waiting for children wake up, and added the missing `vfork` syscall.
+- Fixed `execve` reusing the frames of the image it replaced (the teardown then freed the new image), and made `create` fail with `ENOENT` when the parent directory is missing.
+- Made the initramfs files read-only so a write can no longer corrupt the kernel image, and made `fstat` report the live file size.
+- Preserved the SSE register file across context switches (the sixteen XMM registers are saved per task) and enabled `CR4.OSFXSR`.
+
+## 0.62.0 - 2026-10-19
+- Relocated the kernel to a high-half image base at boot: a pre-relocation stage clones the firmware PML4, maps the image at `0xffff_9000_0000_0000` and a 1 GiB direct map at `0xffff_8000_0000_0000`, copies the loaded PE image, applies its `DIR64` base relocations, jumps high and drops every other PML4 slot.
+- BootInfo ABI 2 reports the loader-chosen `image_base`/`image_size`, so self-relocation works regardless of where OVMF placed the image.
+- Added a physical-access abstraction (`EarlyPhys` identity during table construction, direct-map `Identity` afterwards, `phys_to_virt`, page-walking `virt_to_phys`) and converted virtio-net/virtio-blk DMA, APIC/IOAPIC MMIO, initrd and VFS/process/seccomp frame access to it.
+- Removed the `exec` slot-0 rejection: standard non-PIE static binaries linked at `0x400000` now run unmodified; user address-space clones keep the direct map and kernel image as supervisor mappings.
+- Test stubs and `/init` now link at `0x400000`, and a `-no-pie` musl helper (`DIFF_NOPIE_OK`) verifies fork+exec of a low-address `ET_EXEC` binary.
+- Fixed `virt_to_phys` to preserve the in-page offset, which had aliased DMA buffers within a page and broken ARP/network traffic.
+
+## 0.61.0 - 2026-10-19
+- Made pthreads work end to end under musl: `pthread_create`/`pthread_join`, contended mutexes, condition variables, `pthread_kill` and per-thread TLS.
+- Implemented `CLONE_PARENT_SETTID`/`CLONE_CHILD_SETTID` tid writes (including correct `clone3` struct offsets), so musl's exiting threads release `__thread_list_lock` through the kernel's clear-child-tid write instead of deadlocking the first join.
+- Added a per-task `tgid`: threads inherit their creator's group id, `gettid` returns the task id while `getpid` returns the group id, and `tkill`/`tgkill` deliver `pthread_kill` to the addressed thread.
+- Fixed signal delivery from the syscall-exit path to use the live per-task stack frame, so a thread that blocked inside a syscall (for example in `nanosleep`) runs its handler instead of losing the signal against another task's stale frame.
+- Stopped sending `SIGCHLD` for thread exits and switched futex waiters to `(uaddr, pid)` identity so woken waiters cannot lose their wakeup to a recycled wait-table slot.
+- Reclaimed dead thread slots at the next thread spawn, folding each exited thread's CPU ticks into its thread-group leader like Linux does.
+- Expanded native/guest differential tests with pthread create/join, condvar, pthread_kill and TLS cases.
+
+## 0.60.0 - 2026-10-19
+- Added per-process CPU-time accounting: the timer interrupt attributes each 1ms tick to user or kernel time from the interrupted CS.
+- Implemented CPU clocks: `clock_gettime(CLOCK_PROCESS_CPUTIME_ID/CLOCK_THREAD_CPUTIME_ID)` now return accounted CPU time and `clock_getres` reports the tick resolution.
+- Implemented real `getrusage` (`RUSAGE_SELF`, `RUSAGE_THREAD`, `RUSAGE_CHILDREN`) and `times()`, and `wait4` now returns the reaped child's usage in `struct rusage`, folded into the parent's children totals.
+- Made `ITIMER_VIRTUAL` and `ITIMER_PROF` functional: they count user (and kernel) ticks, fire `SIGVTALRM`/`SIGPROF` with interval reload, and `setitimer`/`getitimer` accept all three timers.
+- `/proc/<pid>/stat` reports utime/stime/cutime/cstime and fixes the priority/nice/num_threads field positions.
+- Expanded native/guest differential tests with CPU-clock, rusage and virtual-timer cases.
+
+## 0.59.0 - 2026-10-19
+- Implemented POSIX record locks: `fcntl` `F_GETLK`/`F_SETLK`/`F_SETLKW` with per-process ownership, range replacement with trimming and splitting, owner pid reporting, blocking waits that return `EINTR` on signals, release when any descriptor of the inode closes and at process exit.
+- Implemented open-file-description locks `F_OFD_GETLK`/`F_OFD_SETLK`/`F_OFD_SETLKW`, owned by the description so `dup`/`fork` share them and the last close releases them.
+- Added robust-futex death handling at task exit: the robust list is walked, still-owned words get `FUTEX_OWNER_DIED` with the TID cleared, and a waiter is woken when `FUTEX_WAITERS` was set, mirroring Linux.
+- Fixed `MAP_SHARED|MAP_ANONYMOUS` mappings so forked processes keep sharing the same frames instead of copy-on-write splitting.
+- Expanded native/guest differential tests with record-lock, OFD-lock and robust-futex cases.
+
+## 0.58.0 - 2026-10-18
+- Implemented the POSIX timer family (`timer_create/settime/gettime/getoverrun/delete`) with signal notification, `si_value`, overrun counting and `TIMER_ABSTIME`.
+- Made `alarm`, `getitimer` and `setitimer` share a per-process `ITIMER_REAL` timer; `ITIMER_VIRTUAL`/`ITIMER_PROF` report `EINVAL` pending CPU-time accounting.
+- Added `clock_settime` plus a CMOS RTC seed for `CLOCK_REALTIME`, truthful clock-id classification in `clock_gettime`/`clock_getres`, and `TIMER_ABSTIME` support in `clock_nanosleep`.
+- Implemented `rt_sigpending`, `rt_sigtimedwait` with timer siginfo delivery, and `pause` returning `EINTR`.
+- Added `set_robust_list`/`get_robust_list` storage and round trip.
+- Fixed the timer IRQ stub to align the kernel stack dynamically before the Rust handler; a `movaps` in the new tick code exposed the statically assumed alignment.
+- Expanded native/guest differential tests with timer, itimer, clock, robust-list and sigpending cases.
+
+## 0.57.0 - 2026-10-18
+- Added per-open-file status flags: `O_NONBLOCK` for opens, pipes and sockets, live-`O_APPEND` writes, and `FD_CLOEXEC` cleared on `execve`.
+- Implemented the descriptor-control surface of `fcntl` (`F_DUPFD`, `F_DUPFD_CLOEXEC`, `F_GETFD`/`F_SETFD`, `F_GETFL`/`F_SETFL`, `F_GETLK`) and flag handling in `open`/`openat`, `socket`/`accept4`, and `dup3`.
+- Added `flock(2)` advisory locks with blocking and `LOCK_NB` contention, wake-on-release, and per-open-file sharing.
+- Routed `sendto`/`recvfrom`/`sendmsg`/`recvmsg` through `MSG_DONTWAIT`.
+- Fixed a latent fork→exec→wait kernel stack overflow by doubling kernel stacks to 64 KiB and adding a syscall-entry stack guard.
+- Expanded native/guest differential tests with flock contention, nonblocking pipe and fcntl flag round trips, append-after-lseek content, and close-on-exec across `execve`.
+
+## 0.56.0 - 2026-10-18
+- Replaced placeholder `/proc` data with truthful per-process cmdline, environ, status, stat, statm and maps, including `/proc/<pid>` introspection.
+- Added dynamic `/proc/self/fd` enumeration and readlink targets for pipes, sockets, devices, inodes and anon inodes; generalized readlink/readlinkat over all proc links.
+- Derived system files from live state: meminfo (frame allocator), uptime (monotonic clock), loadavg and mounts (scheduler and mount registry).
+- Implemented `madvise(MADV_DONTNEED|MADV_FREE)` page discard, `MAP_POPULATE` eager fault-in, and truthful `mincore` residency reporting.
+- Expanded native/guest differential tests with procfs truth, madvise zeroing and mincore/populate residency cases.
+
+## 0.55.0 - 2026-10-18
+- Added per-process descriptor, open-file, VM-area/page and scheduler-state accounting with exit-time reclamation checks.
+- Moved mount routing into the VFS and added namespace-cloned tmpfs mounts with longest-prefix path selection.
+- Increased recycled-frame capacity to cover the configured 256 MiB guest and fixed process-exit cleanup failures.
+- Implemented capget/capset, capability-checked identity changes, `PR_SET_NO_NEW_PRIVS`, and stricter seccomp filter validation and lifetime management.
+- Hardened inotify watch matching, event records, overflow, close cleanup and create/modify delivery.
+- Hardened io_uring parameter/ring bounds, descriptor lookup, read/write usercopy, and mapping lifetime; added native/guest NOP coverage.
+- Expanded native/guest tests for errno behavior, `/proc/self/status`, capabilities, seccomp, inotify and io_uring; made the differential runner validate QEMU status and restore inputs on failure.
+
+## 0.54.0 - 2026-10-18
+- Expanded differential syscall coverage across file, directory, process, memory, time, identity and notification APIs.
+- Added native versus guest execution comparison.
+- Kept the full acceptance suite green.
+
+## 0.53.0 - 2026-10-18
+- Added a differential syscall test harness.
+- Added tests for file, directory, process, stat, cwd and identity syscalls.
+- Compared native and guest execution results.
+
+## 0.52.0 - 2026-10-18
+- Added per-namespace UTS hostname state.
+- Added mount-namespace filtering for mount tables.
+- Improved mount-aware path resolution.
+
+## 0.51.0 - 2026-10-18
+- Added per-namespace UTS hostname state.
+- Improved sethostname propagation across namespaces.
+- Delivered inotify events for filesystem changes.
+
+## 0.50.0 - 2026-10-18
+- Added read-only ext2 support on virtio-blk.
+- Added /mnt integration and ext2 file reads.
+- Parsed ext2 superblocks, group descriptors, inodes and directories.
+
+## 0.49.0 - 2026-10-18
+- Added io_uring ring allocation and parameter reporting.
+- Added synchronous NOP, read and write submission processing.
+- Added completion queue entry posting.
+
+## 0.48.0 - 2026-10-18
+- Added classic BPF evaluation for seccomp filters.
+- Supported seccomp allow, errno, trap and kill actions.
+- Validated and stored user-supplied filter programs.
+
+## 0.47.0 - 2026-10-18
+- Added per-process hostname state and sethostname support.
+- Added seccomp strict-mode enforcement.
+- Reflected hostname changes in uname.
+
+## 0.46.0 - 2026-10-18
+- Added a mount table and mount-aware path resolution.
+- Implemented mount and umount2 handling.
+- Enabled bind-style path translation through mountpoints.
+
+## 0.45.0 - 2026-10-18
+- Added pidfd_open and pidfd_send_signal.
+- Made private file-backed mmap writable.
+- Added setsockopt, getsockopt, sendmsg, recvmsg, accept4, sendmmsg and recvmmsg.
+
+## 0.44.0 - 2026-10-18
+- Added /proc/self/exe, root and cwd symlinks.
+- Added /proc/self/ns with namespace identifier links.
+- Improved process introspection through readlink.
+
+## 0.43.0 - 2026-10-18
+- Added setsockopt, getsockopt, sendmsg, recvmsg and accept4.
+- Aggregated iovec buffers in sendmsg/recvmsg.
+- Accepted common socket option calls.
+
+## 0.42.0 - 2026-10-18
+- Expanded `/sys` with class, block, device and kernel entries.
+- Added network interface and block device sysfs attributes.
+- Added `sethostname` and hostname reporting through `uname`.
+
+## 0.41.0 - 2026-10-18
+- Added virtio-blk legacy driver and `/dev/vda`.
+- Added block device VFS/file operations and seek support.
+- Added synchronous disk read/write through virtio descriptor chains.
+
+## 0.40.0 - 2026-10-18
+- Added credentials, groups, capabilities, umask and namespace state to processes.
+- Added setuid/setgid/setreuid/setregid/setresuid/setresgid/getgroups/setgroups/capget/capset/unshare/setns/seccomp syscalls.
+- Added netlink sockets, inotify and signalfd support.
+- Added a `/sys` virtual filesystem with kernel and device entries.
+- Propagated namespace flags through clone and fork.
+
+## 0.39.0 - 2026-10-18
+- Added symlink-aware path resolution, `symlink`, `link`, and `readlink`.
+- Added a minimal `/proc` filesystem with common self and system files.
+- Added `timerfd_create`, `timerfd_settime`, and `timerfd_gettime`.
+- Extended file descriptors with `TimerFd`.
+
+## 0.38.0 - 2026-10-18
+- Added root `/` VFS node support and working `opendir`/`readdir` on `/`.
+- Added compatibility syscalls/stubs: statfs, fstatfs, readlink, close_range, mincore, fallocate, sendfile, sync, getcpu, sched_setaffinity, mlock2, personality, nice, sync_file_range, xattr, fadvise, inotify/timerfd/signalfd stubs.
+- Implemented `fallocate` growth and descriptor-to-descriptor `sendfile`.
+
+## 0.37.0 - 2026-10-18
+- Added cwd-aware path resolution across VFS syscalls and process state.
+- Added filesystem syscalls: mkdir, rmdir, rename, chmod, fchmod, truncate, ftruncate, stat, lstat, unlink, dup.
+- Added process/session syscalls: setpgid, getpgid, setsid, getsid, prctl, sysinfo.
+- Added time/select/rlimit syscalls: gettimeofday, getrlimit, setrlimit, getrusage, times, select, pselect6, clock_getres, clock_nanosleep, utimensat.
+- Added read-only file-backed mmap support.
+- Extended libc wrappers and headers accordingly.
+
 # Changelog
 
-## 0.29.0 - 2026-10-21
-- Replaced the `sysretq` syscall return with an `iretq` return: `SYSRET` loads RFLAGS from RAX, so the old path replaced the user flags with the syscall result and faulted the user process.
-- Made the syscall entry state per task: the user stack pointer and the register frame now travel with the task, so a task that blocks inside a syscall resumes with its own context instead of the context of the task that ran in between.
-- Added real Linux signal delivery: the published x86-64 `rt_sigframe` is built on the user stack with the restorer, the `ucontext_t` and the `siginfo_t`, and `rt_sigreturn` restores the interrupted context.
-- Added `SA_SIGINFO`, `SA_NODEFER`, `SA_RESETHAND`, `SA_RESTORER` enforcement and the `k_sigaction` field order to `rt_sigaction`; `rt_sigprocmask` now reads the mask from the user pointer.
-- Added `rt_sigpending`, per-signal sender tracking for `si_pid`, and default actions: ignore, terminate and stop.
-- `kill` now reaches the requested process or process group instead of the caller; `SIGCONT` resumes a stopped task.
-- Added `EINTR` for a blocking `wait4` or pipe read that is interrupted by a queued signal.
-- `fork` clears the pending set of the child and `execve` clears the pending set and the mask.
-- Added `libc/signal.c` and `libc/sigreturn.S` with the `sigaction`, `sigprocmask`, `sigpending`, `raise` and set helpers, the signal restorer trampoline and the `siginfo_t`/`ucontext_t` definitions.
-- Added `/bin/hello-signal` to the acceptance chain and the signal markers to the acceptance gate.
-- Added `tools/check-abi.py`, a compiler-free gate that checks the published `k_sigaction`, `sigcontext`, `ucontext_t` and `siginfo_t` layouts and the `REG_*` index list against the kernel structures and the libc header.
-- Added `tools/check-source.ps1`, a host-side mirror of the source consistency gate, and `tools/make-snapshot.py`, which regenerates `SOURCE_SNAPSHOT.txt` from the working tree.
+## 0.36.0 - 2026-10-18
+- Added a CAM PCI scanner with multi-function and 64-bit BAR support plus x86-64 port-I/O primitives.
+- Added a legacy virtio-net driver: split rings, RX recycling, synchronous TX completion, and the mandatory 10-byte legacy header.
+- Added an Ethernet/ARP/IPv4/ICMP/UDP stack and a minimal TCP client (go-back-N, RTO, FIN shutdown) in `kernel/net.rs`.
+- Wired `AF_INET` into the socket layer and Linux ABI: `socket`, `bind`, `connect`, `sendto`, `recvfrom`, `getsockname`, `getpeername`, `shutdown`, with `sockaddr_in` translation.
+- Switched the acceptance guest to `virtio-net-pci` with QEMU user networking and added `tools/net-echo.py`, a dual UDP/TCP host echo server.
+- Added `/bin/hello-net` (musl) exercising UDP and TCP echo round trips, chained after `/bin/hello-socket`.
 
 ## 0.28.0 - 2026-10-18
 - Added a Linux signal ABI foundation: `kill`, `rt_sigaction`, `rt_sigprocmask` and `rt_sigreturn` syscalls in `kernel/signal.rs`.

@@ -12,5 +12,6 @@ int strcmp(const char *a, const char *b);
 int strncmp(const char *a, const char *b, size_t n);
 char *strchr(const char *s, int c);
 char *strcpy(char *dst, const char *src);
+char *strstr(const char *haystack, const char *needle);
 
 #endif

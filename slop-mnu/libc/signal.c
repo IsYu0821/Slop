@@ -3,103 +3,59 @@
 #include <errno.h>
 #include "slop_internal.h"
 
-#define SYS_KILL 62
 #define SYS_RT_SIGACTION 13
 #define SYS_RT_SIGPROCMASK 14
 #define SYS_RT_SIGRETURN 15
-#define SYS_RT_SIGPENDING 127
+#define SYS_KILL 62
 
-/* The kernel action layout: handler, flags, mask and restorer. The user
-   visible struct sigaction keeps the POSIX order, so the wrapper translates. */
-struct k_sigaction {
-    void (*k_handler)(int);
-    unsigned long k_flags;
-    sigset_t k_mask;
-    void (*k_restorer)(void);
-};
-
-/* The handler returns into this address, which performs the rt_sigreturn
-   syscall and lets the kernel restore the interrupted context. */
-extern void __slop_sigreturn_trampoline(void);
-
-int kill(pid_t pid, int sig) {
-    long r = __slop_syscall6(SYS_KILL, (long)pid, (long)sig, 0, 0, 0, 0);
+/* POSIX wrapper convention: report -1 and stash the raw errno value. */
+static long sig_fail(long r) {
     if (r < 0) {
         errno = (int)-r;
         return -1;
     }
-    return 0;
+    return r;
 }
 
-int raise(int sig) {
-    return kill(getpid(), sig);
+int kill(int pid, int sig) {
+    return (int)sig_fail(__slop_syscall6(SYS_KILL, pid, sig, 0, 0, 0, 0));
 }
 
 int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
-    struct k_sigaction ka = {0, 0, 0, 0};
-    struct k_sigaction ko = {0, 0, 0, 0};
-    long r;
+    struct kernel_sigaction kact;
+    struct kernel_sigaction kold;
+    struct kernel_sigaction *kactp = 0;
+    struct kernel_sigaction *koldp = 0;
+
     if (act) {
-        ka.k_handler = act->sa_handler;
-        ka.k_flags = ((unsigned long)act->sa_flags & ~(unsigned long)SA_RESTORER) | SA_RESTORER;
-        ka.k_mask = act->sa_mask;
-        ka.k_restorer = act->sa_restorer ? act->sa_restorer : __slop_sigreturn_trampoline;
+        kact.handler = act->sa_handler;
+        kact.flags = act->sa_flags;
+        kact.restorer = act->sa_restorer ? act->sa_restorer : __slop_sigrestore;
+        kact.mask = act->sa_mask;
+        kactp = &kact;
     }
-    r = __slop_syscall6(SYS_RT_SIGACTION, (long)sig, act ? (long)&ka : 0,
-                         oldact ? (long)&ko : 0, 0, 0, 0);
-    if (r < 0) {
-        errno = (int)-r;
-        return -1;
-    }
+    if (oldact) koldp = &kold;
+
+    long r = sig_fail(__slop_syscall6(SYS_RT_SIGACTION, sig,
+                                      (long)kactp, (long)koldp, 0, 0, 0));
+    if (r < 0) return -1;
+
     if (oldact) {
-        oldact->sa_handler = ko.k_handler;
-        oldact->sa_mask = ko.k_mask;
-        oldact->sa_flags = (int)ko.k_flags;
-        oldact->sa_restorer = ko.k_restorer;
+        oldact->sa_handler = kold.handler;
+        oldact->sa_mask = kold.mask;
+        oldact->sa_flags = kold.flags;
+        oldact->sa_restorer = kold.restorer;
     }
     return 0;
 }
 
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
-    long r = __slop_syscall6(SYS_RT_SIGPROCMASK, (long)how, (long)set, (long)oldset, 0, 0, 0);
-    if (r < 0) {
-        errno = (int)-r;
-        return -1;
-    }
-    return 0;
+    return (int)sig_fail(__slop_syscall6(SYS_RT_SIGPROCMASK, how, (long)set,
+                                         (long)oldset, 0, 0, 0));
 }
 
-int sigpending(sigset_t *set) {
-    long r = __slop_syscall6(SYS_RT_SIGPENDING, (long)set, 8, 0, 0, 0, 0);
-    if (r < 0) {
-        errno = (int)-r;
-        return -1;
-    }
-    return 0;
-}
-
-int sigemptyset(sigset_t *set) {
-    *set = 0;
-    return 0;
-}
-
-int sigaddset(sigset_t *set, int sig) {
-    if (sig < 1 || sig > 63) return -1;
-    *set |= 1UL << (sig - 1);
-    return 0;
-}
-
-int sigdelset(sigset_t *set, int sig) {
-    if (sig < 1 || sig > 63) return -1;
-    *set &= ~(1UL << (sig - 1));
-    return 0;
-}
-
-int sigismember(const sigset_t *set, int sig) {
-    if (sig < 1 || sig > 63) return -1;
-    return (int)((*set >> (sig - 1)) & 1UL);
-}
-
-void sigreturn(void) {
+/* Installed as sa_restorer for every handler; the kernel rewrites the saved
+   context and returns to the interrupted point through rt_sigreturn. */
+void __slop_sigrestore(void) {
     __slop_syscall6(SYS_RT_SIGRETURN, 0, 0, 0, 0, 0, 0);
 }

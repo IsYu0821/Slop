@@ -71,3 +71,14 @@ char *strcpy(char *dst, const char *src) {
     }
     return dst;
 }
+
+char *strstr(const char *haystack, const char *needle) {
+    size_t nlen = strlen(needle);
+    if (nlen == 0) return (char *)haystack;
+    for (; *haystack; haystack++) {
+        if (*haystack == *needle && strncmp(haystack, needle, nlen) == 0) {
+            return (char *)haystack;
+        }
+    }
+    return 0;
+}

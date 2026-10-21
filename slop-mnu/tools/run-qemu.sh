@@ -11,5 +11,7 @@ exec "$QEMU" -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
   -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
   -drive format=raw,file=fat:rw:build/efi \
+  -device virtio-net-pci,netdev=net0,disable-modern=on \
+  -netdev user,id=net0 \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   -serial stdio -display none -no-reboot -no-shutdown

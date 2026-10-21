@@ -48,11 +48,7 @@ resume_user_asm:
     mov 96(%rdi), %rax
     mov 88(%rdi), %rdi
     iretq
-/* Signal delivery no longer needs a kernel side trampoline. The kernel builds
-   the rt_sigframe on the user stack, enters the handler with the frame
-   arguments in RDI, RSI and RDX, and stores the handler restorer at the bottom
-   of the frame. The handler returns into that restorer, which performs the
-   rt_sigreturn syscall and lets the kernel restore the interrupted context. */
 #ifdef __ELF__
 .size resume_user_asm,.-resume_user_asm
 #endif
+

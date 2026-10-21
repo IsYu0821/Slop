@@ -58,7 +58,7 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
     }
     unsafe {
         mask_pic();
-        LAPIC = info.lapic;
+        LAPIC = super::phys::phys_to_virt(info.lapic);
         let old = super::msr::rdmsr(super::msr::IA32_APIC_BASE);
         let base = (info.lapic & 0xffff_f000) | (old & 0xfff) | (1 << 11);
         super::msr::wrmsr(super::msr::IA32_APIC_BASE, base);
@@ -66,10 +66,11 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
         write(0x80, 0);
         write(0x350, 1 << 16);
         write(0x360, 1 << 16);
-        let max = ((io_read(info.ioapic, 1) >> 16) & 0xff) as u8;
+        let ioapic = super::phys::phys_to_virt(info.ioapic);
+        let max = ((io_read(ioapic, 1) >> 16) & 0xff) as u8;
         for pin in 0..=max {
-            io_write(info.ioapic, 0x10 + pin * 2, (1 << 16) | (0x20 + pin as u32));
-            io_write(info.ioapic, 0x11 + pin * 2, 0);
+            io_write(ioapic, 0x10 + pin * 2, (1 << 16) | (0x20 + pin as u32));
+            io_write(ioapic, 0x11 + pin * 2, 0);
         }
         // Periodic bootstrap tick. Frequency is intentionally uncalibrated until HPET/PIT calibration is added.
         write(0x3e0, 0x3);
@@ -105,7 +106,8 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
         return Err("GSI below IOAPIC base");
     }
     let pin = gsi - info.ioapic_gsi;
-    let max = ((unsafe { io_read(info.ioapic, 1) } >> 16) & 0xff) as u32;
+    let ioapic = unsafe { super::phys::phys_to_virt(info.ioapic) };
+    let max = ((unsafe { io_read(ioapic, 1) } >> 16) & 0xff) as u32;
     if pin > max {
         return Err("GSI outside IOAPIC");
     }
@@ -116,16 +118,17 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
         | if masked { 1 << 16 } else { 0 };
     let dest = unsafe { read(0x20) } & 0xff00_0000;
     unsafe {
-        io_write(info.ioapic, 0x10 + (pin as u8) * 2, low);
-        io_write(info.ioapic, 0x11 + (pin as u8) * 2, dest);
+        io_write(ioapic, 0x10 + (pin as u8) * 2, low);
+        io_write(ioapic, 0x11 + (pin as u8) * 2, dest);
     }
     Ok(())
 }
 
 #[unsafe(no_mangle)]
-pub extern "sysv64" fn apic_timer_rust() {
+pub extern "sysv64" fn apic_timer_rust(cs:u64) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    crate::task::on_timer_tick();
+    crate::task::on_timer_tick(cs & 3 != 0);
+    crate::net::poll();
     unsafe { write(0xb0,0) }
 }
 
