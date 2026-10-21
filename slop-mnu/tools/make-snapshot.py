@@ -34,6 +34,11 @@ def collect() -> list:
             continue
         if rel.as_posix() in SKIP_FILES:
             continue
+        try:
+            (ROOT / rel.as_posix()).read_text(encoding='utf-8')
+        except (UnicodeDecodeError, ValueError):
+            # Binary artefacts (test programs, libraries) are not sources.
+            continue
         files.append(rel.as_posix())
     return sorted(files)
 

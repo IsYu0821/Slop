@@ -74,6 +74,6 @@ for name,tokens in required.items():
     text=(r/name).read_text()
     for token in tokens:
         assert token in text,(name,token)
-assert (r/'Cargo.toml').read_text().count('version = "0.65.0"')==1
+assert (r/'Cargo.toml').read_text().count('version = "0.68.0"')==1
 print('source consistency checks passed')
 PY
