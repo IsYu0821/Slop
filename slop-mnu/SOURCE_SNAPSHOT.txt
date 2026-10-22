@@ -5,7 +5,7 @@ MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-79715d03c0c13a92eabaa950063c8623b7a9ec4d19fb1aab51290f883ae5eced     36341  CHANGELOG.md
+28d01a63be59ce36321f73ce437a55ae7bd542718ff154c949e9511c39c26ad9     37743  CHANGELOG.md
 53edc938dfaa847ad0f24257cbbb486ba765dce6ec12e8dd79cf0c08bbb3d368       160  Cargo.lock
 3b24f69eca603bf0f15f706f1c64148a283d02c4db7de5190ee0021f6fb7e363       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
@@ -84,15 +84,16 @@ d9003658b6ca3b3e9daeea80994f71f93ecd206dc97871ef95fc14495cb5cccc      4795  docs
 fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b      3991  docs/milestone69.md
 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2      1447  docs/milestone7.md
 521c8c7e2b8506430bde02a3292929500f771ed412213e6766ec4877e365d716      4350  docs/milestone70.md
+3362034b0edbb8ab33ff6ce947485e314cd76c85be69bda03934622a4787f638      2867  docs/milestone71.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-4e9cd9f8cecf00e28c7c7076c6ac4e7370142aa1d115b7b58b40d0ed132854d3      4206  docs/priority-status.md
+138fe82e89377fb1e10d1fb1007ab83d25a823b92f1f9a71b5f08caf976efb48      3902  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
 6e8463960e55a8bb3a5f808d4d2f9b92a9f0c50586d6066fe9c91f722dc5ab1c       133  kernel/arch/mod.rs
-ac90a93fcb186339f066d119b9b08454a828f0a09a2ae8a285686c07b1ba6c64      6938  kernel/arch/x86_64/apic.rs
+477deaeb4269142ca88f8885063e431267ad62b9c00edab40fb0edad29842998      7194  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
 fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4      1553  kernel/arch/x86_64/descriptors.rs
 e60c17d57360942d48d5de51a6abb7484d1493a793f1b360df06c3c4087697fc      2573  kernel/arch/x86_64/idt.rs
@@ -122,10 +123,10 @@ a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kern
 5ff4e9d1032ffed918399821db681c58381f8bc46ab21d146e938b6fd4995a79      7923  kernel/ext2.rs
 3f68aff2499592cd3c4637370fe3064d613da11dab3ef202b6c8e006684c2881     21372  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
-a7167952a3e3c90d7aa88a27a01ab977abdbf56cd9ed6e5e6eade6f859e7c65d      3131  kernel/futex.rs
+48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
 381694ccd8068bf5e69ef31032b56175c911b733bfb67f3a6cc59aa0b628cf24     10908  kernel/lib.rs
-cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6    146375  kernel/linux_abi/mod.rs
+7d3315bfbb222ade06dfea6bda151b7828def56b9a611c65b0e08c44f157e81d    146245  kernel/linux_abi/mod.rs
 3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df      6824  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
@@ -133,17 +134,17 @@ cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6    146375  kern
 1ec33d3b2aa19f4530637b1b8c40239c50b7ecc01bc8152984e075373be07495     22573  kernel/net.rs
 af0e064ebcd09d48855cbc9b8f1399316549fbaacbfe7a6eb93c7c23b187bd6a      3339  kernel/pipe.rs
 54d5972f217a6b8f65da30553e3428d9b462bca5bcb73b01dd67152e9527f10f      6262  kernel/posix_timer.rs
-61f07694db100b9714b121ae5a5c085993d65918ce919f88e625b126ad01c1da     31433  kernel/process.rs
+b0f4b6a16153cf3c3936763cdfc6f66b0d71c1534a9fde48fdc0ced66eb12906     31397  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
 baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252     13874  kernel/signal.rs
 ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
-e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d     27391  kernel/task.rs
-4a3b094639312eb74102243d3ed81b6bf23796b106e84430b64c72e05159e3f9      2355  kernel/time.rs
+b11a686dfbd902cb8ecd13e29cecbae371f3b1c9249dcdd1690583fe9c21b5c9     27420  kernel/task.rs
+9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
-f70b772e842b62502e67e3005dd0ad82b32aa9e308795b6022e67478e94a9d43      6556  kernel/vdso.rs
-88e238f027a3b78351b4fdc09f678a8269f398bf28d9bc8a99127de3af08b771     61878  kernel/vfs.rs
+90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
+4feba4e07131864b3ad8ae62cae0fe33574045f17ba32416deb7eb8251ffd912     61898  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
 be8a5f3290b6dc4700424b8e42ade0d690d530979aca36436d09350aac051c5c       100  libc/errno.c
@@ -196,7 +197,7 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-e855d8926d6da1abd2f0dcb3e08d03e9420ba3f74e7d648eb4913f9b3c1ec8e1      6819  tools/check-source.sh
+ecd11752325b58b80e9fc1be79a2fb64b72b2a74fb2b6a31e44e1615f18a326a      6816  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
 092da751cb43ae8d55c027209f61069469251e4630abbfb470a74905fdec3f3d      3615  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
@@ -204,15 +205,15 @@ e855d8926d6da1abd2f0dcb3e08d03e9420ba3f74e7d648eb4913f9b3c1ec8e1      6819  tool
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
 edd0ec9e6b87e76b6d4272574ac9452d9134e611d0847ecc0795a1ebba1e3c5e      1701  tools/net-echo.py
 a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tools/run-qemu.sh
-efb67b251e7041012073dffe12b69ddd8277a0ba59f34d9f2954c31ae50feba1      3914  vdso/vdso.S
+9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 201
+TOTAL FILES: 202
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 36341 bytes
-SHA-256: 79715d03c0c13a92eabaa950063c8623b7a9ec4d19fb1aab51290f883ae5eced
+SIZE: 37743 bytes
+SHA-256: 28d01a63be59ce36321f73ce437a55ae7bd542718ff154c949e9511c39c26ad9
 ================================================================================
 ## 0.71.0 - 2026-10-22
 - Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
@@ -220,6 +221,14 @@ SHA-256: 79715d03c0c13a92eabaa950063c8623b7a9ec4d19fb1aab51290f883ae5eced
 - A program that reads the clock now spends its time in user mode, so the processor time of the program is charged to the program and not to the kernel, exactly as Linux reports it.
 - Fixed the interrupt path, which read the code segment of the interrupted context from the wrong place and therefore charged nearly every timer tick to the kernel. The vector register save area and the general registers lie between the stack pointer and the frame of the processor, so the code segment is 384 bytes above the stack pointer.
 - The entry point and the shared page are released with the address space, and the frame of the shared page is counted, so the last program that goes away does not take the page from the kernel.
+
+## 0.71.0 - 2026-10-22
+- The clock is now measured with the time stamp counter. The kernel moves the clock forward at every timer tick by the time the counter has passed, and the length of a tick is measured the same way, so the length of a tick follows the counter and does not drift away from it. The monotonic clock, the wall clock and the page of code that reads the clock now describe the same time.
+- The processor time is counted in nanoseconds instead of ticks. Counting ticks and converting them afterwards was wrong as soon as the length of a tick changed, because the conversion used the length that was measured last for every tick that came before.
+- The page of code clamps the time since the last update to zero. The counter can move backwards when the machine takes the processor away, and the difference would otherwise wrap around and report a time far in the future.
+- The page of code bounds the number of times it reads the shared page again, so a reader never waits for ever when the kernel is in the middle of an update.
+- The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
+- The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
 
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
@@ -4486,6 +4495,79 @@ kernel.
 END FILE: docs/milestone70.md
 
 ================================================================================
+FILE: docs/milestone71.md
+SIZE: 2867 bytes
+SHA-256: 3362034b0edbb8ab33ff6ce947485e314cd76c85be69bda03934622a4787f638
+================================================================================
+# Milestone 71: a clock that agrees with itself
+
+## Goal
+
+The page of code that reads the clock and the kernel that keeps it up to
+date have to describe the same time. The differential battery failed now and
+then, and the reason was that they did not: the page of code reported a time
+far in the future, and a program that measured the clock with it never saw
+its own loop end.
+
+## The counter can move backwards
+
+The time stamp counter runs at a constant rate, but its value is not
+guaranteed to grow: when the machine takes the processor away and gives it
+back, the counter can end up behind the value that was read before. The
+difference between the counter now and the value the kernel wrote into the
+shared page is then negative, and the page of code used it as it was.
+
+The difference is clamped to zero now, so the time since the last update of
+the shared page never goes below zero.
+
+The kernel measures the length of a tick with the counter as well, so the
+length of a tick follows the counter instead of standing still, and the
+processor time, which is counted in the time the counter has passed, stays
+in step with the clock.
+
+## The processor time is counted in nanoseconds
+
+The accounting counted ticks and converted them with the length of a tick
+that was measured last. As soon as the length of a tick changed, every tick
+that came before was converted with the wrong length, and the processor time
+of a program drifted away from the clock. The accounting counts the
+nanoseconds now, and the length of a tick is only used where a count of
+ticks is what the interface asks for.
+
+## The futex lost a wakeup
+
+A thread that waits for a word and a thread that changes the word race with
+each other. The word was read and the waiter was registered in the table in
+two steps, and a waker that came between them found no waiter, so the
+wakeup was lost and the waiter blocked although the word had changed.
+
+The word is read and the waiter is registered under the same lock the waker
+uses to take the waiter out of the table, so the two cannot come between
+each other. The timeout of a futex wait is a length of time and not a point
+in time, which is how Linux reads it.
+
+## Acceptance criteria
+
+1. `./tools/acceptance-test.sh` prints `acceptance: PASS`.
+2. `./tools/differential-test.sh` prints `differential test: PASS`.
+3. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
+   Linux)`.
+4. `./tools/heap-test.sh` prints `heap: PASS`.
+5. `./tools/check-source.sh` passes.
+6. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS, twenty four runs in a row.
+- `./tools/busybox-test.sh` PASS, 115 checks match Linux.
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone71.md
+
+================================================================================
 FILE: docs/milestone8.md
 SIZE: 2268 bytes
 SHA-256: 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1
@@ -4552,8 +4634,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 4206 bytes
-SHA-256: 4e9cd9f8cecf00e28c7c7076c6ac4e7370142aa1d115b7b58b40d0ed132854d3
+SIZE: 3902 bytes
+SHA-256: 138fe82e89377fb1e10d1fb1007ab83d25a823b92f1f9a71b5f08caf976efb48
 ================================================================================
 # One-Linux-program priority status
 
@@ -4617,19 +4699,14 @@ SHA-256: 4e9cd9f8cecf00e28c7c7076c6ac4e7370142aa1d115b7b58b40d0ed132854d3
 
 ## Open defects
 
-- The threaded part of the differential battery fails now and then. The
-  program hangs with three of four worker threads finished and the fourth
-  never started, so the wakeup of a waiting thread is lost somewhere
-  between the wait table and the scheduler. The futex wait table is keyed
-  by the address of the word and the task, and the scheduler latches a
-  wakeup that lands before the task blocks, so the race is likely in the
-  handover between the two.
+- The rate of the time stamp counter is measured once at boot. A machine
+  whose counter is not invariant would need the measurement repeated, and a
+  machine that takes the processor away moves the counter backwards, which
+  the entry point and the kernel both guard against.
 
 ## Next in line for the Linux ABI
 
-1. The lost wakeup of a waiting thread, which makes the threaded part of the
-   differential battery fail now and then.
-2. A real-time signal range with `sigqueue` and the queued values.
+1. A real-time signal range with `sigqueue` and the queued values.
 3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
 4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
 5. The floating-point state in the ucontext, so a handler sees the registers.
@@ -4718,8 +4795,8 @@ END FILE: kernel/arch/mod.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/apic.rs
-SIZE: 6938 bytes
-SHA-256: ac90a93fcb186339f066d119b9b08454a828f0a09a2ae8a285686c07b1ba6c64
+SIZE: 7194 bytes
+SHA-256: 477deaeb4269142ca88f8885063e431267ad62b9c00edab40fb0edad29842998
 ================================================================================
 //! xAPIC and first IOAPIC support for the bootstrap processor.
 use crate::acpi::InterruptInfo;
@@ -4929,10 +5006,14 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
+    /* The clock is measured with the counter, so the tick moves it forward
+       and the length of the tick is the time the counter has passed. */
+    let tick_ns=crate::time::advance(now);
+    if tick_ns>0{crate::time::set_tick_ns(tick_ns);}
     /* The vector system call entry point reads the time from a shared page
        that the kernel keeps up to date. */
-    crate::vdso::update();
-    crate::task::on_timer_tick(cs & 3 != 0);
+    crate::vdso::update(now);
+    crate::task::on_timer_tick(cs & 3 != 0,tick_ns);
     crate::net::poll();
     unsafe { write(0xb0,0) }
 }
@@ -7248,8 +7329,8 @@ END FILE: kernel/flock.rs
 
 ================================================================================
 FILE: kernel/futex.rs
-SIZE: 3131 bytes
-SHA-256: a7167952a3e3c90d7aa88a27a01ab977abdbf56cd9ed6e5e6eade6f859e7c65d
+SIZE: 3483 bytes
+SHA-256: 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe
 ================================================================================
 //! Minimal futex: FUTEX_WAIT, FUTEX_WAKE and the PRIVATE/CROSS_PROCESS,
 //! REQUEUE and PI opcodes are rejected. A fixed waiter table keyed by user
@@ -7268,15 +7349,16 @@ fn peek(addr:u64)->Result<u32,i64>{
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,addr as usize)}{return Err(e)}
  Ok(u32::from_ne_bytes(b))
 }
-/* Blocks until woken or the deadline elapses; deadline_ns==u64::MAX waits forever. */
-fn block_until(deadline_ns:u64)->Result<(),i64>{
- if deadline_ns==u64::MAX{
+/* Blocks until woken or the time runs out; duration_ns==u64::MAX waits
+   forever. The timeout of a futex wait is a length of time and not a
+   point in time, which is how Linux reads it. */
+fn block_until(duration_ns:u64)->Result<(),i64>{
+ if duration_ns==u64::MAX{
   task::block_current();
   return Ok(())
  }
- let now=crate::time::monotonic_ns();
- if now>=deadline_ns{return Err(errno::ETIMEDOUT)}
- task::sleep_until(crate::time::ticks_after_ns(deadline_ns-now));
+ if duration_ns==0{return Err(errno::ETIMEDOUT)}
+ task::sleep_until(crate::time::ticks_after_ns(duration_ns));
  Ok(())
 }
 pub fn dispatch(uaddr:u64,op:u32,val:u32,timeout:u64)->Result<i64,i64>{
@@ -7288,8 +7370,7 @@ pub fn dispatch(uaddr:u64,op:u32,val:u32,timeout:u64)->Result<i64,i64>{
  }
 }
 fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
- if peek(uaddr)?!=val{return Err(errno::EAGAIN)}
- let deadline=if timeout==0{u64::MAX}else{
+ let duration=if timeout==0{u64::MAX}else{
   let mut ts=[0u8;16];
   if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut ts,timeout as usize)}{return Err(e)}
   let sec=u64::from_ne_bytes(ts[0..8].try_into().unwrap());
@@ -7299,10 +7380,15 @@ fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
  };
  let pid=task::current_pid();
  loop{
+  /* The word is read and the waiter is registered under the same lock the
+     waker uses to take the waiter out of the table. A wakeup that comes
+     between the two would otherwise be lost: the waker would find no
+     waiter, and the waiter would block after the word had changed. */
   {let mut w=WAITERS.lock();
+   if peek(uaddr)?!=val{return Err(errno::EAGAIN)}
    if w.iter().any(|e|e.used&&e.uaddr==uaddr&&e.pid==pid){return Err(errno::EAGAIN)}
    match w.iter().position(|e|!e.used){Some(i)=>{w[i]=Waiter{used:true,uaddr,pid}},None=>return Err(errno::ENOMEM)}};
-  let res=block_until(deadline);
+  let res=block_until(duration);
   /* wake() removes our entry; find it by identity rather than slot index,
      since the slot may have been reused by another waiter meanwhile. */
   let still_registered={let mut w=WAITERS.lock();
@@ -7617,8 +7703,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 146375 bytes
-SHA-256: cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6
+SIZE: 146245 bytes
+SHA-256: 7d3315bfbb222ade06dfea6bda151b7828def56b9a611c65b0e08c44f157e81d
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -8074,7 +8160,7 @@ fn clock_ns(clock:u64)->Option<u64>{
   1|4|6|7|9|10=>Some(crate::time::monotonic_ns()),
   /* Clone tasks are separate processes in this kernel, so the process and
      thread CPU clocks coincide with the caller's own accounted ticks. */
-  2|3=>Some(crate::task::with_current_process(|p|crate::time::ticks_to_ns(p.utime_ticks.saturating_add(p.stime_ticks))).unwrap_or(0)),
+  2|3=>Some(crate::task::with_current_process(|p|p.utime_ns.saturating_add(p.stime_ns)).unwrap_or(0)),
   _=>None
  }
 }
@@ -8805,12 +8891,12 @@ fn sys_getrlimit(resource:u64,rlim:u64)->i64{
 }
 fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
 fn put_u64(b:&mut[u8;144],off:usize,v:u64){b[off..off+8].copy_from_slice(&v.to_le_bytes());}
-fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
+fn rusage_buf(utime_ns:u64,stime_ns:u64,maxrss_kb:u64)->[u8;144]{
  let mut b=[0u8;144];
- /* The accounting counts ticks, and the length of a tick is measured at
-    boot, so the times are real nanoseconds and not a fixed unit. */
- let ut=crate::time::ticks_to_ns(utime_ticks);
- let st=crate::time::ticks_to_ns(stime_ticks);
+ /* The accounting counts the time the process spent on the processor, in
+    nanoseconds, measured with the time stamp counter. */
+ let ut=utime_ns;
+ let st=stime_ns;
  put_u64(&mut b,0,ut/1_000_000_000);put_u64(&mut b,8,(ut%1_000_000_000)/1000);
  put_u64(&mut b,16,st/1_000_000_000);put_u64(&mut b,24,(st%1_000_000_000)/1000);
  put_u64(&mut b,32,maxrss_kb);
@@ -8819,10 +8905,10 @@ fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
 fn sys_getrusage(who:u64,ru:u64)->i64{
  if ru==0{return errno::neg(errno::EFAULT)}
  let buf=if who==u64::MAX{
-  let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0));
+  let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ns,p.cstime_ns)).unwrap_or((0,0));
   rusage_buf(ut,st,0)
  }else if who==0||who==1{
-  match crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.resident_pages()*4)){
+  match crate::task::with_current_process(|p|(p.utime_ns,p.stime_ns,p.resident_pages()*4)){
    Some((ut,st,rss))=>rusage_buf(ut,st,rss),
    None=>return errno::neg(errno::ESRCH),
   }
@@ -8832,7 +8918,7 @@ fn sys_getrusage(who:u64,ru:u64)->i64{
 }
 fn sys_times(ptr:u64)->i64{
  if ptr!=0{
-  let (ut,st,cut,cst)=crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0,0,0));
+  let (ut,st,cut,cst)=crate::task::with_current_process(|p|(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns)).unwrap_or((0,0,0,0));
   let mut b=[0u8;32];
   for(i,v)in[ut,st,cut,cst].iter().enumerate(){b[i*8..i*8+8].copy_from_slice(&(v/10).to_le_bytes());}
   if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&b){return errno::neg(e)}
@@ -11354,8 +11440,8 @@ END FILE: kernel/posix_timer.rs
 
 ================================================================================
 FILE: kernel/process.rs
-SIZE: 31433 bytes
-SHA-256: 61f07694db100b9714b121ae5a5c085993d65918ce919f88e625b126ad01c1da
+SIZE: 31397 bytes
+SHA-256: b0f4b6a16153cf3c3936763cdfc6f66b0d71c1534a9fde48fdc0ced66eb12906
 ================================================================================
 //! Per-process state: private address space, VM ledger, brk and descriptors.
 use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX},phys::Identity},fd::FdTable,vm::{Map,VmFlags,VmKind}};
@@ -11397,12 +11483,12 @@ pub struct Process{
  pub cap_inh:u64,pub cap_prm:u64,pub cap_eff:u64,pub cap_bset:u64,
  pub ns_uts:u64,pub ns_ipc:u64,pub ns_mnt:u64,pub ns_pid:u64,pub ns_net:u64,pub ns_user:u64,pub ns_cgroup:u64,pub ns_time:u64,
   pub seccomp_mode:u32,pub no_new_privs:bool,pub umask:u32,
- pub utime_ticks:u64,pub stime_ticks:u64,pub cutime_ticks:u64,pub cstime_ticks:u64,
+ pub utime_ns:u64,pub stime_ns:u64,pub cutime_ns:u64,pub cstime_ns:u64,
  pub groups:[u32;32],pub ngroups:usize,
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:[0;32],ngroups:0})
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ns:0,stime_ns:0,cutime_ns:0,cstime_ns:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
@@ -11630,7 +11716,7 @@ impl Process{
  }
   pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,interp_slot:self.interp_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
- seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:self.groups,ngroups:self.ngroups})}
+ seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ns:0,stime_ns:0,cutime_ns:0,cstime_ns:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
   pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}crate::vdso::unmap_from(&root,&access);let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */
@@ -12468,8 +12554,8 @@ END FILE: kernel/sync.rs
 
 ================================================================================
 FILE: kernel/task.rs
-SIZE: 27391 bytes
-SHA-256: e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d
+SIZE: 27420 bytes
+SHA-256: b11a686dfbd902cb8ecd13e29cecbae371f3b1c9249dcdd1690583fe9c21b5c9
 ================================================================================
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
@@ -12543,11 +12629,11 @@ fn take_slot(s:&mut Scheduler)->Result<usize,i64>{
  if let Some(i)=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Zombie&&s.tasks[i].is_thread){
   let t=s.tasks[i];s.tasks[i]=EMPTY;
   KERNEL_ENTRIES.lock()[i]=None;USER_STARTS.lock()[i]=None;FORK_RESUMES.lock()[i]=None;
-  let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[i].take(){Some(p)=>(p.utime_ticks,p.stime_ticks,p.cutime_ticks,p.cstime_ticks),_=>(0,0,0,0)}};
+  let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[i].take(){Some(p)=>(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns),_=>(0,0,0,0)}};
   let lead=(1..MAX_TASKS).find(|&j|s.tasks[j].pid==t.tgid&&s.tasks[j].state!=State::Unused&&!s.tasks[j].is_thread);
   if let Some(j)=lead{let mut procs=PROCS.lock();if let Some(p)=procs[j].as_mut(){
-   p.utime_ticks=p.utime_ticks.saturating_add(ut);p.stime_ticks=p.stime_ticks.saturating_add(st);
-   p.cutime_ticks=p.cutime_ticks.saturating_add(ct);p.cstime_ticks=p.cstime_ticks.saturating_add(cst);}}
+   p.utime_ns=p.utime_ns.saturating_add(ut);p.stime_ns=p.stime_ns.saturating_add(st);
+   p.cutime_ns=p.cutime_ns.saturating_add(ct);p.cstime_ns=p.cstime_ns.saturating_add(cst);}}
   return Ok(i)
  }
  Err(crate::errno::EAGAIN)
@@ -12589,11 +12675,11 @@ pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u6
 extern "sysv64" fn fork_thread_trampoline()->!{let slot=SCHED.lock().current;let frame=FORK_RESUMES.lock()[slot].take().unwrap();crate::println!("task: fork child resumed pid={}",current_pid());unsafe{crate::arch::x86_64::user::resume(&frame)}}
 extern "sysv64" fn kernel_thread_trampoline()->!{let slot=SCHED.lock().current;let entry=KERNEL_ENTRIES.lock()[slot].take().unwrap();unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags));}entry();finish_current(0)}
 pub fn yield_now(){schedule(false)}
-pub fn on_timer_tick(user:bool){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();account_tick(user);wake_sleepers(now);crate::posix_timer::tick(now);}
+pub fn on_timer_tick(user:bool,delta_ns:u64){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();account_tick(user,delta_ns);wake_sleepers(now);crate::posix_timer::tick(now);}
 /* Attributes one 1ms tick to the running process: CS&3 told us whether the
    interrupted context was user or kernel code. */
-fn account_tick(user:bool){
- let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ticks<u64::MAX{p.utime_ticks+=1}}else if p.stime_ticks<u64::MAX{p.stime_ticks+=1}}}crate::posix_timer::cpu_tick(pid,user);}
+fn account_tick(user:bool,delta_ns:u64){
+ let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ns<u64::MAX{p.utime_ns=p.utime_ns.saturating_add(delta_ns)}}else if p.stime_ns<u64::MAX{p.stime_ns=p.stime_ns.saturating_add(delta_ns)}}}crate::posix_timer::cpu_tick(pid,user);}
 pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
 /* A wake that lands before the target blocks is latched in wake_pending, so a
    register-then-block waiter can never lose it. */
@@ -12739,7 +12825,7 @@ pub fn reap_child(pid_sel:i64,nohang:bool)->Result<WaitOutcome,i64>{
  let me=current_pid();let(pslot,my_pgid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pgid)};
  let matches=|t:&Task|t.ppid==me&&(pid_sel==-1||(pid_sel==0&&t.pgid==my_pgid)||(pid_sel>0&&t.pid==pid_sel as u32)||(pid_sel< -1&&t.pgid==(-pid_sel) as u32));
  let mut s=SCHED.lock();
- if let Some(slot)=s.tasks.iter().position(|t|t.state==State::Zombie&&matches(t)){let t=s.tasks[slot];s.tasks[slot]=EMPTY;drop(s);KERNEL_ENTRIES.lock()[slot]=None;USER_STARTS.lock()[slot]=None;FORK_RESUMES.lock()[slot]=None;let(utime,stime)={let mut procs=PROCS.lock();let times=procs[slot].take().map(|p|(p.utime_ticks.saturating_add(p.cutime_ticks),p.stime_ticks.saturating_add(p.cstime_ticks))).unwrap_or((0,0));if !t.is_thread{if let Some(pp)=procs[pslot].as_mut(){pp.cutime_ticks=pp.cutime_ticks.saturating_add(times.0);pp.cstime_ticks=pp.cstime_ticks.saturating_add(times.1);}}times};return Ok(WaitOutcome::Reaped(t.pid,encode_status(t),utime,stime))}
+ if let Some(slot)=s.tasks.iter().position(|t|t.state==State::Zombie&&matches(t)){let t=s.tasks[slot];s.tasks[slot]=EMPTY;drop(s);KERNEL_ENTRIES.lock()[slot]=None;USER_STARTS.lock()[slot]=None;FORK_RESUMES.lock()[slot]=None;let(utime,stime)={let mut procs=PROCS.lock();let times=procs[slot].take().map(|p|(p.utime_ns.saturating_add(p.cutime_ns),p.stime_ns.saturating_add(p.cstime_ns))).unwrap_or((0,0));if !t.is_thread{if let Some(pp)=procs[pslot].as_mut(){pp.cutime_ns=pp.cutime_ns.saturating_add(times.0);pp.cstime_ns=pp.cstime_ns.saturating_add(times.1);}}times};return Ok(WaitOutcome::Reaped(t.pid,encode_status(t),utime,stime))}
  let has_child=s.tasks.iter().any(|t|t.state!=State::Unused&&matches(t));drop(s);
  if !has_child{return Err(crate::errno::ECHILD)}
  if nohang{Ok(WaitOutcome::NoHang)}else{Ok(WaitOutcome::Blocked)}
@@ -12752,19 +12838,38 @@ END FILE: kernel/task.rs
 
 ================================================================================
 FILE: kernel/time.rs
-SIZE: 2355 bytes
-SHA-256: 4a3b094639312eb74102243d3ed81b6bf23796b106e84430b64c72e05159e3f9
+SIZE: 4281 bytes
+SHA-256: 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05
 ================================================================================
 //! Monotonic time, the wall clock and the xorshift64 random source.
+//!
+//! The clock is measured with the time stamp counter. The counter runs at a
+//! constant rate that is measured against the programmable interval timer at
+//! boot, and the kernel moves the clock forward at every timer tick by the
+//! time the counter has passed. The time between two ticks is measured the
+//! same way, so the length of a tick follows the counter and does not drift
+//! away from it.
+//!
+//! The counter is the only time source a program can read without entering
+//! the kernel, so the clock has to be built on it: the page of code that
+//! Linux calls the vector system call entry point reads the counter and the
+//! base of the clock, and the two have to describe the same time.
+use crate::sync::IrqSpinLock;
 use core::sync::atomic::{AtomicU64,Ordering};
-/* The length of one timer tick in nanoseconds. The timer of the machine
-   does not run at a rate the processor reports, so the length is measured
-   at boot against the time stamp counter. The default is the rate a program
-   expects until the measurement replaces it. */
-const DEFAULT_TICK_NS:u64=1_000_000;
-static TICK_NS:AtomicU64=AtomicU64::new(DEFAULT_TICK_NS);
+
+/// The base of the clock: the time and the counter value at the last
+/// update.
+#[derive(Clone,Copy)]
+struct ClockBase{ns:u64,tsc:u64}
+static CLOCK:IrqSpinLock<ClockBase>=IrqSpinLock::new(ClockBase{ns:0,tsc:0});
+/// The nanoseconds per counter cycle, with 32 fractional bits.
+static SCALE:AtomicU64=AtomicU64::new(0);
+/// The measured length of a timer tick in nanoseconds.
+static TICK_NS:AtomicU64=AtomicU64::new(1_000_000);
+static REALTIME_OFFSET_NS:AtomicU64=AtomicU64::new(0);
 static TSC_HZ:AtomicU64=AtomicU64::new(0);
 static RNG:AtomicU64=AtomicU64::new(0x6e6f_7274_6873_7461);
+
 /// The length of one timer tick in nanoseconds.
 pub fn tick_ns()->u64{TICK_NS.load(Ordering::Relaxed)}
 /// Records the measured length of a timer tick.
@@ -12774,18 +12879,49 @@ pub fn set_tick_ns(ns:u64){if ns>0{TICK_NS.store(ns,Ordering::Relaxed)}}
 pub fn tsc_hz()->u64{TSC_HZ.load(Ordering::Relaxed)}
 /// Records the measured rate of the time stamp counter.
 pub fn set_tsc_hz(hz:u64){TSC_HZ.store(hz,Ordering::Relaxed)}
-pub fn monotonic_ns()->u64{crate::arch::x86_64::apic::ticks().saturating_mul(tick_ns())}
-static REALTIME_OFFSET_NS:AtomicU64=AtomicU64::new(0);
+/// The nanoseconds per counter cycle, with 32 fractional bits.
+pub fn scale()->u64{SCALE.load(Ordering::Relaxed)}
+/// Records the rate of the counter in nanoseconds per cycle.
+pub fn set_scale(v:u64){SCALE.store(v,Ordering::Relaxed)}
+
+/// The monotonic time at a given counter value.
+pub fn monotonic_at(t:u64)->u64{
+ let c=CLOCK.lock();
+ if t<=c.tsc{return c.ns}
+ c.ns.saturating_add(((t-c.tsc) as u64).saturating_mul(scale())>>32)
+}
+/// The current monotonic time.
+pub fn monotonic_ns()->u64{monotonic_at(crate::arch::x86_64::tsc::rdtsc())}
+/// Moves the clock forward to the counter value `t` and returns the length
+/// of the tick that just passed, in nanoseconds.
+pub fn advance(t:u64)->u64{
+ let mut c=CLOCK.lock();
+ if t<=c.tsc{return 0}
+ let delta=t-c.tsc;
+ let ns=(delta as u64).saturating_mul(scale())>>32;
+ c.ns=c.ns.saturating_add(ns);
+ c.tsc=t;
+ drop(c);
+ ns
+}
+/// The distance between the wall clock and the monotonic clock.
+pub fn realtime_offset_ns()->u64{REALTIME_OFFSET_NS.load(Ordering::Relaxed)}
+/// The wall clock.
 pub fn realtime_ns()->u64{monotonic_ns().wrapping_add(REALTIME_OFFSET_NS.load(Ordering::Relaxed))}
+/// Sets the wall clock.
 pub fn set_realtime_ns(ns:u64){REALTIME_OFFSET_NS.store(ns.wrapping_sub(monotonic_ns()),Ordering::Relaxed)}
+/// Converts a number of ticks into nanoseconds.
 pub fn ticks_to_ns(t:u64)->u64{t.saturating_mul(tick_ns())}
+/// The number of ticks a length of time takes.
 pub fn ns_to_ticks_ceil(ns:u64)->u64{let unit=tick_ns();ns.saturating_add(unit-1)/unit}
+/// The tick at which a delay of `ns` nanoseconds is over.
 pub fn ticks_after_ns(ns:u64)->u64{crate::arch::x86_64::apic::ticks().saturating_add(ns_to_ticks_ceil(ns))}
-/// The tick at which a delay of `ns` nanoseconds is over. The delay is
-/// rounded down, so the deadline never lies behind the delay that was asked
-/// for. A delay shorter than a tick still waits for a tick.
+/// The tick at which a delay of `ns` nanoseconds is over, rounded down, so
+/// the deadline never lies behind the delay that was asked for.
 pub fn ticks_after_ns_floor(ns:u64)->u64{let n=ns/tick_ns();crate::arch::x86_64::apic::ticks().saturating_add(if n==0{1}else{n})}
+/// A source of random bytes.
 pub fn fill_random(out:&mut[u8]){let mut x=RNG.load(Ordering::Relaxed)^monotonic_ns().rotate_left(17);for b in out{x^=x<<13;x^=x>>7;x^=x<<17;*b=x as u8;}RNG.store(x,Ordering::Relaxed)}
+/// Checks that the clock moves forward.
 pub fn self_test()->bool{let a=monotonic_ns();let mut b=[0u8;16];fill_random(&mut b);monotonic_ns()>=a&&b.iter().any(|x|*x!=0)}
 --------------------------------------------------------------------------------
 END FILE: kernel/time.rs
@@ -12817,8 +12953,8 @@ END FILE: kernel/usercopy.rs
 
 ================================================================================
 FILE: kernel/vdso.rs
-SIZE: 6556 bytes
-SHA-256: f70b772e842b62502e67e3005dd0ad82b32aa9e308795b6022e67478e94a9d43
+SIZE: 6780 bytes
+SHA-256: 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883
 ================================================================================
 //! The vector system call entry point.
 //!
@@ -12881,22 +13017,24 @@ pub fn init(){
  unsafe{Identity.bytes(frame,PAGE as usize).fill(0)};
  VVAR_FRAME.store(frame,Ordering::Relaxed);
  VVAR_READY.store(1,Ordering::Relaxed);
- update();
+ update(crate::arch::x86_64::tsc::rdtsc());
 }
 
 /// Writes the time base into the shared page. The page is written under a
 /// sequence lock: a reader that sees the number change reads the page
 /// again.
-pub fn update(){
+pub fn update(tsc:u64){
  let frame=VVAR_FRAME.load(Ordering::Relaxed);
  if frame==0{return}
  let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
  let seq=v.seq;
  v.seq=seq+1;
  core::sync::atomic::compiler_fence(Ordering::SeqCst);
- v.tsc_base=crate::arch::x86_64::tsc::rdtsc();
- v.mono_base=crate::time::monotonic_ns();
- v.real_base=crate::time::realtime_ns();
+ /* The base of the clock and the counter value belong together, so the
+    entry point reads the same time the kernel does. */
+ v.tsc_base=tsc;
+ v.mono_base=crate::time::monotonic_at(tsc);
+ v.real_base=v.mono_base.wrapping_add(crate::time::realtime_offset_ns());
  core::sync::atomic::compiler_fence(Ordering::SeqCst);
  v.seq=seq+2;
 }
@@ -12908,10 +13046,12 @@ pub fn set_scale(){
  if frame==0{return}
  let hz=crate::time::tsc_hz();
  if hz==0{return}
- let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
  /* The nanoseconds per cycle with 32 fractional bits, so the entry point
     can multiply and shift instead of dividing. */
- v.scale=(1_000_000_000u64<<32)/hz;
+ let scale=(1_000_000_000u64<<32)/hz;
+ crate::time::set_scale(scale);
+ let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
+ v.scale=scale;
 }
 
 /// Takes the entry point and the shared page out of an address space. The
@@ -12969,8 +13109,8 @@ END FILE: kernel/vdso.rs
 
 ================================================================================
 FILE: kernel/vfs.rs
-SIZE: 61878 bytes
-SHA-256: 88e238f027a3b78351b4fdc09f678a8269f398bf28d9bc8a99127de3af08b771
+SIZE: 61898 bytes
+SHA-256: 4feba4e07131864b3ad8ae62cae0fe33574045f17ba32416deb7eb8251ffd912
 ================================================================================
 //! Allocation-free initramfs VFS with read/write support.
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
@@ -13504,7 +13644,7 @@ fn proc_fill(subject:ProcSubject,file:&str)->usize{
    let pid=subject_pid(subject);
    let (comm,n)=proc_with(subject,|p|{let mut b=[0u8;64];let n=comm_of(p,&mut b);(b,n)}).unwrap_or(([0u8;64],0));
    let (vsize,rss)=proc_with(subject,|p|(p.vma_bytes(),p.resident_pages())).unwrap_or((0,0));
-   append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" (");append(buf,&mut off,&comm[..n]);append(buf,&mut off,b") R ");append_num(buf,&mut off,crate::task::ppid_of(pid) as u64);append(buf,&mut off,b" ");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" ");let (ut,st,cut,cst)=proc_with(subject,|p|(p.utime_ticks/10,p.stime_ticks/10,p.cutime_ticks/10,p.cstime_ticks/10)).unwrap_or((0,0,0,0));
+   append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" (");append(buf,&mut off,&comm[..n]);append(buf,&mut off,b") R ");append_num(buf,&mut off,crate::task::ppid_of(pid) as u64);append(buf,&mut off,b" ");append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" ");let (ut,st,cut,cst)=proc_with(subject,|p|(p.utime_ns/10_000_000,p.stime_ns/10_000_000,p.cutime_ns/10_000_000,p.cstime_ns/10_000_000)).unwrap_or((0,0,0,0));
    append_num(buf,&mut off,pid as u64);append(buf,&mut off,b" 0 -1 0 0 0 0 0 ");append_num(buf,&mut off,ut);append(buf,&mut off,b" ");append_num(buf,&mut off,st);append(buf,&mut off,b" ");append_num(buf,&mut off,cut);append(buf,&mut off,b" ");append_num(buf,&mut off,cst);append(buf,&mut off,b" 20 0 ");append_num(buf,&mut off,crate::task::thread_count(pid) as u64);append(buf,&mut off,b" 0 0 ");append_num(buf,&mut off,vsize);append(buf,&mut off,b" ");append_num(buf,&mut off,rss);append(buf,&mut off,b" 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
   }
   "statm"=>{let (vsize,rss)=proc_with(subject,|p|(p.vma_bytes(),p.resident_pages())).unwrap_or((0,0));append_num(buf,&mut off,vsize/4096);append(buf,&mut off,b" ");append_num(buf,&mut off,rss);append(buf,&mut off,b" 0 0 0 0 0\n");}
@@ -18424,8 +18564,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 6819 bytes
-SHA-256: e855d8926d6da1abd2f0dcb3e08d03e9420ba3f74e7d648eb4913f9b3c1ec8e1
+SIZE: 6816 bytes
+SHA-256: ecd11752325b58b80e9fc1be79a2fb64b72b2a74fb2b6a31e44e1615f18a326a
 ================================================================================
 #!/bin/sh
 set -eu
@@ -18485,7 +18625,7 @@ required={
  'kernel/vm.rs':['pub fn replace','pub fn insert','pub fn allocate','pub fn remove'],
  'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2'],
  
- 'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ticks'],
+ 'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ns'],
  'kernel/futex.rs':['fn wait','pub fn wake','pub fn dispatch','block_until'],
  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
@@ -18964,8 +19104,8 @@ END FILE: tools/run-qemu.sh
 
 ================================================================================
 FILE: vdso/vdso.S
-SIZE: 3914 bytes
-SHA-256: efb67b251e7041012073dffe12b69ddd8277a0ba59f34d9f2954c31ae50feba1
+SIZE: 4284 bytes
+SHA-256: 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c
 ================================================================================
 /* The vector system call entry point.
  *
@@ -19116,12 +19256,19 @@ __vdso_getcpu:
 	ret
 
 /* Reads the shared page under the sequence lock and returns the time in
-   nanoseconds in rax. The offset of the base time is in rcx. */
+   nanoseconds in rax. The offset of the base time is in rcx. The number of
+   tries is bounded, so a reader never waits for ever when the kernel is
+   in the middle of an update. */
 .Lnow:
+	mov $64, %r13
 .Lretry:
 	mov V_SEQ(%r15), %r8
 	test $1, %r8
+	jz .Lread
+	dec %r13
 	jnz .Lretry
+	mov V_SEQ(%r15), %r8
+.Lread:
 	mov V_SCALE(%r15), %r13
 	mov V_TSC(%r15), %rbx
 	mov (%r15,%rcx), %r12
@@ -19136,6 +19283,9 @@ __vdso_getcpu:
 	   the nanoseconds per cycle with 32 fractional bits, so the product is
 	   shifted down to drop the fraction. */
 	sub %rbx, %r9
+	/* The counter can move backwards when the machine takes the processor
+	   away, so the time since the last update never goes below zero. */
+	jb .Lnodiff
 	mov %r9, %rax
 	mulq %r13
 	shl $32, %rdx
@@ -19143,6 +19293,9 @@ __vdso_getcpu:
 	or %rax, %rdx
 	add %r12, %rdx
 	mov %rdx, %rax
+	ret
+.Lnodiff:
+	mov %r12, %rax
 	ret
 
 	.section .note.GNU-stack,"",@progbits

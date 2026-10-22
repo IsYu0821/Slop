@@ -5,6 +5,14 @@
 - Fixed the interrupt path, which read the code segment of the interrupted context from the wrong place and therefore charged nearly every timer tick to the kernel. The vector register save area and the general registers lie between the stack pointer and the frame of the processor, so the code segment is 384 bytes above the stack pointer.
 - The entry point and the shared page are released with the address space, and the frame of the shared page is counted, so the last program that goes away does not take the page from the kernel.
 
+## 0.71.0 - 2026-10-22
+- The clock is now measured with the time stamp counter. The kernel moves the clock forward at every timer tick by the time the counter has passed, and the length of a tick is measured the same way, so the length of a tick follows the counter and does not drift away from it. The monotonic clock, the wall clock and the page of code that reads the clock now describe the same time.
+- The processor time is counted in nanoseconds instead of ticks. Counting ticks and converting them afterwards was wrong as soon as the length of a tick changed, because the conversion used the length that was measured last for every tick that came before.
+- The page of code clamps the time since the last update to zero. The counter can move backwards when the machine takes the processor away, and the difference would otherwise wrap around and report a time far in the future.
+- The page of code bounds the number of times it reads the shared page again, so a reader never waits for ever when the kernel is in the middle of an update.
+- The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
+- The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
+
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
 - The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.

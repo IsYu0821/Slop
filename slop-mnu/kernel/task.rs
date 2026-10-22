@@ -70,11 +70,11 @@ fn take_slot(s:&mut Scheduler)->Result<usize,i64>{
  if let Some(i)=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Zombie&&s.tasks[i].is_thread){
   let t=s.tasks[i];s.tasks[i]=EMPTY;
   KERNEL_ENTRIES.lock()[i]=None;USER_STARTS.lock()[i]=None;FORK_RESUMES.lock()[i]=None;
-  let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[i].take(){Some(p)=>(p.utime_ticks,p.stime_ticks,p.cutime_ticks,p.cstime_ticks),_=>(0,0,0,0)}};
+  let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[i].take(){Some(p)=>(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns),_=>(0,0,0,0)}};
   let lead=(1..MAX_TASKS).find(|&j|s.tasks[j].pid==t.tgid&&s.tasks[j].state!=State::Unused&&!s.tasks[j].is_thread);
   if let Some(j)=lead{let mut procs=PROCS.lock();if let Some(p)=procs[j].as_mut(){
-   p.utime_ticks=p.utime_ticks.saturating_add(ut);p.stime_ticks=p.stime_ticks.saturating_add(st);
-   p.cutime_ticks=p.cutime_ticks.saturating_add(ct);p.cstime_ticks=p.cstime_ticks.saturating_add(cst);}}
+   p.utime_ns=p.utime_ns.saturating_add(ut);p.stime_ns=p.stime_ns.saturating_add(st);
+   p.cutime_ns=p.cutime_ns.saturating_add(ct);p.cstime_ns=p.cstime_ns.saturating_add(cst);}}
   return Ok(i)
  }
  Err(crate::errno::EAGAIN)
@@ -116,11 +116,11 @@ pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u6
 extern "sysv64" fn fork_thread_trampoline()->!{let slot=SCHED.lock().current;let frame=FORK_RESUMES.lock()[slot].take().unwrap();crate::println!("task: fork child resumed pid={}",current_pid());unsafe{crate::arch::x86_64::user::resume(&frame)}}
 extern "sysv64" fn kernel_thread_trampoline()->!{let slot=SCHED.lock().current;let entry=KERNEL_ENTRIES.lock()[slot].take().unwrap();unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags));}entry();finish_current(0)}
 pub fn yield_now(){schedule(false)}
-pub fn on_timer_tick(user:bool){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();account_tick(user);wake_sleepers(now);crate::posix_timer::tick(now);}
+pub fn on_timer_tick(user:bool,delta_ns:u64){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();account_tick(user,delta_ns);wake_sleepers(now);crate::posix_timer::tick(now);}
 /* Attributes one 1ms tick to the running process: CS&3 told us whether the
    interrupted context was user or kernel code. */
-fn account_tick(user:bool){
- let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ticks<u64::MAX{p.utime_ticks+=1}}else if p.stime_ticks<u64::MAX{p.stime_ticks+=1}}}crate::posix_timer::cpu_tick(pid,user);}
+fn account_tick(user:bool,delta_ns:u64){
+ let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ns<u64::MAX{p.utime_ns=p.utime_ns.saturating_add(delta_ns)}}else if p.stime_ns<u64::MAX{p.stime_ns=p.stime_ns.saturating_add(delta_ns)}}}crate::posix_timer::cpu_tick(pid,user);}
 pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
 /* A wake that lands before the target blocks is latched in wake_pending, so a
    register-then-block waiter can never lose it. */
@@ -266,7 +266,7 @@ pub fn reap_child(pid_sel:i64,nohang:bool)->Result<WaitOutcome,i64>{
  let me=current_pid();let(pslot,my_pgid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pgid)};
  let matches=|t:&Task|t.ppid==me&&(pid_sel==-1||(pid_sel==0&&t.pgid==my_pgid)||(pid_sel>0&&t.pid==pid_sel as u32)||(pid_sel< -1&&t.pgid==(-pid_sel) as u32));
  let mut s=SCHED.lock();
- if let Some(slot)=s.tasks.iter().position(|t|t.state==State::Zombie&&matches(t)){let t=s.tasks[slot];s.tasks[slot]=EMPTY;drop(s);KERNEL_ENTRIES.lock()[slot]=None;USER_STARTS.lock()[slot]=None;FORK_RESUMES.lock()[slot]=None;let(utime,stime)={let mut procs=PROCS.lock();let times=procs[slot].take().map(|p|(p.utime_ticks.saturating_add(p.cutime_ticks),p.stime_ticks.saturating_add(p.cstime_ticks))).unwrap_or((0,0));if !t.is_thread{if let Some(pp)=procs[pslot].as_mut(){pp.cutime_ticks=pp.cutime_ticks.saturating_add(times.0);pp.cstime_ticks=pp.cstime_ticks.saturating_add(times.1);}}times};return Ok(WaitOutcome::Reaped(t.pid,encode_status(t),utime,stime))}
+ if let Some(slot)=s.tasks.iter().position(|t|t.state==State::Zombie&&matches(t)){let t=s.tasks[slot];s.tasks[slot]=EMPTY;drop(s);KERNEL_ENTRIES.lock()[slot]=None;USER_STARTS.lock()[slot]=None;FORK_RESUMES.lock()[slot]=None;let(utime,stime)={let mut procs=PROCS.lock();let times=procs[slot].take().map(|p|(p.utime_ns.saturating_add(p.cutime_ns),p.stime_ns.saturating_add(p.cstime_ns))).unwrap_or((0,0));if !t.is_thread{if let Some(pp)=procs[pslot].as_mut(){pp.cutime_ns=pp.cutime_ns.saturating_add(times.0);pp.cstime_ns=pp.cstime_ns.saturating_add(times.1);}}times};return Ok(WaitOutcome::Reaped(t.pid,encode_status(t),utime,stime))}
  let has_child=s.tasks.iter().any(|t|t.state!=State::Unused&&matches(t));drop(s);
  if !has_child{return Err(crate::errno::ECHILD)}
  if nohang{Ok(WaitOutcome::NoHang)}else{Ok(WaitOutcome::Blocked)}

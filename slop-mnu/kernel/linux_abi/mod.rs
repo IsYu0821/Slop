@@ -452,7 +452,7 @@ fn clock_ns(clock:u64)->Option<u64>{
   1|4|6|7|9|10=>Some(crate::time::monotonic_ns()),
   /* Clone tasks are separate processes in this kernel, so the process and
      thread CPU clocks coincide with the caller's own accounted ticks. */
-  2|3=>Some(crate::task::with_current_process(|p|crate::time::ticks_to_ns(p.utime_ticks.saturating_add(p.stime_ticks))).unwrap_or(0)),
+  2|3=>Some(crate::task::with_current_process(|p|p.utime_ns.saturating_add(p.stime_ns)).unwrap_or(0)),
   _=>None
  }
 }
@@ -1183,12 +1183,12 @@ fn sys_getrlimit(resource:u64,rlim:u64)->i64{
 }
 fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
 fn put_u64(b:&mut[u8;144],off:usize,v:u64){b[off..off+8].copy_from_slice(&v.to_le_bytes());}
-fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
+fn rusage_buf(utime_ns:u64,stime_ns:u64,maxrss_kb:u64)->[u8;144]{
  let mut b=[0u8;144];
- /* The accounting counts ticks, and the length of a tick is measured at
-    boot, so the times are real nanoseconds and not a fixed unit. */
- let ut=crate::time::ticks_to_ns(utime_ticks);
- let st=crate::time::ticks_to_ns(stime_ticks);
+ /* The accounting counts the time the process spent on the processor, in
+    nanoseconds, measured with the time stamp counter. */
+ let ut=utime_ns;
+ let st=stime_ns;
  put_u64(&mut b,0,ut/1_000_000_000);put_u64(&mut b,8,(ut%1_000_000_000)/1000);
  put_u64(&mut b,16,st/1_000_000_000);put_u64(&mut b,24,(st%1_000_000_000)/1000);
  put_u64(&mut b,32,maxrss_kb);
@@ -1197,10 +1197,10 @@ fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
 fn sys_getrusage(who:u64,ru:u64)->i64{
  if ru==0{return errno::neg(errno::EFAULT)}
  let buf=if who==u64::MAX{
-  let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0));
+  let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ns,p.cstime_ns)).unwrap_or((0,0));
   rusage_buf(ut,st,0)
  }else if who==0||who==1{
-  match crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.resident_pages()*4)){
+  match crate::task::with_current_process(|p|(p.utime_ns,p.stime_ns,p.resident_pages()*4)){
    Some((ut,st,rss))=>rusage_buf(ut,st,rss),
    None=>return errno::neg(errno::ESRCH),
   }
@@ -1210,7 +1210,7 @@ fn sys_getrusage(who:u64,ru:u64)->i64{
 }
 fn sys_times(ptr:u64)->i64{
  if ptr!=0{
-  let (ut,st,cut,cst)=crate::task::with_current_process(|p|(p.utime_ticks,p.stime_ticks,p.cutime_ticks,p.cstime_ticks)).unwrap_or((0,0,0,0));
+  let (ut,st,cut,cst)=crate::task::with_current_process(|p|(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns)).unwrap_or((0,0,0,0));
   let mut b=[0u8;32];
   for(i,v)in[ut,st,cut,cst].iter().enumerate(){b[i*8..i*8+8].copy_from_slice(&(v/10).to_le_bytes());}
   if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&b){return errno::neg(e)}

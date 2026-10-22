@@ -206,10 +206,14 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
+    /* The clock is measured with the counter, so the tick moves it forward
+       and the length of the tick is the time the counter has passed. */
+    let tick_ns=crate::time::advance(now);
+    if tick_ns>0{crate::time::set_tick_ns(tick_ns);}
     /* The vector system call entry point reads the time from a shared page
        that the kernel keeps up to date. */
-    crate::vdso::update();
-    crate::task::on_timer_tick(cs & 3 != 0);
+    crate::vdso::update(now);
+    crate::task::on_timer_tick(cs & 3 != 0,tick_ns);
     crate::net::poll();
     unsafe { write(0xb0,0) }
 }

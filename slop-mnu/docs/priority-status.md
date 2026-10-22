@@ -60,19 +60,14 @@
 
 ## Open defects
 
-- The threaded part of the differential battery fails now and then. The
-  program hangs with three of four worker threads finished and the fourth
-  never started, so the wakeup of a waiting thread is lost somewhere
-  between the wait table and the scheduler. The futex wait table is keyed
-  by the address of the word and the task, and the scheduler latches a
-  wakeup that lands before the task blocks, so the race is likely in the
-  handover between the two.
+- The rate of the time stamp counter is measured once at boot. A machine
+  whose counter is not invariant would need the measurement repeated, and a
+  machine that takes the processor away moves the counter backwards, which
+  the entry point and the kernel both guard against.
 
 ## Next in line for the Linux ABI
 
-1. The lost wakeup of a waiting thread, which makes the threaded part of the
-   differential battery fail now and then.
-2. A real-time signal range with `sigqueue` and the queued values.
+1. A real-time signal range with `sigqueue` and the queued values.
 3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
 4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
 5. The floating-point state in the ucontext, so a handler sees the registers.

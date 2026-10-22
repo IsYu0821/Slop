@@ -15,15 +15,16 @@ fn peek(addr:u64)->Result<u32,i64>{
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,addr as usize)}{return Err(e)}
  Ok(u32::from_ne_bytes(b))
 }
-/* Blocks until woken or the deadline elapses; deadline_ns==u64::MAX waits forever. */
-fn block_until(deadline_ns:u64)->Result<(),i64>{
- if deadline_ns==u64::MAX{
+/* Blocks until woken or the time runs out; duration_ns==u64::MAX waits
+   forever. The timeout of a futex wait is a length of time and not a
+   point in time, which is how Linux reads it. */
+fn block_until(duration_ns:u64)->Result<(),i64>{
+ if duration_ns==u64::MAX{
   task::block_current();
   return Ok(())
  }
- let now=crate::time::monotonic_ns();
- if now>=deadline_ns{return Err(errno::ETIMEDOUT)}
- task::sleep_until(crate::time::ticks_after_ns(deadline_ns-now));
+ if duration_ns==0{return Err(errno::ETIMEDOUT)}
+ task::sleep_until(crate::time::ticks_after_ns(duration_ns));
  Ok(())
 }
 pub fn dispatch(uaddr:u64,op:u32,val:u32,timeout:u64)->Result<i64,i64>{
@@ -35,8 +36,7 @@ pub fn dispatch(uaddr:u64,op:u32,val:u32,timeout:u64)->Result<i64,i64>{
  }
 }
 fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
- if peek(uaddr)?!=val{return Err(errno::EAGAIN)}
- let deadline=if timeout==0{u64::MAX}else{
+ let duration=if timeout==0{u64::MAX}else{
   let mut ts=[0u8;16];
   if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut ts,timeout as usize)}{return Err(e)}
   let sec=u64::from_ne_bytes(ts[0..8].try_into().unwrap());
@@ -46,10 +46,15 @@ fn wait(uaddr:u64,val:u32,timeout:u64,op:u32)->Result<i64,i64>{
  };
  let pid=task::current_pid();
  loop{
+  /* The word is read and the waiter is registered under the same lock the
+     waker uses to take the waiter out of the table. A wakeup that comes
+     between the two would otherwise be lost: the waker would find no
+     waiter, and the waiter would block after the word had changed. */
   {let mut w=WAITERS.lock();
+   if peek(uaddr)?!=val{return Err(errno::EAGAIN)}
    if w.iter().any(|e|e.used&&e.uaddr==uaddr&&e.pid==pid){return Err(errno::EAGAIN)}
    match w.iter().position(|e|!e.used){Some(i)=>{w[i]=Waiter{used:true,uaddr,pid}},None=>return Err(errno::ENOMEM)}};
-  let res=block_until(deadline);
+  let res=block_until(duration);
   /* wake() removes our entry; find it by identity rather than slot index,
      since the slot may have been reused by another waiter meanwhile. */
   let still_registered={let mut w=WAITERS.lock();

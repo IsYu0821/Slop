@@ -147,12 +147,19 @@ __vdso_getcpu:
 	ret
 
 /* Reads the shared page under the sequence lock and returns the time in
-   nanoseconds in rax. The offset of the base time is in rcx. */
+   nanoseconds in rax. The offset of the base time is in rcx. The number of
+   tries is bounded, so a reader never waits for ever when the kernel is
+   in the middle of an update. */
 .Lnow:
+	mov $64, %r13
 .Lretry:
 	mov V_SEQ(%r15), %r8
 	test $1, %r8
+	jz .Lread
+	dec %r13
 	jnz .Lretry
+	mov V_SEQ(%r15), %r8
+.Lread:
 	mov V_SCALE(%r15), %r13
 	mov V_TSC(%r15), %rbx
 	mov (%r15,%rcx), %r12
@@ -167,6 +174,9 @@ __vdso_getcpu:
 	   the nanoseconds per cycle with 32 fractional bits, so the product is
 	   shifted down to drop the fraction. */
 	sub %rbx, %r9
+	/* The counter can move backwards when the machine takes the processor
+	   away, so the time since the last update never goes below zero. */
+	jb .Lnodiff
 	mov %r9, %rax
 	mulq %r13
 	shl $32, %rdx
@@ -174,6 +184,9 @@ __vdso_getcpu:
 	or %rax, %rdx
 	add %r12, %rdx
 	mov %rdx, %rax
+	ret
+.Lnodiff:
+	mov %r12, %rax
 	ret
 
 	.section .note.GNU-stack,"",@progbits

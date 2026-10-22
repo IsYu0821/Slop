@@ -56,7 +56,7 @@ required={
  'kernel/vm.rs':['pub fn replace','pub fn insert','pub fn allocate','pub fn remove'],
  'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2'],
  
- 'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ticks'],
+ 'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ns'],
  'kernel/futex.rs':['fn wait','pub fn wake','pub fn dispatch','block_until'],
  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],

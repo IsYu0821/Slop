@@ -59,22 +59,24 @@ pub fn init(){
  unsafe{Identity.bytes(frame,PAGE as usize).fill(0)};
  VVAR_FRAME.store(frame,Ordering::Relaxed);
  VVAR_READY.store(1,Ordering::Relaxed);
- update();
+ update(crate::arch::x86_64::tsc::rdtsc());
 }
 
 /// Writes the time base into the shared page. The page is written under a
 /// sequence lock: a reader that sees the number change reads the page
 /// again.
-pub fn update(){
+pub fn update(tsc:u64){
  let frame=VVAR_FRAME.load(Ordering::Relaxed);
  if frame==0{return}
  let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
  let seq=v.seq;
  v.seq=seq+1;
  core::sync::atomic::compiler_fence(Ordering::SeqCst);
- v.tsc_base=crate::arch::x86_64::tsc::rdtsc();
- v.mono_base=crate::time::monotonic_ns();
- v.real_base=crate::time::realtime_ns();
+ /* The base of the clock and the counter value belong together, so the
+    entry point reads the same time the kernel does. */
+ v.tsc_base=tsc;
+ v.mono_base=crate::time::monotonic_at(tsc);
+ v.real_base=v.mono_base.wrapping_add(crate::time::realtime_offset_ns());
  core::sync::atomic::compiler_fence(Ordering::SeqCst);
  v.seq=seq+2;
 }
@@ -86,10 +88,12 @@ pub fn set_scale(){
  if frame==0{return}
  let hz=crate::time::tsc_hz();
  if hz==0{return}
- let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
  /* The nanoseconds per cycle with 32 fractional bits, so the entry point
     can multiply and shift instead of dividing. */
- v.scale=(1_000_000_000u64<<32)/hz;
+ let scale=(1_000_000_000u64<<32)/hz;
+ crate::time::set_scale(scale);
+ let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
+ v.scale=scale;
 }
 
 /// Takes the entry point and the shared page out of an address space. The
