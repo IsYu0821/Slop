@@ -206,6 +206,9 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
+    /* The vector system call entry point reads the time from a shared page
+       that the kernel keeps up to date. */
+    crate::vdso::update();
     crate::task::on_timer_tick(cs & 3 != 0);
     crate::net::poll();
     unsafe { write(0xb0,0) }

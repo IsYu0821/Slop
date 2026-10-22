@@ -77,6 +77,8 @@ common_exception:
     popq %rcx
     popq %rbx
     popq %rax
+    /* The save area lies at the stack pointer the pops have left, because
+       the vector registers were saved from that place. */
     movups 0(%rsp),%xmm0
     movups 16(%rsp),%xmm1
     movups 32(%rsp),%xmm2

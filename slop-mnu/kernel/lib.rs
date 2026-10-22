@@ -33,6 +33,7 @@ pub mod futex;
 pub mod vm;
 pub mod wait_queue;
 pub mod usercopy;
+pub mod vdso;
 
 #[repr(align(16))]
 struct Stack([u8; 65536]);
@@ -158,6 +159,8 @@ fn calibrate_clock(){
  unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
  let measured=cycles.saturating_mul(1_000_000_000)/tsc_hz;
  if measured==0{println!("time: the tick length could not be measured, the tick keeps its default length");return}
+ vdso::init();
+ vdso::set_scale();
  if let Some(count)=arch::x86_64::apic::program_tick_ns(TICK_TARGET_NS,measured){
   unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
   let cycles=arch::x86_64::apic::measure_tick_cycles(64);

@@ -47,7 +47,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;
  let brk_slot=((crate::process::BRK_BASE>>39)&511)as usize;
- let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot];
+ let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot,crate::vdso::VDSO_SLOT,crate::vdso::VVAR_SLOT];
  let root=firmware.clone_bootstrap(&access,&private).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){
@@ -70,7 +70,11 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let phdr_vaddr=parsed.segments[..parsed.segment_count].iter().find_map(|s|{
   if phoff>=s.file_offset&&phoff<s.file_offset+s.file_size{Some(exe_base+s.vaddr+(phoff-s.file_offset))}else{None}
  }).ok_or("program headers not mapped")?;
- let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0}};
+ /* The vector system call entry point and the shared page that holds the
+    time base are mapped into every process, and the auxiliary vector points
+    at the entry point, so the C library finds the clock entry points. */
+ crate::vdso::map_into(&root,&access).map_err(|_|"the vector system call entry point could not be mapped")?;
+ let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0},vdso:crate::vdso::VDSO_BASE};
   let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],info).map_err(|_|"stack build failed")?;
   let mut segs=[MapSeg::default();MAX_MAP_SEGS];let mut nsegs=0usize;
   if let Some(ip)=interp.as_ref(){for seg in &ip.segments[..ip.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:LD_BASE+seg.vaddr&!(PAGE-1),end:align(LD_BASE+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}}

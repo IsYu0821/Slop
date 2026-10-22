@@ -253,7 +253,7 @@ impl Process{
     path. Frames carry refcounts; teardown releases them through release_frame. */
  pub fn clone_address_space(&self)->Result<u64,i64>{
   let access=Identity;
-  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT];let mut n=0usize;
+  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT,crate::vdso::VDSO_SLOT,crate::vdso::VVAR_SLOT];let mut n=0usize;
   for i in 0..all.len(){let s=all[i];if !all[..n].contains(&s){all[n]=s;n+=1;}}
   let slots=&all[..n];
   let child=self.root().clone_bootstrap(&access,slots)?;
@@ -273,7 +273,7 @@ impl Process{
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
-  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
+  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}crate::vdso::unmap_from(&root,&access);let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */
   pub fn teardown_exit(&mut self,status:i32,vector:u64){
    let fd_descriptors=self.fds.descriptor_count();
@@ -289,6 +289,9 @@ impl Process{
    if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot&&self.mmap_slot!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
    if self.interp_slot!=self.image_slot&&self.interp_slot!=self.stack_slot&&self.interp_slot!=self.mmap_slot{if let Err(e)=root.destroy_private_slot(&access,self.interp_slot){crate::println!("warning: interpreter slot teardown failed errno={}",e);cleanup_ok=false}}
    if BRK_SLOT!=self.image_slot&&BRK_SLOT!=self.stack_slot&&BRK_SLOT!=self.mmap_slot&&BRK_SLOT!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,BRK_SLOT){crate::println!("warning: brk slot teardown failed errno={}",e);cleanup_ok=false}}
+   /* The vector system call entry point and the shared page go away with
+      the address space. */
+   crate::vdso::unmap_from(&root,&access);
    if let Err(e)=crate::memory::free_frame(self.cr3){crate::println!("warning: process PML4 recycle failed errno={}",e);cleanup_ok=false}
    if self.seccomp_filter!=0{if let Err(e)=seccomp_filter_release(self.seccomp_filter as u64){crate::println!("warning: seccomp filter release failed errno={}",e);cleanup_ok=false}self.seccomp_filter=0;self.seccomp_filter_len=0;}
    crate::record_lock::release_pid(crate::task::current_pid());
@@ -310,6 +313,9 @@ impl Process{
    if old.3!=old.1&&old.3!=old.2&&root.destroy_private_slot(&access,old.3).is_err(){crate::println!("warning: old exec mmap teardown failed")}
    if old.4!=old.1&&old.4!=old.2&&old.4!=old.3&&root.destroy_private_slot(&access,old.4).is_err(){crate::println!("warning: old exec interpreter teardown failed")}
    if BRK_SLOT!=old.1&&BRK_SLOT!=old.2&&BRK_SLOT!=old.3&&BRK_SLOT!=old.4&&root.destroy_private_slot(&access,BRK_SLOT).is_err(){crate::println!("warning: old exec brk teardown failed")}
+   /* The vector system call entry point and the shared page of the old
+      image go away with it. */
+   crate::vdso::unmap_from(&root,&access);
   if crate::memory::free_frame(old.0).is_err(){crate::println!("warning: old exec PML4 recycle failed")}Ok(())
  }
 }

@@ -11,5 +11,5 @@ pub fn plan(image:&[u8])->Result<Plan,&'static str>{
  if out.phdr==0{return Err("program headers are not mapped")}
  Ok(out)
 }
-pub fn stack_info(p:&Plan)->stack::ImageInfo{stack::ImageInfo{phdr:p.phdr,phent:p.phent,phnum:p.phnum,entry:p.entry,base:p.interp_base}}
+pub fn stack_info(p:&Plan)->stack::ImageInfo{stack::ImageInfo{phdr:p.phdr,phent:p.phent,phnum:p.phnum,entry:p.entry,base:p.interp_base,vdso:crate::vdso::VDSO_BASE}}
 fn align_up(v:u64)->Result<u64,&'static str>{v.checked_add(4095).map(|x|x&!4095).ok_or("alignment overflow")}

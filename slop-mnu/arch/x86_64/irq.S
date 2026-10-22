@@ -42,7 +42,12 @@ apic_timer_entry:
     push %r14
     push %r15
     mov %rsp, %r15
-    mov 128(%r15), %rdi
+    /* The vector register save area and the pushed registers lie between
+       the stack pointer and the frame of the processor, so the code
+       segment is 384 bytes above the stack pointer: 256 bytes of vector
+       registers, 120 bytes of general registers, then the program counter
+       and the code segment. */
+    mov 384(%r15), %rdi
     and $-16, %rsp
     call apic_timer_rust
     mov %r15, %rsp
@@ -61,6 +66,8 @@ apic_timer_entry:
     pop %rdx
     pop %rcx
     pop %rax
+    /* The save area lies at the stack pointer the pops have left, because
+       the vector registers were saved from that place. */
     movups 0(%rsp),%xmm0
     movups 16(%rsp),%xmm1
     movups 32(%rsp),%xmm2

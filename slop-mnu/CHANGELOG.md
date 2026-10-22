@@ -1,3 +1,10 @@
+## 0.71.0 - 2026-10-22
+- Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
+- The entry point reads the time from a shared page that the kernel keeps up to date: the rate of the time stamp counter, the value of the counter at the last update, and the monotonic and the wall clock at that moment. The page is read under a sequence lock, so a program either sees a complete update or the one that follows it. The page is the same physical frame in every process, so the kernel writes it without knowing which program runs.
+- A program that reads the clock now spends its time in user mode, so the processor time of the program is charged to the program and not to the kernel, exactly as Linux reports it.
+- Fixed the interrupt path, which read the code segment of the interrupted context from the wrong place and therefore charged nearly every timer tick to the kernel. The vector register save area and the general registers lie between the stack pointer and the frame of the processor, so the code segment is 384 bytes above the stack pointer.
+- The entry point and the shared page are released with the address space, and the frame of the shared page is counted, so the last program that goes away does not take the page from the kernel.
+
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
 - The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.

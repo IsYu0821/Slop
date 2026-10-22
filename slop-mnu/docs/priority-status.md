@@ -48,22 +48,30 @@
   process group, `rt_sigpending` and `EINTR` for an interrupted blocking wait
 - the vector register file preserved across an exception and an interrupt
 
+## Implemented and covered by the acceptance gate
+
+- the vector system call entry point, the page of code Linux gives every
+  program, with the entry points the C library looks for, so a program
+  reads the clock without entering the kernel
+- a shared page that the kernel keeps up to date, read under a sequence
+  lock, so the entry point can tell the time without asking the kernel
+- the processor time charged to the program that spends it, like Linux
+  reports it
+
 ## Open defects
 
-- The differential battery stops at the processor time of a child. The
-  reason is the missing vector system call entry point: on Linux a program
-  that reads the clock does not enter the kernel, so the loop that measures
-  the clock spends its time in user mode and the user time of the child
-  grows. This kernel has no such entry point, so every clock reading is a
-  system call and the time is charged to the kernel, which leaves the user
-  time far below the value Linux reports. The clock itself is correct: the
-  process clock, the thread clock and the wall clock agree.
+- The threaded part of the differential battery fails now and then. The
+  program hangs with three of four worker threads finished and the fourth
+  never started, so the wakeup of a waiting thread is lost somewhere
+  between the wait table and the scheduler. The futex wait table is keyed
+  by the address of the word and the task, and the scheduler latches a
+  wakeup that lands before the task blocks, so the race is likely in the
+  handover between the two.
 
 ## Next in line for the Linux ABI
 
-1. A vector system call entry point, so a program can read the clock without
-   entering the kernel. This closes the gap above and gives every Linux
-   program the fast clock path it expects.
+1. The lost wakeup of a waiting thread, which makes the threaded part of the
+   differential battery fail now and then.
 2. A real-time signal range with `sigqueue` and the queued values.
 3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
 4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.

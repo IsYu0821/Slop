@@ -1,19 +1,19 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.70.0
+Version: 0.71.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-b4c18ebc5057abc8a6293a22db76eb218f1975f81d5761780b096f89078f348a     34760  CHANGELOG.md
-54beb044dbfacf7c314a7d82e125121753403b7c7eba46db6ed6d67e8fc0386b       160  Cargo.lock
-6c43c8d0249e12caef4d3ee37e30afdab4514e86e811451145240a8745fecd7c       231  Cargo.toml
+79715d03c0c13a92eabaa950063c8623b7a9ec4d19fb1aab51290f883ae5eced     36341  CHANGELOG.md
+53edc938dfaa847ad0f24257cbbb486ba765dce6ec12e8dd79cf0c08bbb3d368       160  Cargo.lock
+3b24f69eca603bf0f15f706f1c64148a283d02c4db7de5190ee0021f6fb7e363       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 0087be549f8a4007ed82108ff45b350fb4f0f4afbc1bae5df240f17bdfbee0f8      2205  arch/x86_64/context.S
 9ff8356010f6fe858f0cd0cdd28c1fa7c7d7ff8e764f4f5f6fbea2570a44e59e       292  arch/x86_64/entry.S
-6bb9fd913b1a5907c6f506a0f8deb1ba160ace3eef7dca5e06b4f59a74f618f2      2980  arch/x86_64/exceptions.S
-efa8c93d3c07f922521317195e55cac845748d20fcafc358759eb64d04d258c9      1897  arch/x86_64/irq.S
+900fea1e0624f552c6a6c7f3b633f55f0b744ddca4dae8e586348d8bcf2a2eab      3114  arch/x86_64/exceptions.S
+6ca59c435f4ba76dc2686a26427febaf86710e86f3af370f4f1fa9fbbdd11d9f      2354  arch/x86_64/irq.S
 e8fce1147115339757c6c7924ca324ccb7fb1b44696e25770ee27da4e078cba8      3700  arch/x86_64/syscall.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
@@ -83,15 +83,16 @@ d9003658b6ca3b3e9daeea80994f71f93ecd206dc97871ef95fc14495cb5cccc      4795  docs
 88350202734d660bb397d1de3319615b78ebd75bf9e90207bcdae5966ea9f55d      5989  docs/milestone68.md
 fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b      3991  docs/milestone69.md
 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2      1447  docs/milestone7.md
+521c8c7e2b8506430bde02a3292929500f771ed412213e6766ec4877e365d716      4350  docs/milestone70.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-ce7e409e04edabd53eca2108c1eafae4f02958e58beb31782cbe9a4c2df958db      3926  docs/priority-status.md
+4e9cd9f8cecf00e28c7c7076c6ac4e7370142aa1d115b7b58b40d0ed132854d3      4206  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
 6e8463960e55a8bb3a5f808d4d2f9b92a9f0c50586d6066fe9c91f722dc5ab1c       133  kernel/arch/mod.rs
-f6ec9ba104358310ab426e7be37c1263511053aa5d1add949c44010761b2a09c      6791  kernel/arch/x86_64/apic.rs
+ac90a93fcb186339f066d119b9b08454a828f0a09a2ae8a285686c07b1ba6c64      6938  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
 fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4      1553  kernel/arch/x86_64/descriptors.rs
 e60c17d57360942d48d5de51a6abb7484d1493a793f1b360df06c3c4087697fc      2573  kernel/arch/x86_64/idt.rs
@@ -116,23 +117,23 @@ edb7cc0c218a2554077b9a00da9661d29d6c82255406647958ca8bbd97fe63d6      5800  kern
 8a5fa81bc4414fc3aff8fb588f48b0d084896f06b89d8f3b1fd68b939169bf91      7735  kernel/driver/virtio_net.rs
 6bbb932f62d527d9be9900dd95d33d1e7a833a93f665752cdda90f2efe7a6272      4725  kernel/elf.rs
 16477b32f8e57c9b89d5790aa8aa2c3974f51790499ddb1e6674b4adf6bb7ea9      1371  kernel/errno.rs
-ad9ddad42be7fa9f17c04f2bc364254292f2754c14d83085d1741137e0d3a785      2122  kernel/exec.rs
-56b0cab86d36df2dde57cf05cba900dc5c9f16b8fb1041f548d00671f5af1ea9      8105  kernel/exec_runtime.rs
+34384129aeb59712cf08ff8cce15570dcdceeb1ac6ea26da0222f722194016a5      2150  kernel/exec.rs
+a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kernel/exec_runtime.rs
 5ff4e9d1032ffed918399821db681c58381f8bc46ab21d146e938b6fd4995a79      7923  kernel/ext2.rs
 3f68aff2499592cd3c4637370fe3064d613da11dab3ef202b6c8e006684c2881     21372  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 a7167952a3e3c90d7aa88a27a01ab977abdbf56cd9ed6e5e6eade6f859e7c65d      3131  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
-77afca9390357f3475b59b315b6d2118bd634736fcfbe1485e89291581a06763     10859  kernel/lib.rs
+381694ccd8068bf5e69ef31032b56175c911b733bfb67f3a6cc59aa0b628cf24     10908  kernel/lib.rs
 cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6    146375  kernel/linux_abi/mod.rs
 3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df      6824  kernel/linux_abi/nr.rs
-460d4dcfa80585c57d94de369dac73653869519547610e52e5d0758b1db3331e      3219  kernel/linux_abi/stack.rs
-abdd66e1514fbb151b74b39200f99d55a4ef1c6370c39e95a1e1195300e6d270      1227  kernel/linux_abi/types.rs
+2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
+4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
 1d57f86e9440a1374a16699c4ef115a886dc5d3e13173f23c1b14ac58936a687      3262  kernel/memory.rs
 1ec33d3b2aa19f4530637b1b8c40239c50b7ecc01bc8152984e075373be07495     22573  kernel/net.rs
 af0e064ebcd09d48855cbc9b8f1399316549fbaacbfe7a6eb93c7c23b187bd6a      3339  kernel/pipe.rs
 54d5972f217a6b8f65da30553e3428d9b462bca5bcb73b01dd67152e9527f10f      6262  kernel/posix_timer.rs
-76e5222190091e133e4f20cdec920c13f48ebddb9cd51f4c498b4f9ed435d6a2     31056  kernel/process.rs
+61f07694db100b9714b121ae5a5c085993d65918ce919f88e625b126ad01c1da     31433  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
 baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252     13874  kernel/signal.rs
@@ -141,6 +142,7 @@ ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kern
 e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d     27391  kernel/task.rs
 4a3b094639312eb74102243d3ed81b6bf23796b106e84430b64c72e05159e3f9      2355  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
+f70b772e842b62502e67e3005dd0ad82b32aa9e308795b6022e67478e94a9d43      6556  kernel/vdso.rs
 88e238f027a3b78351b4fdc09f678a8269f398bf28d9bc8a99127de3af08b771     61878  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
@@ -186,14 +188,15 @@ f74397ba719aff6f5f6fc46af081c3683a6dd9693ac581b6dd8c914cd6b84b3f      3626  test
 51557caad7e6f9b90462b924ca491b99c557a649a3357b74ce863e5f33a3066f       482  tests/minimal-linux.ld
 f14a8f1c89f60460b6fdfc05ef63c0167c0578425f20c7d88254fbeaf02f139a       171  tests/nopie-helper.c
 c9d90f83334313526b05eb85ee96acb04896d99a9e7c76d29a9e95aae7d92f92      2887  tools/acceptance-test.sh
-6a62c0bbef4c2f603a4328ad4ceb36987c6dd3cd6fc1ec835d7c728f6a209257      2679  tools/build-initramfs.py
+d0ca4ece563b103066f3e0eff06445de44a827061366f066ad6ffa25330d0778      2740  tools/build-initramfs.py
 709cbf94a77ecc14571a16d8ce5049f09e45c3b1a159087d59ace4e9588d51e6      1522  tools/build-libc-test.sh
 96022cf77b8dd848bb172c214baee090048096d0e7559945d587fcca32242bef       544  tools/build-test-elf.sh
-46ca0d552977f589363381627c2300b40dac76518960bb3c55b60cd13b182be4      1220  tools/build-uefi.sh
+758640c7771df664a1874967d9fc3e28b3ffe42bf7a3d63680bee367e6879d67      1242  tools/build-uefi.sh
+dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tools/build-vdso.sh
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307      6242  tools/check-source.sh
+e855d8926d6da1abd2f0dcb3e08d03e9420ba3f74e7d648eb4913f9b3c1ec8e1      6819  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
 092da751cb43ae8d55c027209f61069469251e4630abbfb470a74905fdec3f3d      3615  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
@@ -201,14 +204,23 @@ a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307      6242  tool
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
 edd0ec9e6b87e76b6d4272574ac9452d9134e611d0847ecc0795a1ebba1e3c5e      1701  tools/net-echo.py
 a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tools/run-qemu.sh
+efb67b251e7041012073dffe12b69ddd8277a0ba59f34d9f2954c31ae50feba1      3914  vdso/vdso.S
+3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 196
+TOTAL FILES: 201
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 34760 bytes
-SHA-256: b4c18ebc5057abc8a6293a22db76eb218f1975f81d5761780b096f89078f348a
+SIZE: 36341 bytes
+SHA-256: 79715d03c0c13a92eabaa950063c8623b7a9ec4d19fb1aab51290f883ae5eced
 ================================================================================
+## 0.71.0 - 2026-10-22
+- Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
+- The entry point reads the time from a shared page that the kernel keeps up to date: the rate of the time stamp counter, the value of the counter at the last update, and the monotonic and the wall clock at that moment. The page is read under a sequence lock, so a program either sees a complete update or the one that follows it. The page is the same physical frame in every process, so the kernel writes it without knowing which program runs.
+- A program that reads the clock now spends its time in user mode, so the processor time of the program is charged to the program and not to the kernel, exactly as Linux reports it.
+- Fixed the interrupt path, which read the code segment of the interrupted context from the wrong place and therefore charged nearly every timer tick to the kernel. The vector register save area and the general registers lie between the stack pointer and the frame of the processor, so the code segment is 384 bytes above the stack pointer.
+- The entry point and the shared page are released with the address space, and the frame of the shared page is counted, so the last program that goes away does not take the page from the kernel.
+
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
 - The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.
@@ -637,7 +649,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: 54beb044dbfacf7c314a7d82e125121753403b7c7eba46db6ed6d67e8fc0386b
+SHA-256: 53edc938dfaa847ad0f24257cbbb486ba765dce6ec12e8dd79cf0c08bbb3d368
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -645,18 +657,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.70.0"
+version = "0.71.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 6c43c8d0249e12caef4d3ee37e30afdab4514e86e811451145240a8745fecd7c
+SHA-256: 3b24f69eca603bf0f15f706f1c64148a283d02c4db7de5190ee0021f6fb7e363
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.70.0"
+version = "0.71.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -925,8 +937,8 @@ END FILE: arch/x86_64/entry.S
 
 ================================================================================
 FILE: arch/x86_64/exceptions.S
-SIZE: 2980 bytes
-SHA-256: 6bb9fd913b1a5907c6f506a0f8deb1ba160ace3eef7dca5e06b4f59a74f618f2
+SIZE: 3114 bytes
+SHA-256: 900fea1e0624f552c6a6c7f3b633f55f0b744ddca4dae8e586348d8bcf2a2eab
 ================================================================================
 .text
 .global isr_default,isr_invalid_tss,isr_segment_not_present,isr_stack_segment
@@ -1007,6 +1019,8 @@ common_exception:
     popq %rcx
     popq %rbx
     popq %rax
+    /* The save area lies at the stack pointer the pops have left, because
+       the vector registers were saved from that place. */
     movups 0(%rsp),%xmm0
     movups 16(%rsp),%xmm1
     movups 32(%rsp),%xmm2
@@ -1032,8 +1046,8 @@ END FILE: arch/x86_64/exceptions.S
 
 ================================================================================
 FILE: arch/x86_64/irq.S
-SIZE: 1897 bytes
-SHA-256: efa8c93d3c07f922521317195e55cac845748d20fcafc358759eb64d04d258c9
+SIZE: 2354 bytes
+SHA-256: 6ca59c435f4ba76dc2686a26427febaf86710e86f3af370f4f1fa9fbbdd11d9f
 ================================================================================
 .text
 .global apic_timer_entry
@@ -1079,7 +1093,12 @@ apic_timer_entry:
     push %r14
     push %r15
     mov %rsp, %r15
-    mov 128(%r15), %rdi
+    /* The vector register save area and the pushed registers lie between
+       the stack pointer and the frame of the processor, so the code
+       segment is 384 bytes above the stack pointer: 256 bytes of vector
+       registers, 120 bytes of general registers, then the program counter
+       and the code segment. */
+    mov 384(%r15), %rdi
     and $-16, %rsp
     call apic_timer_rust
     mov %r15, %rsp
@@ -1098,6 +1117,8 @@ apic_timer_entry:
     pop %rdx
     pop %rcx
     pop %rax
+    /* The save area lies at the stack pointer the pops have left, because
+       the vector registers were saved from that place. */
     movups 0(%rsp),%xmm0
     movups 16(%rsp),%xmm1
     movups 32(%rsp),%xmm2
@@ -4357,6 +4378,114 @@ The current syscall stack pointers are global statics. They are valid only for t
 END FILE: docs/milestone7.md
 
 ================================================================================
+FILE: docs/milestone70.md
+SIZE: 4350 bytes
+SHA-256: 521c8c7e2b8506430bde02a3292929500f771ed412213e6766ec4877e365d716
+================================================================================
+# Milestone 70: the vector system call entry point
+
+## Goal
+
+Linux gives every program a page of code that it can call without entering
+the kernel. The C library looks the entry points up in the dynamic symbol
+table of that page and uses them for the clock, so a program that reads the
+clock does not pay for a system call, and the time it spends is charged to
+the program instead of the kernel.
+
+Without that page every clock reading of a program is a system call, and a
+program that measures the clock reports almost no user time. The
+differential battery compared the processor time of a program with the
+value Linux reports, and the two were far apart.
+
+## The page
+
+`vdso/vdso.S` holds the entry points, with the names Linux uses:
+`__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and
+`__vdso_getcpu`. The page is a shared object with a dynamic symbol table,
+so the C library finds the entry points the same way it finds them on
+Linux.
+
+`tools/build-vdso.sh` builds it and checks two things that the C library
+needs: the dynamic hash table has to be beside the symbol table, and the
+file offset and the address of every loadable segment have to be the same.
+The C library computes the load address of the page from the last loadable
+segment, so the two have to agree with the addresses the kernel maps the
+segments to.
+
+The page is mapped at the same address in every process, alone in a page
+table slot of its own, and the auxiliary vector points at it.
+
+## The time
+
+The page cannot ask the kernel for the time without defeating its purpose,
+so the kernel keeps a shared page up to date:
+
+- the rate of the time stamp counter, in nanoseconds per cycle with 32
+  fractional bits,
+- the value of the counter at the last update,
+- the monotonic and the wall clock in nanoseconds at that moment.
+
+The entry point reads the page under a sequence lock, adds the time that
+passed since the last update, measured with the counter, and splits the
+result into seconds and nanoseconds. The clocks that count the time a
+process spends on the processor are not known in the page, so they report
+that they are not available and the caller falls back to the system call,
+like Linux.
+
+The shared page is the same physical frame in every process, so the kernel
+writes it through the direct map without knowing which program runs. The
+frame is counted, so the last program that goes away does not take the page
+away from the kernel.
+
+## The interrupt path read the wrong place
+
+With the page in place, a program that reads the clock spent its time in
+user mode, but the processor time of the program stayed small: nearly every
+timer tick was still charged to the kernel.
+
+The interrupt path read the code segment of the interrupted context from
+the wrong place. The vector register save area and the general registers
+lie between the stack pointer and the frame of the processor, so the code
+segment is 384 bytes above the stack pointer and not 128 bytes above it.
+The code read 128 bytes, which is part of the vector register save area, and
+the segment it found there was almost always the kernel one. Every tick was
+therefore charged to the kernel, and the processor time of a program that
+reads the clock never grew.
+
+## Acceptance criteria
+
+1. `./tools/acceptance-test.sh` prints `acceptance: PASS`.
+2. `./tools/differential-test.sh` prints `differential test: PASS`.
+3. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
+   Linux)`.
+4. `./tools/heap-test.sh` prints `heap: PASS`.
+5. `./tools/check-source.sh` passes.
+6. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS.
+- `./tools/busybox-test.sh` PASS, 115 checks match Linux.
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+The differential battery now runs to the end for the first time. It used to
+stop at the pending signal check, and before that at the processor time
+accounting, because the clock could not be read without entering the
+kernel.
+
+## Open items
+
+- The threaded part of the differential battery fails now and then. The
+  program hangs with three of four threads finished, so a wakeup of a
+  waiting thread is lost. The analysis is recorded in
+  `docs/priority-status.md`.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone70.md
+
+================================================================================
 FILE: docs/milestone8.md
 SIZE: 2268 bytes
 SHA-256: 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1
@@ -4423,8 +4552,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 3926 bytes
-SHA-256: ce7e409e04edabd53eca2108c1eafae4f02958e58beb31782cbe9a4c2df958db
+SIZE: 4206 bytes
+SHA-256: 4e9cd9f8cecf00e28c7c7076c6ac4e7370142aa1d115b7b58b40d0ed132854d3
 ================================================================================
 # One-Linux-program priority status
 
@@ -4476,22 +4605,30 @@ SHA-256: ce7e409e04edabd53eca2108c1eafae4f02958e58beb31782cbe9a4c2df958db
   process group, `rt_sigpending` and `EINTR` for an interrupted blocking wait
 - the vector register file preserved across an exception and an interrupt
 
+## Implemented and covered by the acceptance gate
+
+- the vector system call entry point, the page of code Linux gives every
+  program, with the entry points the C library looks for, so a program
+  reads the clock without entering the kernel
+- a shared page that the kernel keeps up to date, read under a sequence
+  lock, so the entry point can tell the time without asking the kernel
+- the processor time charged to the program that spends it, like Linux
+  reports it
+
 ## Open defects
 
-- The differential battery stops at the processor time of a child. The
-  reason is the missing vector system call entry point: on Linux a program
-  that reads the clock does not enter the kernel, so the loop that measures
-  the clock spends its time in user mode and the user time of the child
-  grows. This kernel has no such entry point, so every clock reading is a
-  system call and the time is charged to the kernel, which leaves the user
-  time far below the value Linux reports. The clock itself is correct: the
-  process clock, the thread clock and the wall clock agree.
+- The threaded part of the differential battery fails now and then. The
+  program hangs with three of four worker threads finished and the fourth
+  never started, so the wakeup of a waiting thread is lost somewhere
+  between the wait table and the scheduler. The futex wait table is keyed
+  by the address of the word and the task, and the scheduler latches a
+  wakeup that lands before the task blocks, so the race is likely in the
+  handover between the two.
 
 ## Next in line for the Linux ABI
 
-1. A vector system call entry point, so a program can read the clock without
-   entering the kernel. This closes the gap above and gives every Linux
-   program the fast clock path it expects.
+1. The lost wakeup of a waiting thread, which makes the threaded part of the
+   differential battery fail now and then.
 2. A real-time signal range with `sigqueue` and the queued values.
 3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
 4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
@@ -4581,8 +4718,8 @@ END FILE: kernel/arch/mod.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/apic.rs
-SIZE: 6791 bytes
-SHA-256: f6ec9ba104358310ab426e7be37c1263511053aa5d1add949c44010761b2a09c
+SIZE: 6938 bytes
+SHA-256: ac90a93fcb186339f066d119b9b08454a828f0a09a2ae8a285686c07b1ba6c64
 ================================================================================
 //! xAPIC and first IOAPIC support for the bootstrap processor.
 use crate::acpi::InterruptInfo;
@@ -4792,6 +4929,9 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
+    /* The vector system call entry point reads the time from a shared page
+       that the kernel keeps up to date. */
+    crate::vdso::update();
     crate::task::on_timer_tick(cs & 3 != 0);
     crate::net::poll();
     unsafe { write(0xb0,0) }
@@ -6373,8 +6513,8 @@ END FILE: kernel/errno.rs
 
 ================================================================================
 FILE: kernel/exec.rs
-SIZE: 2122 bytes
-SHA-256: ad9ddad42be7fa9f17c04f2bc364254292f2754c14d83085d1741137e0d3a785
+SIZE: 2150 bytes
+SHA-256: 34384129aeb59712cf08ff8cce15570dcdceeb1ac6ea26da0222f722194016a5
 ================================================================================
 //! Transaction-friendly Linux ELF execution plan. It does not mutate an address space.
 use crate::{elf,linux_abi::stack,vm::VmFlags};
@@ -6389,15 +6529,15 @@ pub fn plan(image:&[u8])->Result<Plan,&'static str>{
  if out.phdr==0{return Err("program headers are not mapped")}
  Ok(out)
 }
-pub fn stack_info(p:&Plan)->stack::ImageInfo{stack::ImageInfo{phdr:p.phdr,phent:p.phent,phnum:p.phnum,entry:p.entry,base:p.interp_base}}
+pub fn stack_info(p:&Plan)->stack::ImageInfo{stack::ImageInfo{phdr:p.phdr,phent:p.phent,phnum:p.phnum,entry:p.entry,base:p.interp_base,vdso:crate::vdso::VDSO_BASE}}
 fn align_up(v:u64)->Result<u64,&'static str>{v.checked_add(4095).map(|x|x&!4095).ok_or("alignment overflow")}
 --------------------------------------------------------------------------------
 END FILE: kernel/exec.rs
 
 ================================================================================
 FILE: kernel/exec_runtime.rs
-SIZE: 8105 bytes
-SHA-256: 56b0cab86d36df2dde57cf05cba900dc5c9f16b8fb1041f548d00671f5af1ea9
+SIZE: 8513 bytes
+SHA-256: a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431
 ================================================================================
 //! Commits an ELF64 image (static or dynamic) to a private bootstrap CR3 with
 //! rollback on failure. Dynamic images load their PT_INTERP interpreter first
@@ -6448,7 +6588,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;
  let brk_slot=((crate::process::BRK_BASE>>39)&511)as usize;
- let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot];
+ let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot,crate::vdso::VDSO_SLOT,crate::vdso::VVAR_SLOT];
  let root=firmware.clone_bootstrap(&access,&private).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){
@@ -6471,7 +6611,11 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let phdr_vaddr=parsed.segments[..parsed.segment_count].iter().find_map(|s|{
   if phoff>=s.file_offset&&phoff<s.file_offset+s.file_size{Some(exe_base+s.vaddr+(phoff-s.file_offset))}else{None}
  }).ok_or("program headers not mapped")?;
- let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0}};
+ /* The vector system call entry point and the shared page that holds the
+    time base are mapped into every process, and the auxiliary vector points
+    at the entry point, so the C library finds the clock entry points. */
+ crate::vdso::map_into(&root,&access).map_err(|_|"the vector system call entry point could not be mapped")?;
+ let info=stack::ImageInfo{phdr:phdr_vaddr,phent:parsed.header.phentsize as u64,phnum:parsed.header.phnum as u64,entry:exe_base+parsed.header.entry,base:if interp.is_some(){LD_BASE}else{0},vdso:crate::vdso::VDSO_BASE};
   let built=stack::build(page,stack_top-PAGE,argv,envp,execfn,[0x4e;16],info).map_err(|_|"stack build failed")?;
   let mut segs=[MapSeg::default();MAX_MAP_SEGS];let mut nsegs=0usize;
   if let Some(ip)=interp.as_ref(){for seg in &ip.segments[..ip.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:LD_BASE+seg.vaddr&!(PAGE-1),end:align(LD_BASE+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}}
@@ -7268,8 +7412,8 @@ END FILE: kernel/inotify.rs
 
 ================================================================================
 FILE: kernel/lib.rs
-SIZE: 10859 bytes
-SHA-256: 77afca9390357f3475b59b315b6d2118bd634736fcfbe1485e89291581a06763
+SIZE: 10908 bytes
+SHA-256: 381694ccd8068bf5e69ef31032b56175c911b733bfb67f3a6cc59aa0b628cf24
 ================================================================================
 #![no_std]
 #![feature(naked_functions)]
@@ -7306,6 +7450,7 @@ pub mod futex;
 pub mod vm;
 pub mod wait_queue;
 pub mod usercopy;
+pub mod vdso;
 
 #[repr(align(16))]
 struct Stack([u8; 65536]);
@@ -7431,6 +7576,8 @@ fn calibrate_clock(){
  unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
  let measured=cycles.saturating_mul(1_000_000_000)/tsc_hz;
  if measured==0{println!("time: the tick length could not be measured, the tick keeps its default length");return}
+ vdso::init();
+ vdso::set_scale();
  if let Some(count)=arch::x86_64::apic::program_tick_ns(TICK_TARGET_NS,measured){
   unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
   let cycles=arch::x86_64::apic::measure_tick_cycles(64);
@@ -10137,13 +10284,13 @@ END FILE: kernel/linux_abi/nr.rs
 
 ================================================================================
 FILE: kernel/linux_abi/stack.rs
-SIZE: 3219 bytes
-SHA-256: 460d4dcfa80585c57d94de369dac73653869519547610e52e5d0758b1db3331e
+SIZE: 3275 bytes
+SHA-256: 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf
 ================================================================================
 //! System V AMD64/Linux initial userspace stack image builder.
 use super::types::*;
 pub const MAX_ARGS:usize=32; pub const MAX_ENVS:usize=64; pub const RANDOM_BYTES:usize=16;
-#[derive(Clone,Copy)] pub struct ImageInfo { pub phdr:u64,pub phent:u64,pub phnum:u64,pub entry:u64,pub base:u64 }
+#[derive(Clone,Copy)] pub struct ImageInfo { pub phdr:u64,pub phent:u64,pub phnum:u64,pub entry:u64,pub base:u64,pub vdso:u64 }
 pub struct BuiltStack { pub rsp:u64,pub argc:usize,pub bytes_used:usize,pub random_addr:u64,pub execfn_addr:u64 }
 
 /// Builds a complete argc/argv/envp/auxv stack in `page`, whose first byte is at `base`.
@@ -10156,7 +10303,7 @@ pub fn build(page:&mut[u8],base:u64,argv:&[&str],envp:&[&str],execfn:&str,random
  let mut enva=[0u64;MAX_ENVS]; for (i,s) in envp.iter().enumerate().rev(){enva[i]=push_cstr(page,base,&mut cursor,s)?;}
  let mut arga=[0u64;MAX_ARGS]; for (i,s) in argv.iter().enumerate().rev(){arga[i]=push_cstr(page,base,&mut cursor,s)?;}
  cursor&=!7usize;
- let aux=[Auxv{kind:AT_PAGESZ,value:4096},Auxv{kind:AT_PHDR,value:info.phdr},Auxv{kind:AT_PHENT,value:info.phent},Auxv{kind:AT_PHNUM,value:info.phnum},Auxv{kind:AT_ENTRY,value:info.entry},Auxv{kind:AT_BASE,value:info.base},Auxv{kind:AT_UID,value:0},Auxv{kind:AT_EUID,value:0},Auxv{kind:AT_GID,value:0},Auxv{kind:AT_EGID,value:0},Auxv{kind:AT_SECURE,value:0},Auxv{kind:AT_RANDOM,value:random_addr},Auxv{kind:AT_EXECFN,value:execfn_addr},Auxv{kind:AT_NULL,value:0}];
+ let aux=[Auxv{kind:AT_PAGESZ,value:4096},Auxv{kind:AT_PHDR,value:info.phdr},Auxv{kind:AT_PHENT,value:info.phent},Auxv{kind:AT_PHNUM,value:info.phnum},Auxv{kind:AT_ENTRY,value:info.entry},Auxv{kind:AT_BASE,value:info.base},Auxv{kind:AT_UID,value:0},Auxv{kind:AT_EUID,value:0},Auxv{kind:AT_GID,value:0},Auxv{kind:AT_EGID,value:0},Auxv{kind:AT_SECURE,value:0},Auxv{kind:AT_RANDOM,value:random_addr},Auxv{kind:AT_EXECFN,value:execfn_addr},Auxv{kind:AT_SYSINFO_EHDR,value:info.vdso},Auxv{kind:AT_NULL,value:0}];
  let scalar_words=aux.len()*2 + 1+envp.len() + 1+argv.len() + 1;
  if (base + cursor as u64 - (scalar_words as u64)*8)&15!=0 { if cursor<8{return Err(crate::errno::E2BIG)} cursor-=8; }
  for a in aux.iter().rev(){push_u64(page,&mut cursor,a.value)?;push_u64(page,&mut cursor,a.kind)?;}
@@ -10175,8 +10322,8 @@ END FILE: kernel/linux_abi/stack.rs
 
 ================================================================================
 FILE: kernel/linux_abi/types.rs
-SIZE: 1227 bytes
-SHA-256: abdd66e1514fbb151b74b39200f99d55a4ef1c6370c39e95a1e1195300e6d270
+SIZE: 1261 bytes
+SHA-256: 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8
 ================================================================================
 #[repr(C)] #[derive(Clone,Copy,Default)]
 pub struct Timespec { pub tv_sec:i64, pub tv_nsec:i64 }
@@ -10195,6 +10342,7 @@ pub const AT_NULL:u64=0; pub const AT_PAGESZ:u64=6; pub const AT_PHDR:u64=3; pub
 pub const AT_PHENT:u64=4; pub const AT_PHNUM:u64=5; 
 pub const AT_UID:u64=11; pub const AT_EUID:u64=12; pub const AT_GID:u64=13; pub const AT_EGID:u64=14;
 pub const AT_SECURE:u64=23; pub const AT_RANDOM:u64=25; pub const AT_EXECFN:u64=31;
+pub const AT_SYSINFO_EHDR:u64=33;
 --------------------------------------------------------------------------------
 END FILE: kernel/linux_abi/types.rs
 
@@ -11206,8 +11354,8 @@ END FILE: kernel/posix_timer.rs
 
 ================================================================================
 FILE: kernel/process.rs
-SIZE: 31056 bytes
-SHA-256: 76e5222190091e133e4f20cdec920c13f48ebddb9cd51f4c498b4f9ed435d6a2
+SIZE: 31433 bytes
+SHA-256: 61f07694db100b9714b121ae5a5c085993d65918ce919f88e625b126ad01c1da
 ================================================================================
 //! Per-process state: private address space, VM ledger, brk and descriptors.
 use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX},phys::Identity},fd::FdTable,vm::{Map,VmFlags,VmKind}};
@@ -11464,7 +11612,7 @@ impl Process{
     path. Frames carry refcounts; teardown releases them through release_frame. */
  pub fn clone_address_space(&self)->Result<u64,i64>{
   let access=Identity;
-  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT];let mut n=0usize;
+  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT,crate::vdso::VDSO_SLOT,crate::vdso::VVAR_SLOT];let mut n=0usize;
   for i in 0..all.len(){let s=all[i];if !all[..n].contains(&s){all[n]=s;n+=1;}}
   let slots=&all[..n];
   let child=self.root().clone_bootstrap(&access,slots)?;
@@ -11484,7 +11632,7 @@ impl Process{
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
-  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
+  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}crate::vdso::unmap_from(&root,&access);let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */
   pub fn teardown_exit(&mut self,status:i32,vector:u64){
    let fd_descriptors=self.fds.descriptor_count();
@@ -11500,6 +11648,9 @@ impl Process{
    if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot&&self.mmap_slot!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
    if self.interp_slot!=self.image_slot&&self.interp_slot!=self.stack_slot&&self.interp_slot!=self.mmap_slot{if let Err(e)=root.destroy_private_slot(&access,self.interp_slot){crate::println!("warning: interpreter slot teardown failed errno={}",e);cleanup_ok=false}}
    if BRK_SLOT!=self.image_slot&&BRK_SLOT!=self.stack_slot&&BRK_SLOT!=self.mmap_slot&&BRK_SLOT!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,BRK_SLOT){crate::println!("warning: brk slot teardown failed errno={}",e);cleanup_ok=false}}
+   /* The vector system call entry point and the shared page go away with
+      the address space. */
+   crate::vdso::unmap_from(&root,&access);
    if let Err(e)=crate::memory::free_frame(self.cr3){crate::println!("warning: process PML4 recycle failed errno={}",e);cleanup_ok=false}
    if self.seccomp_filter!=0{if let Err(e)=seccomp_filter_release(self.seccomp_filter as u64){crate::println!("warning: seccomp filter release failed errno={}",e);cleanup_ok=false}self.seccomp_filter=0;self.seccomp_filter_len=0;}
    crate::record_lock::release_pid(crate::task::current_pid());
@@ -11521,6 +11672,9 @@ impl Process{
    if old.3!=old.1&&old.3!=old.2&&root.destroy_private_slot(&access,old.3).is_err(){crate::println!("warning: old exec mmap teardown failed")}
    if old.4!=old.1&&old.4!=old.2&&old.4!=old.3&&root.destroy_private_slot(&access,old.4).is_err(){crate::println!("warning: old exec interpreter teardown failed")}
    if BRK_SLOT!=old.1&&BRK_SLOT!=old.2&&BRK_SLOT!=old.3&&BRK_SLOT!=old.4&&root.destroy_private_slot(&access,BRK_SLOT).is_err(){crate::println!("warning: old exec brk teardown failed")}
+   /* The vector system call entry point and the shared page of the old
+      image go away with it. */
+   crate::vdso::unmap_from(&root,&access);
   if crate::memory::free_frame(old.0).is_err(){crate::println!("warning: old exec PML4 recycle failed")}Ok(())
  }
 }
@@ -12660,6 +12814,158 @@ pub fn copy_from_user(dst:&mut[u8],src:usize)->Result<(),i64>{checked(src,dst.le
 pub fn copy_to_user(dst:usize,src:&[u8])->Result<(),i64>{checked(dst,src.len())?;let phys=Identity;let mut done=0;while done<src.len(){let va=dst+done;let pa=resolve(va,true)?;let n=core::cmp::min(PAGE-(va&(PAGE-1)),src.len()-done);let to=unsafe{phys.bytes(pa,n)};to.copy_from_slice(&src[done..done+n]);done+=n;}Ok(())}
 --------------------------------------------------------------------------------
 END FILE: kernel/usercopy.rs
+
+================================================================================
+FILE: kernel/vdso.rs
+SIZE: 6556 bytes
+SHA-256: f70b772e842b62502e67e3005dd0ad82b32aa9e308795b6022e67478e94a9d43
+================================================================================
+//! The vector system call entry point.
+//!
+//! Linux gives every program a page of code that it can call without
+//! entering the kernel, and the auxiliary vector points at it. The C
+//! library looks the entry points up in the dynamic symbol table of that
+//! page and uses them for the clock, so a program that reads the clock does
+//! not pay for a system call, and the time it spends is charged to the
+//! program instead of the kernel.
+//!
+//! The page carries the entry points __vdso_clock_gettime,
+//! __vdso_gettimeofday, __vdso_time and __vdso_getcpu, the same names Linux
+//! uses, and the C library looks them up by name.
+//!
+//! The page needs the current time, and it cannot ask the kernel for it
+//! without defeating its purpose. So the kernel keeps a shared page up to
+//! date: the rate of the time stamp counter, the value of the counter at
+//! the last update, and the monotonic and the wall clock at that moment.
+//! The entry point reads the page under a sequence lock and adds the time
+//! that passed since the last update, measured with the counter.
+
+use crate::arch::x86_64::phys::{phys_to_virt,Identity};
+use crate::arch::x86_64::paging::{self,PageTableRoot};
+use core::sync::atomic::{AtomicU64,Ordering};
+
+/// The address of the entry point in every process. It sits alone in a
+/// page table slot, so a mapping of the program can never overwrite it.
+pub const VDSO_BASE:u64=0x0000_6000_0000_0000;
+pub const VDSO_SLOT:usize=((VDSO_BASE>>39)&511)as usize;
+/// The address of the shared page that holds the time base. It sits alone
+/// in a page table slot of its own, beside the one of the entry point.
+pub const VVAR_BASE:u64=0x0000_6100_0000_0000;
+pub const VVAR_SLOT:usize=((VVAR_BASE>>39)&511)as usize;
+/// The path of the entry point in the initramfs.
+pub const VDSO_PATH:&str="/lib/vdso.so";
+const PAGE:u64=4096;
+
+/// The shared page. The kernel writes it, the entry point reads it.
+#[repr(C,align(4096))]
+pub struct Vvar{
+ /// The number of the update. A reader that sees an odd number waits.
+ pub seq:u64,
+ /// The nanoseconds per counter cycle, with 32 fractional bits.
+ pub scale:u64,
+ /// The value of the counter at the last update.
+ pub tsc_base:u64,
+ /// The monotonic nanoseconds at the last update.
+ pub mono_base:u64,
+ /// The wall clock nanoseconds at the last update.
+ pub real_base:u64,
+}
+
+static VVAR_FRAME:AtomicU64=AtomicU64::new(0);
+static VVAR_READY:AtomicU64=AtomicU64::new(0);
+
+/// Reserves the shared page and the physical frame behind it.
+pub fn init(){
+ if VVAR_READY.load(Ordering::Relaxed)!=0{return}
+ let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>{crate::println!("vdso: the shared page could not be reserved");return}};
+ unsafe{Identity.bytes(frame,PAGE as usize).fill(0)};
+ VVAR_FRAME.store(frame,Ordering::Relaxed);
+ VVAR_READY.store(1,Ordering::Relaxed);
+ update();
+}
+
+/// Writes the time base into the shared page. The page is written under a
+/// sequence lock: a reader that sees the number change reads the page
+/// again.
+pub fn update(){
+ let frame=VVAR_FRAME.load(Ordering::Relaxed);
+ if frame==0{return}
+ let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
+ let seq=v.seq;
+ v.seq=seq+1;
+ core::sync::atomic::compiler_fence(Ordering::SeqCst);
+ v.tsc_base=crate::arch::x86_64::tsc::rdtsc();
+ v.mono_base=crate::time::monotonic_ns();
+ v.real_base=crate::time::realtime_ns();
+ core::sync::atomic::compiler_fence(Ordering::SeqCst);
+ v.seq=seq+2;
+}
+
+/// Records the rate of the time stamp counter in the shared page. The
+/// entry point needs it to turn the counter into nanoseconds.
+pub fn set_scale(){
+ let frame=VVAR_FRAME.load(Ordering::Relaxed);
+ if frame==0{return}
+ let hz=crate::time::tsc_hz();
+ if hz==0{return}
+ let v=unsafe{&mut *(phys_to_virt(frame) as *mut Vvar)};
+ /* The nanoseconds per cycle with 32 fractional bits, so the entry point
+    can multiply and shift instead of dividing. */
+ v.scale=(1_000_000_000u64<<32)/hz;
+}
+
+/// Takes the entry point and the shared page out of an address space. The
+/// frame behind the shared page belongs to the kernel, so it is only
+/// counted down and not released.
+pub fn unmap_from(root:&PageTableRoot,access:&Identity){
+ let frame=VVAR_FRAME.load(Ordering::Relaxed);
+ if frame!=0{
+  if let Ok(pa)=root.unmap_page(access,VVAR_BASE){if pa==frame{let _=crate::memory::release_frame(pa);}}
+ }
+ let _=root.destroy_private_slot(access,VDSO_SLOT);
+ let _=root.destroy_private_slot(access,VVAR_SLOT);
+}
+
+/// Maps the entry point and the shared page into an address space. The
+/// shared page is the same physical frame in every process, so the kernel
+/// can write it without knowing which process runs.
+pub fn map_into(root:&PageTableRoot,access:&Identity)->Result<(),i64>{
+ let frame=VVAR_FRAME.load(Ordering::Relaxed);
+ if frame==0{return Err(crate::errno::ENODEV)}
+ /* The shared page is read only for the program, like the page Linux
+    keeps the time in. */
+ if let Err(e)=root.map_page(access,VVAR_BASE,frame,paging::USER|paging::PRESENT){crate::println!("vdso: the shared page could not be mapped errno={}",e);return Err(e)}
+ /* The frame is counted, so the last process that goes away does not take
+    the page away from the kernel. */
+ crate::memory::refcount_inc(frame);
+ let bytes=match crate::vfs::image(VDSO_PATH){Ok(v)=>v,Err(e)=>{crate::println!("vdso: the entry point is not in the initramfs errno={}",e);return Err(e)}};
+ let plan=match crate::elf::plan(&bytes){Ok(p)=>p,Err(e)=>{crate::println!("vdso: the entry point is not a usable image: {}",e);return Err(crate::errno::ENOEXEC)}};
+
+ /* Every page of the file is mapped at the address of its offset, and the
+    pages that hold code are executable. The file offset and the address of
+    a loadable segment are the same, so the C library finds the entry
+    points where the kernel put them. */
+ let pages=(bytes.len() as u64+PAGE-1)/PAGE;
+ for p in 0..pages{
+  let va=VDSO_BASE+p*PAGE;
+  let exec=plan.segments[..plan.segment_count].iter().any(|s|{
+   s.vaddr<(p+1)*PAGE&&s.vaddr+s.memory_size>p*PAGE&&s.flags&crate::elf::PF_X!=0
+  });
+  let pa=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(crate::errno::ENOMEM)};
+  unsafe{
+   let page=access.bytes(pa,PAGE as usize);
+   page.fill(0);
+   let from=(p*PAGE) as usize;
+   let to=core::cmp::min(from+PAGE as usize,bytes.len());
+   if to>from{page[..to-from].copy_from_slice(&bytes[from..to]);}
+  }
+  let flags=paging::USER|paging::PRESENT|if exec{0}else{paging::NX};
+  if let Err(e)=root.map_page(access,va,pa,flags){let _=crate::memory::free_frame(pa);return Err(e)}
+ }
+ Ok(())
+}
+--------------------------------------------------------------------------------
+END FILE: kernel/vdso.rs
 
 ================================================================================
 FILE: kernel/vfs.rs
@@ -17533,15 +17839,15 @@ END FILE: tools/acceptance-test.sh
 
 ================================================================================
 FILE: tools/build-initramfs.py
-SIZE: 2679 bytes
-SHA-256: 6a62c0bbef4c2f603a4328ad4ceb36987c6dd3cd6fc1ec835d7c728f6a209257
+SIZE: 2740 bytes
+SHA-256: d0ca4ece563b103066f3e0eff06445de44a827061366f066ad6ffa25330d0778
 ================================================================================
 #!/usr/bin/env python3
 from pathlib import Path
 import struct
 out=bytearray(b'NSAR0001')
 musl_lib=Path('tests/musl/lib/libc.so').read_bytes()
-entries=[('/bin',b'',0o040755),('/etc',b'',0o040755),('/lib',b'',0o040755),('/init',Path('build/minimal-linux.elf').read_bytes(),0o100755),('/lib/libc.so',musl_lib,0o100755),('/lib/ld-musl-x86_64.so.1',musl_lib,0o100755),('/bin/hello-dyn',Path('tests/musl/hello-dyn').read_bytes(),0o100755),('/bin/hello-thread',Path('tests/musl/hello-thread').read_bytes(),0o100755),('/bin/hello-socket',Path('tests/musl/hello-socket').read_bytes(),0o100755),('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),('/bin/hello',Path('build/hello-linux.elf').read_bytes(),0o100755),('/bin/hello-c',Path('build/hello-c.elf').read_bytes(),0o100755),('/bin/hello-posix',Path('build/hello-posix.elf').read_bytes(),0o100755),('/bin/hello-signal',Path('build/hello-signal.elf').read_bytes(),0o100755),('/bin/hello-file',Path('build/hello-file.elf').read_bytes(),0o100755),('/bin/hello-syscall',Path('build/hello-syscall.elf').read_bytes(),0o100755),('/etc/motd',b'Slop/MNU initramfs\n',0o100444)]
+entries=[('/bin',b'',0o040755),('/etc',b'',0o040755),('/lib',b'',0o040755),('/init',Path('build/minimal-linux.elf').read_bytes(),0o100755),('/lib/libc.so',musl_lib,0o100755),('/lib/ld-musl-x86_64.so.1',musl_lib,0o100755),('/lib/vdso.so',Path('build/vdso.so').read_bytes(),0o100755),('/bin/hello-dyn',Path('tests/musl/hello-dyn').read_bytes(),0o100755),('/bin/hello-thread',Path('tests/musl/hello-thread').read_bytes(),0o100755),('/bin/hello-socket',Path('tests/musl/hello-socket').read_bytes(),0o100755),('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),('/bin/hello',Path('build/hello-linux.elf').read_bytes(),0o100755),('/bin/hello-c',Path('build/hello-c.elf').read_bytes(),0o100755),('/bin/hello-posix',Path('build/hello-posix.elf').read_bytes(),0o100755),('/bin/hello-signal',Path('build/hello-signal.elf').read_bytes(),0o100755),('/bin/hello-file',Path('build/hello-file.elf').read_bytes(),0o100755),('/bin/hello-syscall',Path('build/hello-syscall.elf').read_bytes(),0o100755),('/etc/motd',b'Slop/MNU initramfs\n',0o100444)]
 out += struct.pack('<I',len(entries))
 for name,data,mode in entries:
     b=name.encode(); out += struct.pack('<HHI',len(b),mode,len(data)); out += b; out += bytes((-len(out))&7); out += data; out += bytes((-len(out))&7)
@@ -17627,8 +17933,8 @@ END FILE: tools/build-test-elf.sh
 
 ================================================================================
 FILE: tools/build-uefi.sh
-SIZE: 1220 bytes
-SHA-256: 46ca0d552977f589363381627c2300b40dac76518960bb3c55b60cd13b182be4
+SIZE: 1242 bytes
+SHA-256: 758640c7771df664a1874967d9fc3e28b3ffe42bf7a3d63680bee367e6879d67
 ================================================================================
 #!/bin/sh
 set -eu
@@ -17636,6 +17942,7 @@ mkdir -p build/efi/EFI/BOOT
 ./tools/check-toolchain.sh
 ./tools/build-test-elf.sh
 ./tools/build-libc-test.sh
+./tools/build-vdso.sh
 ./tools/build-initramfs.py
 cargo +nightly build -Zbuild-std=core,compiler_builtins -Zbuild-std-features=compiler-builtins-mem --target x86_64-pc-windows-msvc --release
 KLIB=$(find target/x86_64-pc-windows-msvc/release -maxdepth 1 -type f \( -name '*slop_mnu_kernel*.lib' -o -name '*slop_mnu_kernel*.a' \) | head -n 1)
@@ -17652,6 +17959,47 @@ lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64 \
 printf 'created build/efi/EFI/BOOT/BOOTX64.EFI\n'
 --------------------------------------------------------------------------------
 END FILE: tools/build-uefi.sh
+
+================================================================================
+FILE: tools/build-vdso.sh
+SIZE: 1508 bytes
+SHA-256: dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0
+================================================================================
+#!/bin/sh
+set -eu
+# Builds the vector system call entry point.
+#
+# Linux gives every program a page of code that it can call without
+# entering the kernel. The page is a shared object with the usual entry
+# points, and the C library finds them through the dynamic symbol table
+# that the auxiliary vector points at.
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+mkdir -p build
+clang -c -nostdlib -fno-stack-protector -fno-asynchronous-unwind-tables \
+  -mno-red-zone -Wa,--noexecstack vdso/vdso.S -o build/vdso.o
+ld.lld -shared -nostdlib --hash-style=both --build-id=none \
+  -z max-page-size=4096 -z noexecstack -soname linux-vdso.so.1 \
+  -T vdso/vdso.ld build/vdso.o -o build/vdso.so
+# The C library looks the entry points up in the symbol table and needs the
+# hash table beside it, so the build fails when one of them is missing.
+llvm-readelf -d build/vdso.so | grep -q 'HASH' || {
+  echo 'vdso: the dynamic hash table is missing' >&2
+  exit 1
+}
+llvm-readelf --dyn-syms build/vdso.so | grep -q '__vdso_clock_gettime' || {
+  echo 'vdso: the clock entry point is not exported' >&2
+  exit 1
+}
+# The C library computes the load address of the page from the last
+# loadable segment, so the file offset and the address of every loadable
+# segment have to be the same.
+llvm-readelf -l build/vdso.so | awk '
+  $1=="LOAD" { if ($2 != $3) { print "vdso: a loadable segment has a file offset that differs from its address" > "/dev/stderr"; exit 1 } }
+' || exit 1
+printf 'created build/vdso.so\n'
+--------------------------------------------------------------------------------
+END FILE: tools/build-vdso.sh
 
 ================================================================================
 FILE: tools/busybox-test.sh
@@ -18076,8 +18424,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 6242 bytes
-SHA-256: a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307
+SIZE: 6819 bytes
+SHA-256: e855d8926d6da1abd2f0dcb3e08d03e9420ba3f74e7d648eb4913f9b3c1ec8e1
 ================================================================================
 #!/bin/sh
 set -eu
@@ -18090,7 +18438,7 @@ r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
  'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS'],
- 'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust'],
+ 'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust','movups 0(%rsp),%xmm0'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
  'kernel/lib.rs':['spawn_user(loaded)','wait_child(user_pid)','scheduler: user process reaped','kmain_high_continue','apply_relocations','keep_slots','KIMAGE_BASE'],
  'kernel/usercopy.rs':['root.query','PRESENT|USER|WRITABLE'],
@@ -18107,7 +18455,13 @@ required={
  'tests/nopie-helper.c':['nopie-helper ran','return 17'],
  'tools/differential-test.sh':['nopie-helper','DIFF_NOPIE_OK'],
  'kernel/arch/x86_64/apic.rs':['TIMER_VECTOR','write(0xb0,0)','1<<17','phys_to_virt'],
- 'arch/x86_64/irq.S':['apic_timer_entry','mov 128(%r15), %rdi','call apic_timer_rust','iretq'],
+ 'arch/x86_64/irq.S':['apic_timer_entry','mov 384(%r15), %rdi','call apic_timer_rust','iretq','movups 0(%rsp),%xmm0'],
+ 'kernel/arch/x86_64/tsc.rs':['pub fn rdtsc','lfence','rdtsc'],
+ 'kernel/arch/x86_64/pit.rs':['pub const INPUT_HZ','pub fn measure_tsc','pub fn tsc_hz'],
+ 'kernel/vdso.rs':['pub const VDSO_BASE','pub const VVAR_BASE','pub fn map_into','pub fn update','__vdso_clock_gettime'],
+ 'vdso/vdso.S':['__vdso_clock_gettime','__vdso_gettimeofday','__vdso_time','__vdso_getcpu'],
+ 'vdso/vdso.ld':['ENTRY(__vdso_clock_gettime)'],
+ 'tools/build-vdso.sh':['vdso/vdso.S','vdso/vdso.ld','--hash-style=both','__vdso_clock_gettime'],
  'kernel/sync.rs':['IrqSpinLock','irq_save','irq_restore'],
  'kernel/task.rs':['fpu_area','fpu_save_regs','struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
  'kernel/arch/x86_64/msr.rs':['IA32_FS_BASE','IA32_KERNEL_GS_BASE'],
@@ -18146,7 +18500,7 @@ required={
  'kernel/socket.rs':['INET_UDP_BASE','INET_TCP_BASE','pub fn inet_kind'],
  'tools/run-qemu.sh':['virtio-net-pci','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
- 'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net'],
+ 'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net','/lib/vdso.so'],
  'arch/x86_64/context.S':['switch_context','mov %rsp,(%rdi)','mov %rsi,%rsp','movups %xmm0'],
  'tests/bbtest.sh':['out shell-echo','out fs-cat','out proc-signal','BB|done|end'],
  'tools/busybox-test.sh':['busybox compat: PASS','build/busybox','tests/musl/busybox'],
@@ -18607,4 +18961,223 @@ exec "$QEMU" -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
   -serial stdio -display none -no-reboot -no-shutdown
 --------------------------------------------------------------------------------
 END FILE: tools/run-qemu.sh
+
+================================================================================
+FILE: vdso/vdso.S
+SIZE: 3914 bytes
+SHA-256: efb67b251e7041012073dffe12b69ddd8277a0ba59f34d9f2954c31ae50feba1
+================================================================================
+/* The vector system call entry point.
+ *
+ * Linux gives every program a page of code that it can call without
+ * entering the kernel, so a program that reads the clock does not pay for
+ * a system call. The page holds the usual entry points, and the time comes
+ * from a shared page that the kernel keeps up to date.
+ *
+ * The shared page holds the rate of the time stamp counter, the value of
+ * the counter at the last update of the page, and the monotonic and the
+ * wall clock in nanoseconds at that moment. A program reads the page under
+ * a sequence lock, so it either sees a complete update or the update that
+ * follows it.
+ *
+ *   offset 0:  the sequence of the update
+ *   offset 8:  the nanoseconds per counter cycle, with 32 fractional bits
+ *   offset 16: the counter value at the last update
+ *   offset 24: the monotonic nanoseconds at the last update
+ *   offset 32: the wall clock nanoseconds at the last update
+ */
+
+/* The address of the shared page. The kernel maps it at the same address
+   in every process. */
+	.set VVAR, 0x610000000000
+	.set V_SEQ, 0
+	.set V_SCALE, 8
+	.set V_TSC, 16
+	.set V_MONO, 24
+	.set V_REAL, 32
+
+	.text
+	.globl __vdso_clock_gettime
+	.type __vdso_clock_gettime,@function
+	.globl __vdso_gettimeofday
+	.type __vdso_gettimeofday,@function
+	.globl __vdso_time
+	.type __vdso_time,@function
+	.globl __vdso_getcpu
+	.type __vdso_getcpu,@function
+
+/* Fills the timespec at rsi with the time of the clock named by rdi.
+   The clocks that count the time a process spends on the processor are not
+   known here, so they report that they are not available and the caller
+   falls back to the system call. */
+__vdso_clock_gettime:
+	test %rdi, %rdi
+	jz .Lwall
+	cmp $1, %rdi
+	je .Lmonotonic
+	cmp $7, %rdi
+	je .Lmonotonic
+	mov $-38, %rax
+	ret
+.Lwall:
+	mov $V_REAL, %ecx
+	jmp .Lclock
+.Lmonotonic:
+	mov $V_MONO, %ecx
+.Lclock:
+	push %rbx
+	push %r12
+	push %r13
+	push %r14
+	push %r15
+	movabs $VVAR, %r15
+	call .Lnow
+	/* rax holds the nanoseconds. */
+	mov $1000000000, %r8
+	xor %edx, %edx
+	div %r8
+	mov %rax, (%rsi)
+	mov %rdx, %r10
+	mov %r10, 8(%rsi)
+	xor %eax, %eax
+	pop %r15
+	pop %r14
+	pop %r13
+	pop %r12
+	pop %rbx
+	ret
+
+/* Fills the timeval at rdi with the wall clock. */
+__vdso_gettimeofday:
+	test %rdi, %rdi
+	jz .Lzero
+	push %rbx
+	push %r12
+	push %r13
+	push %r14
+	push %r15
+	mov $V_REAL, %ecx
+	movabs $VVAR, %r15
+	call .Lnow
+	mov $1000000, %r8
+	xor %edx, %edx
+	div %r8
+	mov %rax, (%rdi)
+	mov %rdx, %r10
+	mov %r10, 8(%rdi)
+	xor %eax, %eax
+	pop %r15
+	pop %r14
+	pop %r13
+	pop %r12
+	pop %rbx
+	ret
+.Lzero:
+	xor %eax, %eax
+	ret
+
+/* Returns the wall clock in seconds and stores it at rdi when that is
+   given. */
+__vdso_time:
+	push %rbx
+	push %r12
+	push %r13
+	push %r14
+	push %r15
+	mov $V_REAL, %ecx
+	movabs $VVAR, %r15
+	call .Lnow
+	mov $1000000000, %r8
+	xor %edx, %edx
+	div %r8
+	test %rdi, %rdi
+	jz .Ltime_done
+	mov %rax, (%rdi)
+.Ltime_done:
+	pop %r15
+	pop %r14
+	pop %r13
+	pop %r12
+	pop %rbx
+	ret
+
+/* Reports the processor the program runs on. The kernel has one
+   processor, so the answer is always the first one. */
+__vdso_getcpu:
+	test %rsi, %rsi
+	jz .Lcpu_done
+	movl $0, (%rsi)
+.Lcpu_done:
+	test %rdx, %rdx
+	jz .Lcpu_none
+	movl $0, (%rdx)
+.Lcpu_none:
+	xor %eax, %eax
+	ret
+
+/* Reads the shared page under the sequence lock and returns the time in
+   nanoseconds in rax. The offset of the base time is in rcx. */
+.Lnow:
+.Lretry:
+	mov V_SEQ(%r15), %r8
+	test $1, %r8
+	jnz .Lretry
+	mov V_SCALE(%r15), %r13
+	mov V_TSC(%r15), %rbx
+	mov (%r15,%rcx), %r12
+	lfence
+	rdtsc
+	mov %rax, %r9
+	lfence
+	mov V_SEQ(%r15), %rax
+	cmp %r8, %rax
+	jne .Lretry
+	/* The nanoseconds since the last update of the page. The scale holds
+	   the nanoseconds per cycle with 32 fractional bits, so the product is
+	   shifted down to drop the fraction. */
+	sub %rbx, %r9
+	mov %r9, %rax
+	mulq %r13
+	shl $32, %rdx
+	shr $32, %rax
+	or %rax, %rdx
+	add %r12, %rdx
+	mov %rdx, %rax
+	ret
+
+	.section .note.GNU-stack,"",@progbits
+--------------------------------------------------------------------------------
+END FILE: vdso/vdso.S
+
+================================================================================
+FILE: vdso/vdso.ld
+SIZE: 716 bytes
+SHA-256: 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c
+================================================================================
+/* The layout of the vector system call entry point.
+ *
+ * The file offset and the address of every loadable segment are the same,
+ * so the C library, which computes the load address of the page from the
+ * last loadable segment, finds the entry points at the addresses the
+ * kernel maps them to.
+ *
+ * The first page holds the program headers and the tables that describe
+ * the entry points, the second page holds the code.
+ */
+ENTRY(__vdso_clock_gettime)
+
+SECTIONS
+{
+	. = 0x1000;
+	.text : { *(.text*) }
+	. = 0x2000;
+	.dynsym : { *(.dynsym) }
+	.hash : { *(.hash) }
+	.gnu.hash : { *(.gnu.hash) }
+	.dynstr : { *(.dynstr) }
+	.dynamic : { *(.dynamic) }
+	/DISCARD/ : { *(.note*) *(.comment) *(.symtab) *(.strtab) }
+}
+--------------------------------------------------------------------------------
+END FILE: vdso/vdso.ld
 
