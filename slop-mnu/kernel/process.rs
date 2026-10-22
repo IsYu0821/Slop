@@ -10,6 +10,10 @@ static SECCOMP_FILTER_REFS:crate::sync::SpinLock<[SeccompFilterRef;MAX_SECCOMP_F
    slot: the anonymous mappings use slot 130 and the images slot 128 and
    129, so the regions never share a page table entry. */
 pub const BRK_BASE:u64=0x0000_4180_0000_0000;
+/* The heap must stay inside its own PML4 slot, otherwise it would start to
+   share page-table entries with the neighbouring private regions. */
+pub const BRK_LIMIT:u64=0x0000_4200_0000_0000;
+pub const BRK_SLOT:usize=((BRK_BASE>>39)&511)as usize;
 pub fn slot_of(va:u64)->usize{((va>>39)&511)as usize}
 pub fn seccomp_filter_register(frame:u64)->Result<(),i64>{
  let mut refs=SECCOMP_FILTER_REFS.lock();let slot=refs.iter().position(|entry|entry.frame==0).ok_or(crate::errno::ENOMEM)?;refs[slot]=SeccompFilterRef{frame,refs:1};Ok(())
@@ -24,7 +28,7 @@ pub fn seccomp_filter_release(frame:u64)->Result<(),i64>{
 
 pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
- pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
+ pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,pub interp_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,pub cwd:[u8;128],pub cwd_len:usize,pub root:[u8;128],pub root_len:usize,
  pub pending:u64,pub sigmask:u64,pub pending_from:[u32;64],pub sig_restart:bool,pub sig_syscall:u64,pub sig_result:i64,pub si_code:[i32;64],pub si_value:[u64;64],pub si_overrun:[u32;64],pub robust_list_head:u64,pub robust_list_len:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
@@ -38,8 +42,8 @@ pub struct Process{
  pub groups:[u32;32],pub ngroups:usize,
 }
 impl Process{
- pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:[0;32],ngroups:0})
+ pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<Self,i64>{
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
@@ -85,7 +89,7 @@ impl Process{
   fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{match root.unmap_page(&phys,va){Ok(pa)=>{if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::release_frame(pa)?}}Err(e)=>{if e!=crate::errno::ENOENT{return Err(e)}}}va+=PAGE;}Ok(())}
   fn unmap_external_mappings(root:&PageTableRoot,vm:&Map){let access=Identity;for i in 0..vm.resource_stats().areas{if let Some(area)=vm.area(i){if !area.flags.contains(VmFlags::EXTERNAL){continue}let mut va=area.start as u64;while va<area.end as u64{if let Ok(frame)=root.unmap_page(&access,va){crate::fd::iouring_mapping_release(frame)}va+=PAGE;}}}}
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
- pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};/* The heap area grows: replace the old brk area instead of colliding with it. */
+ pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=BRK_LIMIT||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};/* The heap area grows: replace the old brk area instead of colliding with it. */
   if self.vm.replace(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{
   const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;const MAP_POPULATE:u64=0x8000;
@@ -249,7 +253,7 @@ impl Process{
     path. Frames carry refcounts; teardown releases them through release_frame. */
  pub fn clone_address_space(&self)->Result<u64,i64>{
   let access=Identity;
-  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot];let mut n=0usize;
+  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT];let mut n=0usize;
   for i in 0..all.len(){let s=all[i];if !all[..n].contains(&s){all[n]=s;n+=1;}}
   let slots=&all[..n];
   let child=self.root().clone_bootstrap(&access,slots)?;
@@ -265,11 +269,11 @@ impl Process{
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,interp_slot:self.interp_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
-  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
+  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */
   pub fn teardown_exit(&mut self,status:i32,vector:u64){
    let fd_descriptors=self.fds.descriptor_count();
@@ -282,7 +286,9 @@ impl Process{
    let mut cleanup_ok=true;
    if let Err(e)=root.destroy_private_slot(&access,self.image_slot){crate::println!("warning: image slot teardown failed errno={}",e);cleanup_ok=false}
    if self.stack_slot!=self.image_slot{if let Err(e)=root.destroy_private_slot(&access,self.stack_slot){crate::println!("warning: stack slot teardown failed errno={}",e);cleanup_ok=false}}
-   if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
+   if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot&&self.mmap_slot!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
+   if self.interp_slot!=self.image_slot&&self.interp_slot!=self.stack_slot&&self.interp_slot!=self.mmap_slot{if let Err(e)=root.destroy_private_slot(&access,self.interp_slot){crate::println!("warning: interpreter slot teardown failed errno={}",e);cleanup_ok=false}}
+   if BRK_SLOT!=self.image_slot&&BRK_SLOT!=self.stack_slot&&BRK_SLOT!=self.mmap_slot&&BRK_SLOT!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,BRK_SLOT){crate::println!("warning: brk slot teardown failed errno={}",e);cleanup_ok=false}}
    if let Err(e)=crate::memory::free_frame(self.cr3){crate::println!("warning: process PML4 recycle failed errno={}",e);cleanup_ok=false}
    if self.seccomp_filter!=0{if let Err(e)=seccomp_filter_release(self.seccomp_filter as u64){crate::println!("warning: seccomp filter release failed errno={}",e);cleanup_ok=false}self.seccomp_filter=0;self.seccomp_filter_len=0;}
    crate::record_lock::release_pid(crate::task::current_pid());
@@ -293,15 +299,17 @@ impl Process{
    crate::println!("process address space reclaimed status={} vector={}",status,vector);
  }
  /* Swaps in a freshly committed exec image and tears down the old one. */
-  pub fn replace_image(&mut self,new_cr3:u64,image_slot:usize,stack_slot:usize)->Result<(),i64>{
-   let old=(self.cr3,self.image_slot,self.stack_slot,self.mmap_slot);let old_vm=self.vm.clone();
+  pub fn replace_image(&mut self,new_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<(),i64>{
+   let old=(self.cr3,self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot);let old_vm=self.vm.clone();
   unsafe{PageTableRoot{pml4:new_cr3}.activate()}
   crate::task::bind_current_address_space(new_cr3,crate::task::current_kernel_stack_top());
-  self.cr3=new_cr3;self.image_slot=image_slot;self.stack_slot=stack_slot;
+  self.cr3=new_cr3;self.image_slot=image_slot;self.stack_slot=stack_slot;self.interp_slot=interp_slot;
    let access=Identity;let root=PageTableRoot{pml4:old.0};Self::unmap_external_mappings(&root,&old_vm);
   if root.destroy_private_slot(&access,old.1).is_err(){crate::println!("warning: old exec image teardown failed")}
    if old.2!=old.1&&root.destroy_private_slot(&access,old.2).is_err(){crate::println!("warning: old exec stack teardown failed")}
    if old.3!=old.1&&old.3!=old.2&&root.destroy_private_slot(&access,old.3).is_err(){crate::println!("warning: old exec mmap teardown failed")}
+   if old.4!=old.1&&old.4!=old.2&&old.4!=old.3&&root.destroy_private_slot(&access,old.4).is_err(){crate::println!("warning: old exec interpreter teardown failed")}
+   if BRK_SLOT!=old.1&&BRK_SLOT!=old.2&&BRK_SLOT!=old.3&&BRK_SLOT!=old.4&&root.destroy_private_slot(&access,BRK_SLOT).is_err(){crate::println!("warning: old exec brk teardown failed")}
   if crate::memory::free_frame(old.0).is_err(){crate::println!("warning: old exec PML4 recycle failed")}Ok(())
  }
 }

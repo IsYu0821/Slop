@@ -6,14 +6,14 @@
 use crate::arch::x86_64::phys::virt_to_phys;
 use crate::arch::x86_64::port;
 use crate::driver::virtio::{self,Transport};
-use crate::sync::SpinLock;
+use crate::sync::IrqSpinLock;
 use core::sync::atomic::Ordering;
 
 const VIRTIO_BLK_T_IN:u32=0;
 const VIRTIO_BLK_T_OUT:u32=1;
 
-struct Blk{ready:bool,transport:Transport,capacity:u64}
-static BLK:SpinLock<Blk>=SpinLock::new(Blk{ready:false,transport:Transport{modern:false,io:0,mmio:0,common:0,device_cfg:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0},capacity:0});
+struct Blk{ready:bool,transport:Transport,capacity:u64,qsize:usize}
+static BLK:IrqSpinLock<Blk>=IrqSpinLock::new(Blk{ready:false,transport:Transport::legacy(0),capacity:0,qsize:0});
 
 const MAX_Q:usize=128;
 const RING_BYTES:usize=12288;
@@ -22,7 +22,6 @@ static mut RING:Rings=Rings([0;RING_BYTES]);
 /* The offset of the used ring inside the ring buffer. The descriptor table
    and the available ring follow the split virtqueue layout, the used ring
    starts at the next page boundary. */
-static mut USED_OFF:usize=8192;
 #[repr(align(16))]struct ReqBuf([u8;16]);
 static mut REQ:ReqBuf=ReqBuf([0;16]);
 #[repr(align(512))]struct StatusBuf([u8;1]);
@@ -31,13 +30,18 @@ static mut BLK_STATUS:StatusBuf=StatusBuf([0;1]);
 static mut DATA:DataBuf=DataBuf([0;512]);
 
 fn ring()->*mut u8{unsafe{core::ptr::addr_of_mut!(RING.0)as*mut u8}}
-fn avail_idx(r:*mut u8)->*mut u16{unsafe{r.add(16*MAX_Q+2).cast()}}
-fn avail_slot(r:*mut u8,i:usize)->*mut u16{unsafe{r.add(16*MAX_Q+4+2*(i%MAX_Q)).cast()}}
-fn used_idx(r:*mut u8)->*mut u16{unsafe{r.add(unsafe{USED_OFF}+2).cast()}}
-fn used_entry(r:*mut u8,i:usize)->(u32,u32){unsafe{let p=r.add(unsafe{USED_OFF}+4+8*(i%MAX_Q));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
-fn desc_set(r:*mut u8,i:usize,addr:u64,len:u32,flags:u16,next:u16){
+/* The split virtqueue layout inside the ring buffer: the descriptor table
+   comes first, the available ring follows it and the used ring starts at
+   the next page boundary. */
+fn avail_off(size:usize)->usize{16*size}
+fn used_off(size:usize)->usize{((avail_off(size)+6+2*size)+4095)&!4095}
+fn avail_idx(r:*mut u8,size:usize)->*mut u16{unsafe{r.add(avail_off(size)+2).cast()}}
+fn avail_slot(r:*mut u8,size:usize,i:usize)->*mut u16{unsafe{r.add(avail_off(size)+4+2*(i%size)).cast()}}
+fn used_idx(r:*mut u8,size:usize)->*mut u16{unsafe{r.add(used_off(size)+2).cast()}}
+fn used_entry(r:*mut u8,size:usize,i:usize)->(u32,u32){unsafe{let p=r.add(used_off(size)+4+8*(i%size));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
+fn desc_set(r:*mut u8,size:usize,i:usize,addr:u64,len:u32,flags:u16,next:u16){
  unsafe{
-  let p=r.add(16*(i%MAX_Q));
+  let p=r.add(16*(i%size));
   (p as*mut u64).write_volatile(addr);
   (p.add(8)as*mut u32).write_volatile(len);
   (p.add(12)as*mut u16).write_volatile(flags);
@@ -48,20 +52,19 @@ fn desc_set(r:*mut u8,i:usize,addr:u64,len:u32,flags:u16,next:u16){
 /// Builds the queue description and installs it in the device.
 fn setup_queue(t:&Transport,size:usize)->Result<(),&'static str>{
  let r=ring();
- unsafe{USED_OFF=((16*size+4+2*size)+4095)&!4095;}
  let desc=r;
- let avail=unsafe{r.add(16*size)};
- let used=unsafe{r.add(unsafe{USED_OFF})};
+ let avail=unsafe{r.add(avail_off(size))};
+ let used=unsafe{r.add(used_off(size))};
  let q=virtio::Queue{desc,avail,used,size};
  t.queue_setup(0,&q);
  Ok(())
 }
 
 fn do_request(typ:u32,sector:u64)->Result<(),i64>{
- let t={
-  let mut blk=BLK.lock();
+ let (t,size)={
+  let blk=BLK.lock();
   if !blk.ready{return Err(crate::errno::ENODEV)}
-  blk.transport
+  (blk.transport,blk.qsize)
  };
  let r=ring();
  unsafe{
@@ -72,24 +75,25 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
   (hdr.add(8)as*mut u64).write_volatile(sector);
   BLK_STATUS.0[0]=0xff;
   // The descriptor chain: header, data, status.
-  desc_set(r,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
-  desc_set(r,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
-  desc_set(r,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
+  desc_set(r,size,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
+  desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
+  desc_set(r,size,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
   // The available ring.
-  let ai=avail_idx(r).read_volatile();
-  avail_slot(r,ai as usize).write_volatile(0);
+  let ai=avail_idx(r,size).read_volatile();
+  avail_slot(r,size,ai as usize).write_volatile(0);
   core::sync::atomic::compiler_fence(Ordering::SeqCst);
-  avail_idx(r).write_volatile(ai.wrapping_add(1));
+  avail_idx(r,size).write_volatile(ai.wrapping_add(1));
   core::sync::atomic::compiler_fence(Ordering::SeqCst);
   t.notify(0);
   // Wait for the device to consume the request.
-  let mut used=used_idx(r).read_volatile();
-  let start=used;
+  let start=used_idx(r,size).read_volatile();
+  let mut used=start;
   for _ in 0..100000{
-   used=used_idx(r).read_volatile();
+   used=used_idx(r,size).read_volatile();
    if used!=start{break;}
   }
-  let _=used_entry(r,used.wrapping_sub(1)as usize);
+  if used==start{return Err(crate::errno::EIO)}
+  let _=used_entry(r,size,used.wrapping_sub(1)as usize);
   if (BLK_STATUS.0[0]as*const u8).read_volatile()!=0{return Err(crate::errno::EIO)}
  }
  Ok(())
@@ -107,11 +111,9 @@ pub fn init()->Result<u64,&'static str>{
   let _=t.read_features(0);
   t.set_features(0,0);
  }
- let size=if t.modern{MAX_Q}else{
-  let offered=t.queue_select(0);
-  if offered<1{return Err("virtio-blk queue too small")}
-  offered.min(MAX_Q)
- };
+ let size=t.queue_size(0,MAX_Q);
+ if size<1{return Err("virtio-blk queue too small")}
+ if size>MAX_Q{return Err("virtio-blk queue larger than the ring buffer")}
  setup_queue(&t,size)?;
  t.set_status(virtio::S_ACK|virtio::S_DRIVER|virtio::S_DRIVER_OK);
  let mut cap=t.device_config(0);
@@ -120,7 +122,7 @@ pub fn init()->Result<u64,&'static str>{
   unsafe{cap=port::inl(t.io+0x14)as u64|((port::inl(t.io+0x18)as u64)<<32);}
  }
  let mut blk=BLK.lock();
- blk.ready=true;blk.transport=t;blk.capacity=cap;if cap==0{blk.capacity=1024;}
+ blk.ready=true;blk.transport=t;blk.capacity=cap;blk.qsize=size;if cap==0{blk.capacity=1024;}
  Ok(blk.capacity)
 }
 pub fn ready()->bool{BLK.lock().ready}

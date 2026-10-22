@@ -593,6 +593,10 @@ fn tcp_input(src_ip:u32,seg:&[u8],src_mac:[u8;6]){
     let rlen=t.rlen;
     t.rmem.copy_within(delta..rlen,0);
     t.rlen-=delta;
+    /* The acknowledged bytes leave the send window, so the base of the
+       window moves forward. Without this the window never shrinks and the
+       same bytes are retransmitted for ever. */
+    t.snd_una=ack;
     if seq_gt(t.snd_nxt,ack){t.snd_nxt=ack}
     t.retrans_at=ticks()+RTO_TICKS;
     t.retrans_budget=0;

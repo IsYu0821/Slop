@@ -4,6 +4,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 python3 - <<'PY'
 from pathlib import Path
+import re
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
@@ -74,6 +75,6 @@ for name,tokens in required.items():
     text=(r/name).read_text()
     for token in tokens:
         assert token in text,(name,token)
-assert (r/'Cargo.toml').read_text().count('version = "0.68.0"')==1
+assert (r/'Cargo.toml').read_text().count('version = "%s"'%re.search(r'^## (\S+) - ',(r/'CHANGELOG.md').read_text(),re.M).group(1))==1
 print('source consistency checks passed')
 PY

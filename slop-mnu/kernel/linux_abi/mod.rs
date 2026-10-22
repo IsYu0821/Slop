@@ -272,7 +272,8 @@ fn sys_kill(pid:u32,sig:i32)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }
@@ -437,7 +438,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}};
- match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
+ match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
  crate::posix_timer::release_pid(crate::task::current_pid());
  crate::task::set_current_fs_base(0);
@@ -1633,7 +1634,8 @@ fn sys_tgkill(tgid:u32,pid:u32,sig:i32)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }
@@ -2430,7 +2432,8 @@ fn sys_pidfd_send_signal(fd:usize,sig:i32,info:u64,flags:u64)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }

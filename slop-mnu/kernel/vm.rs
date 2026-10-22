@@ -88,8 +88,9 @@ impl Map{
   pub fn find_vma(&self,address:usize)->Option<Area>{self.areas[..self.len].iter().find(|a|address>=a.start&&address<a.end).copied()}
   pub fn set_cow(&mut self,start:usize,end:usize,cow:bool)->Result<(),i64>{let a=self.areas[..self.len].iter_mut().find(|a|a.start==start&&a.end==end).ok_or(crate::errno::EINVAL)?;a.cow=cow;Ok(())}
   pub fn set_locked_range(&mut self,addr:usize,len:usize,locked:bool)->Result<(),i64>{let end=addr.checked_add(len).ok_or(crate::errno::EINVAL)?;for a in self.areas[..self.len].iter_mut(){if a.start>=addr && a.end<=end {a.locked=locked}}Ok(())}
-  /* Ranges that must stay physically shared after fork. */
-  pub fn shared_writable_ranges(&self,mut cb:impl FnMut(usize,usize)){for a in &self.areas[..self.len]{if a.flags.contains(VmFlags::SHARED)&&a.flags.contains(VmFlags::WRITE){cb(a.start,a.end);}}}
+  /* Ranges that must stay physically shared after fork: MAP_SHARED
+     anonymous pages and kernel-backed mappings such as an io_uring ring. */
+  pub fn shared_writable_ranges(&self,mut cb:impl FnMut(usize,usize)){for a in &self.areas[..self.len]{if a.flags.contains(VmFlags::WRITE)&&(a.flags.contains(VmFlags::SHARED)||a.flags.contains(VmFlags::EXTERNAL)){cb(a.start,a.end);}}}
   pub fn mark_all_cow(&mut self){for i in 0..self.len{if !self.areas[i].flags.contains(VmFlags::EXTERNAL){self.areas[i].cow=true;}}}
   pub fn clear(&mut self){self.areas=[Area{start:0,end:0,flags:VmFlags(0),kind:VmKind::Anon,cow:false,locked:false};MAX_AREAS];self.len=0;self.next_hint=MMAP_BASE;}
 }

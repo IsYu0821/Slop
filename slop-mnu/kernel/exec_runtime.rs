@@ -14,7 +14,7 @@ const EXE_BASE:u64=0x0000_4080_0000_0000;
 /* One committed PT_LOAD range, kept for /proc/<pid>/maps. */
 #[derive(Clone,Copy,Default)]pub struct MapSeg{pub start:u64,pub end:u64,pub flags:u32}
 pub const MAX_MAP_SEGS:usize=8;
-#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,
+#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,pub interp_slot:usize,
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
  pub segs:[MapSeg;MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64}
 fn pack_vec(out:&mut [u8],out_len:&mut usize,items:&[&str]){
@@ -46,7 +46,8 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let interp_slot=((LD_BASE>>39)&511)as usize;
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;
- let mut private=[image_slot,stack_slot,mmap_slot,interp_slot];
+ let brk_slot=((crate::process::BRK_BASE>>39)&511)as usize;
+ let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot];
  let root=firmware.clone_bootstrap(&access,&private).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){
@@ -76,7 +77,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
   for seg in &parsed.segments[..parsed.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:exe_base+seg.vaddr&!(PAGE-1),end:align(exe_base+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}
   let mut cmdline=[0u8;512];let mut cmdline_len=0usize;pack_vec(&mut cmdline,&mut cmdline_len,argv);
   let mut environ=[0u8;512];let mut environ_len=0usize;pack_vec(&mut environ,&mut environ_len,envp);
-  let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot,cmdline,cmdline_len,environ,environ_len,segs,nsegs,stack_base,stack_top};tx.commit();Ok(loaded)
+  let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot,interp_slot,cmdline,cmdline_len,environ,environ_len,segs,nsegs,stack_base,stack_top};tx.commit();Ok(loaded)
 }
 /* Maps one PT_LOAD at base+seg.vaddr, copying file bytes and zeroing the rest. */
 fn map_segment(tx:&mut Transaction,root:&PageTableRoot,access:&Identity,image:&[u8],base:u64,seg:&elf::LoadSegment)->Result<(),&'static str>{

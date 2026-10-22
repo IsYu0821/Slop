@@ -1,3 +1,14 @@
+## 0.69.0 - 2026-10-22
+- Fixed the virtio 1.0 notification capability, which was read with the field offsets of the configuration capabilities. The multiplier, the offset and the bar of the notification area were therefore wrong, the device was never notified, and no transmit ever completed. The notification register of a queue now sits at the area base plus the offset plus the multiplier times the queue index, and the queue index is written there.
+- The feature negotiation accepts the version 1 feature and nothing else. Accepting a feature the driver does not implement would let the device use a path that is not served here, such as a merged receive buffer, a flush or a discard.
+- The queue size of a modern device is read back after the driver offers it, so the ring layout follows the size the device actually uses.
+- The virtio drivers keep their state behind an interrupt safe lock and no longer hold it while waiting for a transmit to complete. The timer interrupt polls the network, so a plain spin lock deadlocked the guest as soon as a transmit was outstanding.
+- Fixed the TCP send window: the acknowledged base of the window never moved, so the same bytes were retransmitted for ever and the connection was never closed. The close of a socket now completes.
+- The user address space gives the program break and the dynamic interpreter a page table slot of their own, so a mapping in one region can no longer overwrite the page table entry of another.
+- The SSE register file now survives an exception and an interrupt, so a faulting instruction that uses the vector registers is retried with the values the user program left there.
+- A blocked fatal signal no longer ends the process that sent it, which is what Linux does.
+- Removed a leftover debug print from the resource usage syscall. It wrote to the console while the process lock was held, which deadlocked the guest.
+
 ## 0.68.0 - 2026-10-21
 - The running task identifier now comes from the scheduler instead of a cached copy, so a signal or a wait that names the current task cannot name a task that ran in between.
 

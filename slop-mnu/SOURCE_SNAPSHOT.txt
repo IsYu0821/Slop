@@ -1,19 +1,19 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.68.0
+Version: 0.69.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-6fe0fdebb1360548fb456c32ac7f31d569e1544bd2104728e3679c8f5a2d852c     31389  CHANGELOG.md
-de20cf2f540badc0abebcef8fb9b2f5992799b028dd50c5a87145419fd7c5ff3       160  Cargo.lock
-6e3df1c7fcaaff7c49646d690c058a5f8832436657752e970e9097c95c94a7f4       231  Cargo.toml
+2243550578357442da090ca05516a3a8457c4535dbee938e3cfa3920e2e75607     33285  CHANGELOG.md
+18a861c4ea1351773b2892d71aae3eeb6c7242f175c6932c3030acf1cc7ad1db       160  Cargo.lock
+acb7f17d12832e2848c1bad562af479aa3487c6e38aed9a42a0f0715fab96a70       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 0087be549f8a4007ed82108ff45b350fb4f0f4afbc1bae5df240f17bdfbee0f8      2205  arch/x86_64/context.S
 9ff8356010f6fe858f0cd0cdd28c1fa7c7d7ff8e764f4f5f6fbea2570a44e59e       292  arch/x86_64/entry.S
-8740ca6d18a20558f90b8dcd27552c93afb495a4473ad355afc369eb4ed07fc0      1647  arch/x86_64/exceptions.S
-ef82e3e9b3e2c9ec7f31e5d7fa1e1f5c16e06fb3d6da91f28d1fe8ef1874b59a       693  arch/x86_64/irq.S
+6bb9fd913b1a5907c6f506a0f8deb1ba160ace3eef7dca5e06b4f59a74f618f2      2980  arch/x86_64/exceptions.S
+efa8c93d3c07f922521317195e55cac845748d20fcafc358759eb64d04d258c9      1897  arch/x86_64/irq.S
 e8fce1147115339757c6c7924ca324ccb7fb1b44696e25770ee27da4e078cba8      3700  arch/x86_64/syscall.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
@@ -80,11 +80,12 @@ a490e39b20556b630152dfaf04ab21d8a12278553cb0b53d17621a67feda0eaf      5586  docs
 d74391fb76309cd47034dd45a2a93ebafc4fae6ae8c7ae10d92df31787067578      2699  docs/milestone65.md
 d9003658b6ca3b3e9daeea80994f71f93ecd206dc97871ef95fc14495cb5cccc      4795  docs/milestone66.md
 20e80472bf9b7ff5e5bfea3b617a3a38d6f17e1eed938dab11a187bc3185e2c8      3689  docs/milestone67.md
+88350202734d660bb397d1de3319615b78ebd75bf9e90207bcdae5966ea9f55d      5989  docs/milestone68.md
 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2      1447  docs/milestone7.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-e84ad3c99ab85d79152f7643ebcb7573e4a2136e6a64be09e7114845ab22daf2      3157  docs/priority-status.md
+d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a      3987  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
@@ -107,38 +108,38 @@ be67c05421b4b95925f3bda3bca07b7b967fad3ce9d2be9e5e087c35431eeaa5      1336  kern
 829e8e2bb05e351d9166d89ed978305bb40f2dbf4687d6e0bd09b33fb043e204      4377  kernel/device.rs
 e21ec1ace7924648080675309922ea09136a569764f2ed012a55661ab4a179c5       842  kernel/driver/mod.rs
 06b82fd6c684a113b76ccd836ac118f232a60d66ab340d23eebcb432261e69df      3723  kernel/driver/pci.rs
-92de13eb0babea025506c5d0a349ebb76bfcc7737c269d030d31691a67ae1476      9691  kernel/driver/virtio.rs
-a455f4a013fa444126b9a94f490e3cfa5d8c0fc718c5152f30c5fa27bf3d0be7      5458  kernel/driver/virtio_blk.rs
-c02a324d14ae1eff75037b029eeb2faeda946aee96d018b443a14a7f044484f8      6541  kernel/driver/virtio_net.rs
+f1d6863f8dd9382088474eb747b0c2f00a391f242563b4fb0c54bf074515ebc0     11756  kernel/driver/virtio.rs
+edb7cc0c218a2554077b9a00da9661d29d6c82255406647958ca8bbd97fe63d6      5800  kernel/driver/virtio_blk.rs
+8a5fa81bc4414fc3aff8fb588f48b0d084896f06b89d8f3b1fd68b939169bf91      7735  kernel/driver/virtio_net.rs
 6bbb932f62d527d9be9900dd95d33d1e7a833a93f665752cdda90f2efe7a6272      4725  kernel/elf.rs
 16477b32f8e57c9b89d5790aa8aa2c3974f51790499ddb1e6674b4adf6bb7ea9      1371  kernel/errno.rs
 ad9ddad42be7fa9f17c04f2bc364254292f2754c14d83085d1741137e0d3a785      2122  kernel/exec.rs
-0075f418c5612ad78f95c11619d7d81b229163dfc1515af544f1f36a9195a31f      8002  kernel/exec_runtime.rs
+56b0cab86d36df2dde57cf05cba900dc5c9f16b8fb1041f548d00671f5af1ea9      8105  kernel/exec_runtime.rs
 5ff4e9d1032ffed918399821db681c58381f8bc46ab21d146e938b6fd4995a79      7923  kernel/ext2.rs
 3f68aff2499592cd3c4637370fe3064d613da11dab3ef202b6c8e006684c2881     21372  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 a7167952a3e3c90d7aa88a27a01ab977abdbf56cd9ed6e5e6eade6f859e7c65d      3131  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
 67ebd9877c8c3ba2af618efddef4fe69b76b16a25814b39de64eb25ef2493ced      8745  kernel/lib.rs
-2e84ada9e92462e7cf3829e8169fb94659e04596d5f550420731bbd0e31c5270    144866  kernel/linux_abi/mod.rs
+2a1ac5d7665e8076183dd396581573e117ea072b44b9a9a800f94194895e825a    145236  kernel/linux_abi/mod.rs
 3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df      6824  kernel/linux_abi/nr.rs
 460d4dcfa80585c57d94de369dac73653869519547610e52e5d0758b1db3331e      3219  kernel/linux_abi/stack.rs
 abdd66e1514fbb151b74b39200f99d55a4ef1c6370c39e95a1e1195300e6d270      1227  kernel/linux_abi/types.rs
 1d57f86e9440a1374a16699c4ef115a886dc5d3e13173f23c1b14ac58936a687      3262  kernel/memory.rs
-b8383ab75e2a52f9f987bb74ef67cc9dd5ebc9249a878eb5032ecb12cf2f2d6d     22358  kernel/net.rs
+1ec33d3b2aa19f4530637b1b8c40239c50b7ecc01bc8152984e075373be07495     22573  kernel/net.rs
 af0e064ebcd09d48855cbc9b8f1399316549fbaacbfe7a6eb93c7c23b187bd6a      3339  kernel/pipe.rs
 54d5972f217a6b8f65da30553e3428d9b462bca5bcb73b01dd67152e9527f10f      6262  kernel/posix_timer.rs
-1c268c14b5b89f1340f325e62e179dde3265cc72b990f6430d1631316ab8e07e     29688  kernel/process.rs
+76e5222190091e133e4f20cdec920c13f48ebddb9cd51f4c498b4f9ed435d6a2     31056  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
 baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252     13874  kernel/signal.rs
 ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
-12f26b781d9ae629f6d0b2f469c24886d5125be190df51184b4b10efc3136142     27370  kernel/task.rs
+e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d     27391  kernel/task.rs
 02ae7abb2aa707761f63174902b2b3d6cc9ef8e700dc67322707f1b02d2a7212      1141  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 88e238f027a3b78351b4fdc09f678a8269f398bf28d9bc8a99127de3af08b771     61878  kernel/vfs.rs
-bbf9ec87e997228a9b3ec3d652b8014739f8e73fcf040f659f713cec629db2a1      7876  kernel/vm.rs
+4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
 be8a5f3290b6dc4700424b8e42ade0d690d530979aca36436d09350aac051c5c       100  libc/errno.c
 c85e9410a3a8639395bda1aa8272275ffb5702a57f6fe84f4f2c3e86108e3a80       279  libc/include/errno.h
@@ -189,7 +190,7 @@ c9d90f83334313526b05eb85ee96acb04896d99a9e7c76d29a9e95aae7d92f92      2887  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-5ac0eec4c5984bf5627ed790a3e9a135774d0ee726e37205c2731a68c029ca3e      6164  tools/check-source.sh
+a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307      6242  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
 092da751cb43ae8d55c027209f61069469251e4630abbfb470a74905fdec3f3d      3615  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
@@ -198,13 +199,24 @@ c9d90f83334313526b05eb85ee96acb04896d99a9e7c76d29a9e95aae7d92f92      2887  tool
 edd0ec9e6b87e76b6d4272574ac9452d9134e611d0847ecc0795a1ebba1e3c5e      1701  tools/net-echo.py
 a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tools/run-qemu.sh
 
-TOTAL FILES: 192
+TOTAL FILES: 193
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 31389 bytes
-SHA-256: 6fe0fdebb1360548fb456c32ac7f31d569e1544bd2104728e3679c8f5a2d852c
+SIZE: 33285 bytes
+SHA-256: 2243550578357442da090ca05516a3a8457c4535dbee938e3cfa3920e2e75607
 ================================================================================
+## 0.69.0 - 2026-10-22
+- Fixed the virtio 1.0 notification capability, which was read with the field offsets of the configuration capabilities. The multiplier, the offset and the bar of the notification area were therefore wrong, the device was never notified, and no transmit ever completed. The notification register of a queue now sits at the area base plus the offset plus the multiplier times the queue index, and the queue index is written there.
+- The feature negotiation accepts the version 1 feature and nothing else. Accepting a feature the driver does not implement would let the device use a path that is not served here, such as a merged receive buffer, a flush or a discard.
+- The queue size of a modern device is read back after the driver offers it, so the ring layout follows the size the device actually uses.
+- The virtio drivers keep their state behind an interrupt safe lock and no longer hold it while waiting for a transmit to complete. The timer interrupt polls the network, so a plain spin lock deadlocked the guest as soon as a transmit was outstanding.
+- Fixed the TCP send window: the acknowledged base of the window never moved, so the same bytes were retransmitted for ever and the connection was never closed. The close of a socket now completes.
+- The user address space gives the program break and the dynamic interpreter a page table slot of their own, so a mapping in one region can no longer overwrite the page table entry of another.
+- The SSE register file now survives an exception and an interrupt, so a faulting instruction that uses the vector registers is retried with the values the user program left there.
+- A blocked fatal signal no longer ends the process that sent it, which is what Linux does.
+- Removed a leftover debug print from the resource usage syscall. It wrote to the console while the process lock was held, which deadlocked the guest.
+
 ## 0.68.0 - 2026-10-21
 - The running task identifier now comes from the scheduler instead of a cached copy, so a signal or a wait that names the current task cannot name a task that ran in between.
 
@@ -614,7 +626,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: de20cf2f540badc0abebcef8fb9b2f5992799b028dd50c5a87145419fd7c5ff3
+SHA-256: 18a861c4ea1351773b2892d71aae3eeb6c7242f175c6932c3030acf1cc7ad1db
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -622,18 +634,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.65.0"
+version = "0.69.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 6e3df1c7fcaaff7c49646d690c058a5f8832436657752e970e9097c95c94a7f4
+SHA-256: acb7f17d12832e2848c1bad562af479aa3487c6e38aed9a42a0f0715fab96a70
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.68.0"
+version = "0.69.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -902,8 +914,8 @@ END FILE: arch/x86_64/entry.S
 
 ================================================================================
 FILE: arch/x86_64/exceptions.S
-SIZE: 1647 bytes
-SHA-256: 8740ca6d18a20558f90b8dcd27552c93afb495a4473ad355afc369eb4ed07fc0
+SIZE: 2980 bytes
+SHA-256: 6bb9fd913b1a5907c6f506a0f8deb1ba160ace3eef7dca5e06b4f59a74f618f2
 ================================================================================
 .text
 .global isr_default,isr_invalid_tss,isr_segment_not_present,isr_stack_segment
@@ -923,6 +935,28 @@ isr_alignment_check: pushq $17; jmp common_exception
    iretq after handling a fault, so every GPR the handler may clobber has to be
    saved here and restored before returning. */
 common_exception:
+    /* The faulting instruction is retried after the handler, so the SSE
+       register file has to survive the call into Rust unchanged. The kernel
+       itself uses XMM registers, and a demand-paging or COW fault on a
+       `movups` would otherwise write the handler's leftovers back to user
+       memory. */
+    sub $256, %rsp
+    movups %xmm0,0(%rsp)
+    movups %xmm1,16(%rsp)
+    movups %xmm2,32(%rsp)
+    movups %xmm3,48(%rsp)
+    movups %xmm4,64(%rsp)
+    movups %xmm5,80(%rsp)
+    movups %xmm6,96(%rsp)
+    movups %xmm7,112(%rsp)
+    movups %xmm8,128(%rsp)
+    movups %xmm9,144(%rsp)
+    movups %xmm10,160(%rsp)
+    movups %xmm11,176(%rsp)
+    movups %xmm12,192(%rsp)
+    movups %xmm13,208(%rsp)
+    movups %xmm14,224(%rsp)
+    movups %xmm15,240(%rsp)
     pushq %rax
     pushq %rbx
     pushq %rcx
@@ -938,10 +972,10 @@ common_exception:
     pushq %r13
     pushq %r14
     pushq %r15
-    mov 120(%rsp),%rdi
-    mov 128(%rsp),%rsi
-    mov 136(%rsp),%rdx
-    mov 144(%rsp),%rcx
+    mov 376(%rsp),%rdi
+    mov 384(%rsp),%rsi
+    mov 392(%rsp),%rdx
+    mov 400(%rsp),%rcx
     mov %rsp,%rbp
     and $-16,%rsp
     cld
@@ -962,15 +996,33 @@ common_exception:
     popq %rcx
     popq %rbx
     popq %rax
-    addq $16, %rsp
+    movups 0(%rsp),%xmm0
+    movups 16(%rsp),%xmm1
+    movups 32(%rsp),%xmm2
+    movups 48(%rsp),%xmm3
+    movups 64(%rsp),%xmm4
+    movups 80(%rsp),%xmm5
+    movups 96(%rsp),%xmm6
+    movups 112(%rsp),%xmm7
+    movups 128(%rsp),%xmm8
+    movups 144(%rsp),%xmm9
+    movups 160(%rsp),%xmm10
+    movups 176(%rsp),%xmm11
+    movups 192(%rsp),%xmm12
+    movups 208(%rsp),%xmm13
+    movups 224(%rsp),%xmm14
+    movups 240(%rsp),%xmm15
+    /* Drop the SSE save area together with the synthetic vector and error
+       words; the CPU frame (rip, cs, rflags, ...) follows. */
+    addq $272, %rsp
     iretq
 --------------------------------------------------------------------------------
 END FILE: arch/x86_64/exceptions.S
 
 ================================================================================
 FILE: arch/x86_64/irq.S
-SIZE: 693 bytes
-SHA-256: ef82e3e9b3e2c9ec7f31e5d7fa1e1f5c16e06fb3d6da91f28d1fe8ef1874b59a
+SIZE: 1897 bytes
+SHA-256: efa8c93d3c07f922521317195e55cac845748d20fcafc358759eb64d04d258c9
 ================================================================================
 .text
 .global apic_timer_entry
@@ -979,6 +1031,27 @@ SHA-256: ef82e3e9b3e2c9ec7f31e5d7fa1e1f5c16e06fb3d6da91f28d1fe8ef1874b59a
 #endif
 apic_timer_entry:
     cld
+    /* An interrupt can preempt user code and return to it, and it can also
+       preempt kernel code in the middle of an SSE computation. Save the SSE
+       register file around the handler; context switches save their own
+       copy, but they cannot recover what the handler has already clobbered. */
+    sub $256, %rsp
+    movups %xmm0,0(%rsp)
+    movups %xmm1,16(%rsp)
+    movups %xmm2,32(%rsp)
+    movups %xmm3,48(%rsp)
+    movups %xmm4,64(%rsp)
+    movups %xmm5,80(%rsp)
+    movups %xmm6,96(%rsp)
+    movups %xmm7,112(%rsp)
+    movups %xmm8,128(%rsp)
+    movups %xmm9,144(%rsp)
+    movups %xmm10,160(%rsp)
+    movups %xmm11,176(%rsp)
+    movups %xmm12,192(%rsp)
+    movups %xmm13,208(%rsp)
+    movups %xmm14,224(%rsp)
+    movups %xmm15,240(%rsp)
     push %rax
     push %rcx
     push %rdx
@@ -1014,6 +1087,23 @@ apic_timer_entry:
     pop %rdx
     pop %rcx
     pop %rax
+    movups 0(%rsp),%xmm0
+    movups 16(%rsp),%xmm1
+    movups 32(%rsp),%xmm2
+    movups 48(%rsp),%xmm3
+    movups 64(%rsp),%xmm4
+    movups 80(%rsp),%xmm5
+    movups 96(%rsp),%xmm6
+    movups 112(%rsp),%xmm7
+    movups 128(%rsp),%xmm8
+    movups 144(%rsp),%xmm9
+    movups 160(%rsp),%xmm10
+    movups 176(%rsp),%xmm11
+    movups 192(%rsp),%xmm12
+    movups 208(%rsp),%xmm13
+    movups 224(%rsp),%xmm14
+    movups 240(%rsp),%xmm15
+    add $256, %rsp
     iretq
 #ifdef __ELF__
 .size apic_timer_entry,.-apic_timer_entry
@@ -4000,6 +4090,144 @@ where it used to fail.
 END FILE: docs/milestone67.md
 
 ================================================================================
+FILE: docs/milestone68.md
+SIZE: 5989 bytes
+SHA-256: 88350202734d660bb397d1de3319615b78ebd75bf9e90207bcdae5966ea9f55d
+================================================================================
+# Milestone 68: the virtio 1.0 notification path and a TCP stack that closes
+
+## Goal
+
+Make the hardware drivers work with the device models a Linux user expects
+and make the network stack finish what it starts. The acceptance gate covers
+both: the guest moves real packets through the network driver and the
+connection has to be closed when the program closes the socket.
+
+The milestone found four defects that had been hiding behind each other. The
+first one made every transmit fail, the second one deadlocked the guest as
+soon as a transmit was outstanding, the third one made the connection never
+close, and the fourth one was a leftover debug print that deadlocked the
+guest on its own.
+
+## The notification capability was read with the wrong offsets
+
+The virtio 1.0 interface describes itself through vendor specific PCI
+capabilities. The common configuration and the device configuration share one
+layout: the capability type, the bar and the offset of the structure inside
+that bar. The notification capability has a different one: the offset
+multiplier, the offset of the notification area inside its bar and the bar
+number.
+
+The driver read the notification capability as if it were a configuration
+capability, so the multiplier was the bar number, the offset was the padding
+after the capability and the bar was the low byte of the offset. The
+notification register of a queue was then computed from wrong values, the
+device was never told that work was waiting, and no transmit ever completed.
+The queue index is now written to the area base plus the offset plus the
+multiplier times the queue index, which is where the device reads it.
+
+## The feature negotiation accepted features that are not implemented
+
+The negotiation acknowledged every feature the device offered. A virtio-net
+device offers a merged receive buffer, a control queue and a queue pair, and a
+virtio-blk device offers a flush, a discard, a write of zeroes and a secure
+erase. Accepting a feature means the device may use a path the driver does
+not serve.
+
+The driver now accepts the version 1 feature and nothing else, which is the
+minimum a modern device needs.
+
+The queue size of a modern device is also read back after the driver offers
+it, so the ring layout follows the size the device really uses.
+
+## The network driver held its lock across the transmit wait
+
+The driver state sat behind a plain spin lock, and the transmit path held
+that lock while it waited for the device to consume the buffer. The timer
+interrupt polls the network, and it runs on the same processor, so an
+interrupt that arrived during the wait took the same lock and spun for ever:
+the guest stopped.
+
+The driver state now sits behind an interrupt safe lock, and the transmit
+path releases the lock while it waits.
+
+## The TCP send window never moved
+
+The stack removed the acknowledged bytes from the send buffer but never moved
+the base of the window forward. The number of bytes in flight therefore never
+shrank, the same bytes were retransmitted for ever, and the condition that
+sends the close request was never met, so a socket close spun until the test
+gave up.
+
+The acknowledged base now moves forward with the acknowledgement, the close
+request is sent, and the connection reaches its final state.
+
+## The user address space gave every region its own page table slot
+
+The program break, the anonymous mappings, the dynamic linker and the
+position independent image were placed at addresses that are a multiple of
+64 gigabytes apart, so they shared the same page table slot and, with it, the
+same lower level indices. A mapping in one of the regions overwrote the page
+table entry of another.
+
+Every region now lives alone in a page table slot:
+
+| region | address | page table slot |
+| --- | --- | --- |
+| the dynamic linker | `0x4000_0000_0000` | 128 |
+| the position independent image | `0x4080_0000_0000` | 129 |
+| the anonymous mappings | `0x4100_0000_0000` | 130 |
+| the program break | `0x4180_0000_0000` | 131 |
+
+The program break also has an upper limit, so a runaway break cannot reach
+the region above it.
+
+## The vector registers survive an exception and an interrupt
+
+A faulting instruction is retried after the handler returns, so the vector
+register file has to survive the call into the kernel. An interrupt can
+preempt user code and return to it, and it can preempt kernel code in the
+middle of a vector computation. Both paths now save and restore the sixteen
+vector registers.
+
+## A blocked fatal signal does not end the process that sent it
+
+A fatal signal that the caller sends to itself ends the caller before the
+syscall returns, but only when the signal is not blocked. A process that
+blocks a signal and then raises it keeps running, which is what Linux does.
+
+## Acceptance criteria
+
+1. `./tools/acceptance-test.sh` prints `acceptance: PASS`, including the
+   UDP and TCP echo test that moves real packets through the network driver.
+2. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
+   Linux)`.
+3. `./tools/heap-test.sh` prints `heap: PASS`.
+4. `./tools/check-source.sh` passes.
+5. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/busybox-test.sh` PASS, 115 checks match Linux.
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+## Open items
+
+- The differential battery stops at the processor time accounting. The
+  reason is the missing vector system call entry point: on Linux the clock
+  is read without entering the kernel, so a loop that measures the clock
+  spends its time in user mode, while this kernel charges the time to the
+  kernel. The measurement is recorded in `docs/priority-status.md`.
+- The processor time accounting still counts one tick as a millisecond,
+  while the local APIC timer of the test machine runs at a different rate.
+  The tick is not calibrated against a real time source yet.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone68.md
+
+================================================================================
 FILE: docs/milestone7.md
 SIZE: 1447 bytes
 SHA-256: 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2
@@ -4089,8 +4317,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 3157 bytes
-SHA-256: e84ad3c99ab85d79152f7643ebcb7573e4a2136e6a64be09e7114845ab22daf2
+SIZE: 3987 bytes
+SHA-256: d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a
 ================================================================================
 # One-Linux-program priority status
 
@@ -4106,6 +4334,12 @@ SHA-256: e84ad3c99ab85d79152f7643ebcb7573e4a2136e6a64be09e7114845ab22daf2
 - a virtual-memory area ledger that merges adjacent areas and reuses a
   released range
 - the Linux `madvise` advice set and `rseq` reporting `ENOSYS`
+- the virtio 1.0 notification path, so a default `virtio-blk-pci` and
+  `virtio-net-pci` device model works and a packet really leaves the guest
+- a TCP stack that acknowledges its window, sends the close request and
+  reaches the final state of a connection
+- every user region (the program break, the anonymous mappings, the dynamic
+  linker, the position independent image) in a page table slot of its own
 
 ## Implemented in source, pending build/runtime validation
 
@@ -4128,30 +4362,36 @@ SHA-256: e84ad3c99ab85d79152f7643ebcb7573e4a2136e6a64be09e7114845ab22daf2
   `ucontext_t` and `siginfo_t`, `rt_sigreturn`, `SA_SIGINFO`, `SA_NODEFER`,
   `SA_RESETHAND`, the `SA_RESTORER` requirement, `kill` to a process or a
   process group, `rt_sigpending` and `EINTR` for an interrupted blocking wait
+- the vector register file preserved across an exception and an interrupt
 
 ## Open defects
 
-- The allocator metadata of a musl program is still overwritten now and
-  then: the BusyBox battery fails intermittently with an allocator assertion
-  and the differential battery stops at the pending-signal check. The address
-  layout fix removed the page table collision that made the corruption
-  common, but a second source is left. The differential battery now runs
-  through twenty-five checks instead of five, which makes it the better
-  reproducer.
-- A `tkill` with a stale thread identifier reports `ESRCH` like Linux does,
-  but a C library that caches its thread identifier across a fork then
-  signals the wrong thread. The pending-signal check in the differential
-  battery fails for that reason.
+- The differential battery stops at the processor time accounting. The
+  reason is the missing vector system call entry point: on Linux a program
+  that reads the clock does not enter the kernel, so the loop that measures
+  the clock spends its time in user mode and the user time of the process
+  grows. This kernel has no such entry point, so every clock reading is a
+  system call and the time is charged to the kernel, which leaves the user
+  time far below the value Linux reports. The clock itself is correct: the
+  process clock, the thread clock and the wall clock agree.
+- The local APIC timer is not calibrated. The kernel counts one tick as a
+  millisecond, but the timer of the test machine runs at a different rate, so
+  the monotonic clock and the processor time are scaled wrongly. The rate has
+  to be measured against a real time source, the programmable interval timer
+  is the obvious candidate.
 
 ## Next in line for the Linux ABI
 
-1. A real-time signal range with `sigqueue` and the queued values.
-2. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
-3. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
-4. The floating-point state in the ucontext, so a handler sees the registers.
-5. Threads: `CLONE_VM`, `CLONE_THREAD`, per-thread `fs` base and `set_tid_address`.
-6. Copy-on-write for `fork`, which removes the deep copy of the private slots.
-7. `futex` waiting and waking, which the threading work depends on.
+1. A vector system call entry point, so a program can read the clock without
+   entering the kernel. This closes the gap above and gives every Linux
+   program the fast clock path it expects.
+2. A calibrated local APIC timer, so the monotonic clock and the processor
+   time are in real units.
+3. A real-time signal range with `sigqueue` and the queued values.
+4. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
+5. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
+6. The floating-point state in the ucontext, so a handler sees the registers.
+7. Copy-on-write for `fork`, which removes the deep copy of the private slots.
 --------------------------------------------------------------------------------
 END FILE: docs/priority-status.md
 
@@ -5164,8 +5404,8 @@ END FILE: kernel/driver/pci.rs
 
 ================================================================================
 FILE: kernel/driver/virtio.rs
-SIZE: 9691 bytes
-SHA-256: 92de13eb0babea025506c5d0a349ebb76bfcc7737c269d030d31691a67ae1476
+SIZE: 11756 bytes
+SHA-256: f1d6863f8dd9382088474eb747b0c2f00a391f242563b4fb0c54bf074515ebc0
 ================================================================================
 //! virtio-pci transport.
 //!
@@ -5241,12 +5481,16 @@ pub struct Transport{
  pub modern:bool,
  /// The legacy port I/O base.
  pub io:u16,
- /// The memory mapped base of the first bar.
- pub mmio:u64,
- /// The offset of the common configuration inside the bar.
+ /// The base address of every memory mapped bar.
+ pub bar_base:[u64;6],
+ /// The offset of the common configuration inside its bar.
  pub common:u64,
- /// The offset of the device configuration inside the bar.
+ /// The bar that carries the common configuration.
+ pub common_bar:u32,
+ /// The offset of the device configuration inside its bar.
  pub device_cfg:u64,
+ /// The bar that carries the device configuration.
+ pub device_bar:u32,
  /// The notification multiplier, the queue offset and the bar that carries
  /// the notification area.
  pub notify_mult:u32,
@@ -5256,6 +5500,11 @@ pub struct Transport{
  pub queues:u16,
  /// The physical address of the notification area.
  pub notify_base:u64,
+}
+
+impl Transport{
+ /// The transport of a device that speaks the legacy port I/O interface.
+ pub const fn legacy(io:u16)->Self{Self{modern:false,io,bar_base:[0;6],common:0,common_bar:0,device_cfg:0,device_bar:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0}}
 }
 
 /// Reads a capability sized byte range from the configuration space.
@@ -5275,29 +5524,48 @@ fn cfg_read(bdf:Bdf,offset:u16)->Option<[u8;16]>{
 }
 
 /// Finds the virtio capabilities of a device and returns the offsets of the
-/// common configuration, the notification area and the device configuration.
-fn modern_caps(bdf:Bdf)->Option<(u64,u64,u32,u32,u32)>{
+/// common configuration, the device configuration, the notification area
+/// multiplier, the notification area offset and the bars that carry them.
+///
+/// The common and the device configuration capability share one layout: the
+/// capability type, the bar and the offset of the structure inside that bar.
+/// The notification capability has a different one: the offset multiplier,
+/// the offset of the notification area inside its bar and the bar number.
+fn modern_caps(bdf:Bdf)->Option<(u64,u64,u32,u32,u32,u32,u32)>{
  let acc=Cam;
  let mut ptr=(acc.read32(bdf,pci::CFG_CAP)&0xff)as u16;
  let mut common=0u64;let mut device=0u64;let mut mult=0u32;let mut noff=0u32;let mut nbar=0u32;
+ let mut cbar=0u32;let mut dbar=0u32;
  let mut found=0u32;
  while ptr>=0x40&&ptr<0xfc{
   let cap=cfg_read(bdf,ptr)?;
   let id=cap[0];let next=cap[1];let len=cap[2]as usize;
   if id==PCI_CAP_ID_VENDOR&&len>=16{
-   let cfg_type=cap[3];let bar=cap[4]as u32;
-   let offset=u32::from_le_bytes([cap[8],cap[9],cap[10],cap[11]])as u64;
+   let cfg_type=cap[3];
    match cfg_type{
-    CAP_COMMON_CFG=>{common=offset;found|=1;}
-    CAP_DEVICE_CFG=>{device=offset;found|=2;}
-    CAP_NOTIFY_CFG=>{mult=u32::from_le_bytes([cap[8],cap[9],cap[10],cap[11]]);noff=u32::from_le_bytes([cap[12],cap[13],cap[14],cap[15]]);nbar=bar;found|=4;}
+    CAP_COMMON_CFG=>{
+     cbar=cap[4]as u32;
+     common=u32::from_le_bytes([cap[8],cap[9],cap[10],cap[11]])as u64;
+     found|=1;
+    }
+    CAP_DEVICE_CFG=>{
+     dbar=cap[4]as u32;
+     device=u32::from_le_bytes([cap[8],cap[9],cap[10],cap[11]])as u64;
+     found|=2;
+    }
+    CAP_NOTIFY_CFG=>{
+     mult=cap[3]as u32;
+     noff=u32::from_le_bytes([cap[4],cap[5],cap[6],cap[7]]);
+     nbar=u32::from_le_bytes([cap[8],cap[9],cap[10],cap[11]]);
+     found|=4;
+    }
     _=>{}
    }
   }
   if next==0||u16::from(next)==ptr{break}
   ptr=u16::from(next);
  }
- if found&7==7{Some((common,device,mult,noff,nbar))}else{None}
+ if found&7==7{Some((common,device,mult,noff,nbar,cbar,dbar))}else{None}
 }
 
 /// Finds a virtio device of the given identifier and prepares the transport.
@@ -5307,21 +5575,24 @@ pub fn probe(device:u16)->Option<Transport>{
  let bar0=found.bars[0];
  if device>=MODERN_NET{
   if bar0.io{return None}
-  let (common,dev_cfg,mult,noff,nbar)=modern_caps(found.bdf)?;
+  let (common,dev_cfg,mult,noff,nbar,cbar,dbar)=modern_caps(found.bdf)?;
+  let mut bar_base=[0u64;6];
+  for i in 0..6{bar_base[i]=found.bars[i].base}
   let mmio=bar0.base;
-  let notify_base=if nbar==0{mmio}else{found.bars[nbar as usize].base};
-  let mut t=Transport{modern:true,io:0,mmio,common,device_cfg:dev_cfg,notify_mult:mult,notify_off:noff,notify_bar:nbar,queues:0,notify_base:notify_base};
+  let notify_base=if nbar<6{bar_base[nbar as usize]}else{mmio};
+  let mut t=Transport{modern:true,io:0,bar_base,common,common_bar:cbar,device_cfg:dev_cfg,device_bar:dbar,notify_mult:mult,notify_off:noff,notify_bar:nbar,queues:0,notify_base};
   t.queues=unsafe{core::ptr::read_volatile(t.common_ptr(CFG_NUM_QUEUES)as*const u16)};
   Some(t)
  }else{
   if !bar0.io{return None}
-  Some(Transport{modern:false,io:bar0.base as u16,mmio:0,common:0,device_cfg:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0})
+  Some(Transport::legacy(bar0.base as u16))
  }
 }
 
 impl Transport{
- #[inline]fn common_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.mmio+self.common+off)as*mut u8)}}
- #[inline]fn device_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.mmio+self.device_cfg+off)as*mut u8)}}
+ #[inline]fn bar_base(&self,bar:u32)->u64{if (bar as usize)<6{self.bar_base[bar as usize]}else{self.bar_base[0]}}
+ #[inline]fn common_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.bar_base(self.common_bar)+self.common+off)as*mut u8)}}
+ #[inline]fn device_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.bar_base(self.device_bar)+self.device_cfg+off)as*mut u8)}}
  /// Reads the device status.
  pub fn status(&self)->u8{if self.modern{unsafe{core::ptr::read_volatile(self.common_ptr(CFG_STATUS))}}else{unsafe{port::inb(self.io+LEGACY_STATUS)}}}
  /// Writes the device status.
@@ -5340,13 +5611,17 @@ impl Transport{
  }
  /// Negotiates the modern interface: the driver asks for the version 1
  /// feature and the device confirms the result.
+ ///
+ /// The driver accepts the version 1 feature and nothing else. Accepting a
+ /// feature the driver does not implement would let the device use a path
+ /// that is not served here: a merged receive buffer, a flush, a discard or
+ /// a secure erase. The driver only implements the plain interface, so it
+ /// must not acknowledge those.
  pub fn negotiate_modern(&self)->bool{
-  let mut features=self.read_features(0);
-  let mut high=self.read_features(1);
+  let high=self.read_features(1);
   if high&(1<<(VIRTIO_F_VERSION_1-32))==0{return false}
-  features|=1;high|=1<<(VIRTIO_F_VERSION_1-32);
-  self.set_features(0,features);
-  self.set_features(1,high);
+  self.set_features(0,0);
+  self.set_features(1,1<<(VIRTIO_F_VERSION_1-32));
   self.set_status(self.status()|S_FEATURES_OK);
   (self.status()&S_FEATURES_OK)!=0
  }
@@ -5354,6 +5629,18 @@ impl Transport{
  pub fn queue_select(&self,index:u16)->usize{
   if !self.modern{unsafe{port::outw(self.io+LEGACY_QUEUE_SELECT,index);return port::inw(self.io+LEGACY_QUEUE_SIZE)as usize}}
   unsafe{core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SELECT)as*mut u16,index);core::ptr::read_volatile(self.common_ptr(CFG_QUEUE_SIZE)as*const u16)as usize}
+ }
+ /// Chooses the size of a queue and returns the size the device will use.
+ /// The legacy device dictates the size, the modern one lets the driver
+ /// choose but may reduce it, so the real size is always read back.
+ pub fn queue_size(&self,index:u16,desired:usize)->usize{
+  if !self.modern{return self.queue_select(index)}
+  unsafe{
+   core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SELECT)as*mut u16,index);
+   core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SIZE)as*mut u16,desired as u16);
+   let size=core::ptr::read_volatile(self.common_ptr(CFG_QUEUE_SIZE)as*const u16)as usize;
+   if size==0{desired}else{size}
+  }
  }
  /// Enables a queue.
  pub fn queue_enable(&self,index:u16){if !self.modern{return}unsafe{core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SELECT)as*mut u16,index);core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_ENABLE)as*mut u16,1u16);}}
@@ -5366,8 +5653,6 @@ impl Transport{
   }
   unsafe{
    core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SELECT)as*mut u16,index);
-   /* The driver chooses the queue size of a modern device. */
-   core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_SIZE)as*mut u16,q.size as u16);
    core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_DESC)as*mut u64,crate::arch::x86_64::phys::virt_to_phys(q.desc as u64));
    core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_DRIVER)as*mut u64,crate::arch::x86_64::phys::virt_to_phys(q.avail as u64));
    core::ptr::write_volatile(self.common_ptr(CFG_QUEUE_DEVICE)as*mut u64,crate::arch::x86_64::phys::virt_to_phys(q.used as u64));
@@ -5377,8 +5662,11 @@ impl Transport{
  /// Tells the device that a queue has work.
  pub fn notify(&self,index:u16){
   if !self.modern{unsafe{port::outw(self.io+LEGACY_QUEUE_NOTIFY,index);}return}
-  /* Every queue has its own notification register, two bytes apart. */
-  let addr=self.notify_base+(self.notify_off as u64)*(self.notify_mult as u64)+(index as u64)*2;
+  /* The notification area lives in its own bar. The register of a queue
+     sits at the area base plus the offset of the area plus the offset
+     multiplier times the queue index. The value written is the queue
+     index itself. */
+  let addr=self.notify_base+(self.notify_off as u64)+(self.notify_mult as u64)*(index as u64);
   unsafe{core::ptr::write_volatile(phys_to_virt(addr)as*mut u16,index);}
  }
  /// Reads a device specific configuration value.
@@ -5392,8 +5680,8 @@ END FILE: kernel/driver/virtio.rs
 
 ================================================================================
 FILE: kernel/driver/virtio_blk.rs
-SIZE: 5458 bytes
-SHA-256: a455f4a013fa444126b9a94f490e3cfa5d8c0fc718c5152f30c5fa27bf3d0be7
+SIZE: 5800 bytes
+SHA-256: edb7cc0c218a2554077b9a00da9661d29d6c82255406647958ca8bbd97fe63d6
 ================================================================================
 //! virtio-block driver.
 //!
@@ -5403,14 +5691,14 @@ SHA-256: a455f4a013fa444126b9a94f490e3cfa5d8c0fc718c5152f30c5fa27bf3d0be7
 use crate::arch::x86_64::phys::virt_to_phys;
 use crate::arch::x86_64::port;
 use crate::driver::virtio::{self,Transport};
-use crate::sync::SpinLock;
+use crate::sync::IrqSpinLock;
 use core::sync::atomic::Ordering;
 
 const VIRTIO_BLK_T_IN:u32=0;
 const VIRTIO_BLK_T_OUT:u32=1;
 
-struct Blk{ready:bool,transport:Transport,capacity:u64}
-static BLK:SpinLock<Blk>=SpinLock::new(Blk{ready:false,transport:Transport{modern:false,io:0,mmio:0,common:0,device_cfg:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0},capacity:0});
+struct Blk{ready:bool,transport:Transport,capacity:u64,qsize:usize}
+static BLK:IrqSpinLock<Blk>=IrqSpinLock::new(Blk{ready:false,transport:Transport::legacy(0),capacity:0,qsize:0});
 
 const MAX_Q:usize=128;
 const RING_BYTES:usize=12288;
@@ -5419,7 +5707,6 @@ static mut RING:Rings=Rings([0;RING_BYTES]);
 /* The offset of the used ring inside the ring buffer. The descriptor table
    and the available ring follow the split virtqueue layout, the used ring
    starts at the next page boundary. */
-static mut USED_OFF:usize=8192;
 #[repr(align(16))]struct ReqBuf([u8;16]);
 static mut REQ:ReqBuf=ReqBuf([0;16]);
 #[repr(align(512))]struct StatusBuf([u8;1]);
@@ -5428,13 +5715,18 @@ static mut BLK_STATUS:StatusBuf=StatusBuf([0;1]);
 static mut DATA:DataBuf=DataBuf([0;512]);
 
 fn ring()->*mut u8{unsafe{core::ptr::addr_of_mut!(RING.0)as*mut u8}}
-fn avail_idx(r:*mut u8)->*mut u16{unsafe{r.add(16*MAX_Q+2).cast()}}
-fn avail_slot(r:*mut u8,i:usize)->*mut u16{unsafe{r.add(16*MAX_Q+4+2*(i%MAX_Q)).cast()}}
-fn used_idx(r:*mut u8)->*mut u16{unsafe{r.add(unsafe{USED_OFF}+2).cast()}}
-fn used_entry(r:*mut u8,i:usize)->(u32,u32){unsafe{let p=r.add(unsafe{USED_OFF}+4+8*(i%MAX_Q));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
-fn desc_set(r:*mut u8,i:usize,addr:u64,len:u32,flags:u16,next:u16){
+/* The split virtqueue layout inside the ring buffer: the descriptor table
+   comes first, the available ring follows it and the used ring starts at
+   the next page boundary. */
+fn avail_off(size:usize)->usize{16*size}
+fn used_off(size:usize)->usize{((avail_off(size)+6+2*size)+4095)&!4095}
+fn avail_idx(r:*mut u8,size:usize)->*mut u16{unsafe{r.add(avail_off(size)+2).cast()}}
+fn avail_slot(r:*mut u8,size:usize,i:usize)->*mut u16{unsafe{r.add(avail_off(size)+4+2*(i%size)).cast()}}
+fn used_idx(r:*mut u8,size:usize)->*mut u16{unsafe{r.add(used_off(size)+2).cast()}}
+fn used_entry(r:*mut u8,size:usize,i:usize)->(u32,u32){unsafe{let p=r.add(used_off(size)+4+8*(i%size));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
+fn desc_set(r:*mut u8,size:usize,i:usize,addr:u64,len:u32,flags:u16,next:u16){
  unsafe{
-  let p=r.add(16*(i%MAX_Q));
+  let p=r.add(16*(i%size));
   (p as*mut u64).write_volatile(addr);
   (p.add(8)as*mut u32).write_volatile(len);
   (p.add(12)as*mut u16).write_volatile(flags);
@@ -5445,20 +5737,19 @@ fn desc_set(r:*mut u8,i:usize,addr:u64,len:u32,flags:u16,next:u16){
 /// Builds the queue description and installs it in the device.
 fn setup_queue(t:&Transport,size:usize)->Result<(),&'static str>{
  let r=ring();
- unsafe{USED_OFF=((16*size+4+2*size)+4095)&!4095;}
  let desc=r;
- let avail=unsafe{r.add(16*size)};
- let used=unsafe{r.add(unsafe{USED_OFF})};
+ let avail=unsafe{r.add(avail_off(size))};
+ let used=unsafe{r.add(used_off(size))};
  let q=virtio::Queue{desc,avail,used,size};
  t.queue_setup(0,&q);
  Ok(())
 }
 
 fn do_request(typ:u32,sector:u64)->Result<(),i64>{
- let t={
-  let mut blk=BLK.lock();
+ let (t,size)={
+  let blk=BLK.lock();
   if !blk.ready{return Err(crate::errno::ENODEV)}
-  blk.transport
+  (blk.transport,blk.qsize)
  };
  let r=ring();
  unsafe{
@@ -5469,24 +5760,25 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
   (hdr.add(8)as*mut u64).write_volatile(sector);
   BLK_STATUS.0[0]=0xff;
   // The descriptor chain: header, data, status.
-  desc_set(r,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
-  desc_set(r,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
-  desc_set(r,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
+  desc_set(r,size,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
+  desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
+  desc_set(r,size,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
   // The available ring.
-  let ai=avail_idx(r).read_volatile();
-  avail_slot(r,ai as usize).write_volatile(0);
+  let ai=avail_idx(r,size).read_volatile();
+  avail_slot(r,size,ai as usize).write_volatile(0);
   core::sync::atomic::compiler_fence(Ordering::SeqCst);
-  avail_idx(r).write_volatile(ai.wrapping_add(1));
+  avail_idx(r,size).write_volatile(ai.wrapping_add(1));
   core::sync::atomic::compiler_fence(Ordering::SeqCst);
   t.notify(0);
   // Wait for the device to consume the request.
-  let mut used=used_idx(r).read_volatile();
-  let start=used;
+  let start=used_idx(r,size).read_volatile();
+  let mut used=start;
   for _ in 0..100000{
-   used=used_idx(r).read_volatile();
+   used=used_idx(r,size).read_volatile();
    if used!=start{break;}
   }
-  let _=used_entry(r,used.wrapping_sub(1)as usize);
+  if used==start{return Err(crate::errno::EIO)}
+  let _=used_entry(r,size,used.wrapping_sub(1)as usize);
   if (BLK_STATUS.0[0]as*const u8).read_volatile()!=0{return Err(crate::errno::EIO)}
  }
  Ok(())
@@ -5504,11 +5796,9 @@ pub fn init()->Result<u64,&'static str>{
   let _=t.read_features(0);
   t.set_features(0,0);
  }
- let size=if t.modern{MAX_Q}else{
-  let offered=t.queue_select(0);
-  if offered<1{return Err("virtio-blk queue too small")}
-  offered.min(MAX_Q)
- };
+ let size=t.queue_size(0,MAX_Q);
+ if size<1{return Err("virtio-blk queue too small")}
+ if size>MAX_Q{return Err("virtio-blk queue larger than the ring buffer")}
  setup_queue(&t,size)?;
  t.set_status(virtio::S_ACK|virtio::S_DRIVER|virtio::S_DRIVER_OK);
  let mut cap=t.device_config(0);
@@ -5517,7 +5807,7 @@ pub fn init()->Result<u64,&'static str>{
   unsafe{cap=port::inl(t.io+0x14)as u64|((port::inl(t.io+0x18)as u64)<<32);}
  }
  let mut blk=BLK.lock();
- blk.ready=true;blk.transport=t;blk.capacity=cap;if cap==0{blk.capacity=1024;}
+ blk.ready=true;blk.transport=t;blk.capacity=cap;blk.qsize=size;if cap==0{blk.capacity=1024;}
  Ok(blk.capacity)
 }
 pub fn ready()->bool{BLK.lock().ready}
@@ -5539,8 +5829,8 @@ END FILE: kernel/driver/virtio_blk.rs
 
 ================================================================================
 FILE: kernel/driver/virtio_net.rs
-SIZE: 6541 bytes
-SHA-256: c02a324d14ae1eff75037b029eeb2faeda946aee96d018b443a14a7f044484f8
+SIZE: 7735 bytes
+SHA-256: 8a5fa81bc4414fc3aff8fb588f48b0d084896f06b89d8f3b1fd68b939169bf91
 ================================================================================
 //! virtio-net driver.
 //!
@@ -5549,9 +5839,14 @@ SHA-256: c02a324d14ae1eff75037b029eeb2faeda946aee96d018b443a14a7f044484f8
 //! default `virtio-net-pci` device model works without a compatibility
 //! switch. The device is polled: the receive queue is drained whenever the
 //! network stack asks for a frame.
+//!
+//! The driver state sits behind an interrupt safe lock. The timer interrupt
+//! polls the link, so a plain spin lock would deadlock: an interrupt that
+//! arrives while the interrupted code holds the lock spins forever on a lock
+//! the interrupted code cannot release.
 use crate::arch::x86_64::phys::virt_to_phys;
 use crate::driver::virtio::{self,Transport};
-use crate::sync::SpinLock;
+use crate::sync::IrqSpinLock;
 use core::sync::atomic::Ordering;
 
 const RXQ:u16=0;
@@ -5560,11 +5855,10 @@ const TXQ:u16=1;
 const QSIZE:usize=256;
 const DESC_WRITE:u16=2;
 
-struct Net{ready:bool,transport:Transport,mac:[u8;6],rx_used:u16,tx_used:u16,tx_next:u8}
-static NET:SpinLock<Net>=SpinLock::new(Net{ready:false,transport:Transport{modern:false,io:0,mmio:0,common:0,device_cfg:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0},mac:[0;6],rx_used:0,tx_used:0,tx_next:0});
+struct Net{ready:bool,transport:Transport,mac:[u8;6],rx_used:u16,tx_used:u16,tx_next:u8,rx_size:usize,tx_size:usize}
+static NET:IrqSpinLock<Net>=IrqSpinLock::new(Net{ready:false,transport:Transport::legacy(0),mac:[0;6],rx_used:0,tx_used:0,tx_next:0,rx_size:0,tx_size:0});
 
 const RING_BYTES:usize=12288;
-const USED_OFF:usize=8192;
 const RX_BUFS:usize=32;
 const TX_BUFS:usize=8;
 pub const BUF_SZ:usize=2048;
@@ -5581,14 +5875,20 @@ fn tx_ring()->*mut u8{unsafe{core::ptr::addr_of_mut!(TX_RING.0)as*mut u8}}
 fn rx_buf(i:usize)->*mut u8{unsafe{core::ptr::addr_of_mut!(RX_MEM[i].0)as*mut u8}}
 fn tx_buf(i:usize)->*mut u8{unsafe{core::ptr::addr_of_mut!(TX_MEM[i].0)as*mut u8}}
 
+/* The split virtqueue layout inside one ring buffer: the descriptor table
+   comes first, the available ring follows it and the used ring starts at
+   the next page boundary. The legacy interface demands exactly this layout,
+   the modern one names the three parts separately but accepts any address. */
+fn avail_off(size:usize)->usize{16*size}
+fn used_off(size:usize)->usize{((avail_off(size)+6+2*size)+4095)&!4095}
 /* The available ring of a split virtqueue follows the descriptor table. */
-fn avail_idx(ring:*mut u8,size:usize)->*mut u16{unsafe{ring.add(16*size+2).cast()}}
-fn avail_slot(ring:*mut u8,size:usize,i:usize)->*mut u16{unsafe{ring.add(16*size+4+2*(i%size)).cast()}}
-fn used_idx(ring:*mut u8)->*mut u16{unsafe{ring.add(USED_OFF+2).cast()}}
-fn used_entry(ring:*mut u8,i:usize)->(u32,u32){unsafe{let p=ring.add(USED_OFF+4+8*(i%QSIZE));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
-fn desc_set(ring:*mut u8,i:usize,addr:u64,len:u32,flags:u16){
+fn avail_idx(ring:*mut u8,size:usize)->*mut u16{unsafe{ring.add(avail_off(size)+2).cast()}}
+fn avail_slot(ring:*mut u8,size:usize,i:usize)->*mut u16{unsafe{ring.add(avail_off(size)+4+2*(i%size)).cast()}}
+fn used_idx(ring:*mut u8,size:usize)->*mut u16{unsafe{ring.add(used_off(size)+2).cast()}}
+fn used_entry(ring:*mut u8,size:usize,i:usize)->(u32,u32){unsafe{let p=ring.add(used_off(size)+4+8*(i%size));((p as*const u32).read_volatile(),(p.add(4)as*const u32).read_volatile())}}
+fn desc_set(ring:*mut u8,size:usize,i:usize,addr:u64,len:u32,flags:u16){
  unsafe{
-  let p=ring.add(16*(i%QSIZE));
+  let p=ring.add(16*(i%size));
   (p as*mut u64).write_volatile(addr);
   (p.add(8)as*mut u32).write_volatile(len);
   (p.add(12)as*mut u16).write_volatile(flags);
@@ -5609,9 +5909,11 @@ unsafe fn post(t:&Transport,q:u16,ring:*mut u8,size:usize,id:usize){
 
 /// Installs one queue of the device.
 fn setup_queue(t:&Transport,q:u16,ring:*mut u8,min:usize)->Result<usize,&'static str>{
- let size=if t.modern{QSIZE}else{t.queue_select(q)};
+ let size=t.queue_size(q,QSIZE);
  if size<min{return Err("virtio queue smaller than requested")}
- let qd=virtio::Queue{desc:ring,avail:unsafe{ring.add(16*size)},used:unsafe{ring.add(USED_OFF)},size};
+ if size>QSIZE{return Err("virtio queue larger than the ring buffer")}
+ if used_off(size)+6+8*size>RING_BYTES{return Err("virtio queue does not fit the ring buffer")}
+ let qd=virtio::Queue{desc:ring,avail:unsafe{ring.add(avail_off(size))},used:unsafe{ring.add(used_off(size))},size};
  t.queue_setup(q,&qd);
  Ok(size)
 }
@@ -5627,11 +5929,11 @@ pub fn init()->Result<[u8;6],&'static str>{
   t.set_features(0,0);
  }
  let rx_size=setup_queue(&t,RXQ,rx_ring(),RX_BUFS)?;
- let _tx_size=setup_queue(&t,TXQ,tx_ring(),TX_BUFS)?;
+ let tx_size=setup_queue(&t,TXQ,tx_ring(),TX_BUFS)?;
  let mut net=NET.lock();
  unsafe{
   for i in 0..6{net.mac[i]=t.device_config(i as u64)as u8}
-  for i in 0..RX_BUFS{desc_set(rx_ring(),i,virt_to_phys(rx_buf(i)as u64),BUF_SZ as u32,DESC_WRITE)}
+  for i in 0..RX_BUFS{desc_set(rx_ring(),rx_size,i,virt_to_phys(rx_buf(i)as u64),BUF_SZ as u32,DESC_WRITE)}
   let ai=avail_idx(rx_ring(),rx_size);
   for i in 0..RX_BUFS{avail_slot(rx_ring(),rx_size,i).write_volatile(i as u16)}
   ai.write_volatile(RX_BUFS as u16);
@@ -5641,6 +5943,7 @@ pub fn init()->Result<[u8;6],&'static str>{
  }
  net.transport=t;
  net.rx_used=0;net.tx_used=0;net.tx_next=0;
+ net.rx_size=rx_size;net.tx_size=tx_size;
  net.ready=true;
  let mac=net.mac;
  Ok(mac)
@@ -5657,18 +5960,19 @@ const VNET_HDR:usize=10;
 pub fn poll_frame(out:&mut[u8])->Option<usize>{
  let mut net=NET.lock();
  if !net.ready{return None}
+ let size=net.rx_size;
  unsafe{
   let ring=rx_ring();
-  let used=used_idx(ring).read_volatile();
+  let used=used_idx(ring,size).read_volatile();
   if used==net.rx_used{return None}
-  let(id,len)=used_entry(ring,net.rx_used as usize);
+  let(id,len)=used_entry(ring,size,net.rx_used as usize);
   net.rx_used=net.rx_used.wrapping_add(1);
   let id=id as usize;
   if id>=RX_BUFS{return None}
-  if (len as usize)<VNET_HDR{post(&net.transport,RXQ,ring,QSIZE,id);return None}
+  if (len as usize)<VNET_HDR{post(&net.transport,RXQ,ring,size,id);return None}
   let n=core::cmp::min(len as usize-VNET_HDR,out.len());
   core::ptr::copy_nonoverlapping(rx_buf(id).add(VNET_HDR),out.as_mut_ptr(),n);
-  post(&net.transport,RXQ,ring,QSIZE,id);
+  post(&net.transport,RXQ,ring,size,id);
   Some(n)
  }
 }
@@ -5676,19 +5980,25 @@ pub fn poll_frame(out:&mut[u8])->Option<usize>{
    entry before returning. */
 pub fn send_frame(frame:&[u8])->Result<(),i64>{
  if frame.len()+VNET_HDR>BUF_SZ{return Err(crate::errno::EMSGSIZE)}
- let mut net=NET.lock();
- if !net.ready{return Err(crate::errno::ENETDOWN)}
- let i=net.tx_next as usize;
- net.tx_next=((i+1)%TX_BUFS)as u8;
+ let (i,t,size)={
+  let mut net=NET.lock();
+  if !net.ready{return Err(crate::errno::ENETDOWN)}
+  let i=net.tx_next as usize;
+  net.tx_next=((i+1)%TX_BUFS)as u8;
+  (i,net.transport,net.tx_size)
+ };
  unsafe{
   for b in 0..VNET_HDR{tx_buf(i).add(b).write_volatile(0)}
   core::ptr::copy_nonoverlapping(frame.as_ptr(),tx_buf(i).add(VNET_HDR),frame.len());
-  desc_set(tx_ring(),i,virt_to_phys(tx_buf(i)as u64),(frame.len()+VNET_HDR)as u32,0);
-  post(&net.transport,TXQ,tx_ring(),QSIZE,i);
+  desc_set(tx_ring(),size,i,virt_to_phys(tx_buf(i)as u64),(frame.len()+VNET_HDR)as u32,0);
+  post(&t,TXQ,tx_ring(),size,i);
+  /* Wait for the device to consume the buffer. The lock is not held while
+     waiting: the timer interrupt polls the link and would deadlock on it. */
   let mut spins=0u32;
   loop{
-   let used=used_idx(tx_ring()).read_volatile();
-   if used.wrapping_sub(net.tx_used)>=1{net.tx_used=used;return Ok(())}
+   let used=used_idx(tx_ring(),size).read_volatile();
+   let done={let mut net=NET.lock();if used.wrapping_sub(net.tx_used)>=1{net.tx_used=used;true}else{false}};
+   if done{return Ok(())}
    spins+=1;
    if spins>4_000_000{return Err(crate::errno::EIO)}
    core::hint::spin_loop();
@@ -5804,8 +6114,8 @@ END FILE: kernel/exec.rs
 
 ================================================================================
 FILE: kernel/exec_runtime.rs
-SIZE: 8002 bytes
-SHA-256: 0075f418c5612ad78f95c11619d7d81b229163dfc1515af544f1f36a9195a31f
+SIZE: 8105 bytes
+SHA-256: 56b0cab86d36df2dde57cf05cba900dc5c9f16b8fb1041f548d00671f5af1ea9
 ================================================================================
 //! Commits an ELF64 image (static or dynamic) to a private bootstrap CR3 with
 //! rollback on failure. Dynamic images load their PT_INTERP interpreter first
@@ -5823,7 +6133,7 @@ const EXE_BASE:u64=0x0000_4080_0000_0000;
 /* One committed PT_LOAD range, kept for /proc/<pid>/maps. */
 #[derive(Clone,Copy,Default)]pub struct MapSeg{pub start:u64,pub end:u64,pub flags:u32}
 pub const MAX_MAP_SEGS:usize=8;
-#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,
+#[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,pub interp_slot:usize,
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
  pub segs:[MapSeg;MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64}
 fn pack_vec(out:&mut [u8],out_len:&mut usize,items:&[&str]){
@@ -5855,7 +6165,8 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
  let interp_slot=((LD_BASE>>39)&511)as usize;
  let stack_slot=((crate::exec::USER_STACK_TOP>>39)&511)as usize;
  let mmap_slot=((crate::vm::MMAP_BASE>>39)&511)as usize;
- let mut private=[image_slot,stack_slot,mmap_slot,interp_slot];
+ let brk_slot=((crate::process::BRK_BASE>>39)&511)as usize;
+ let mut private=[image_slot,stack_slot,mmap_slot,interp_slot,brk_slot];
  let root=firmware.clone_bootstrap(&access,&private).map_err(|_|"private CR3 allocation failed")?;
  let mut tx=Transaction::new(&root,&access);
  if let Some(ip)=interp.as_ref(){
@@ -5885,7 +6196,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
   for seg in &parsed.segments[..parsed.segment_count]{if nsegs==MAX_MAP_SEGS{break}segs[nsegs]=MapSeg{start:exe_base+seg.vaddr&!(PAGE-1),end:align(exe_base+seg.vaddr+seg.memory_size).map_err(|_|"segment overflow")?,flags:seg.flags};nsegs+=1;}
   let mut cmdline=[0u8;512];let mut cmdline_len=0usize;pack_vec(&mut cmdline,&mut cmdline_len,argv);
   let mut environ=[0u8;512];let mut environ_len=0usize;pack_vec(&mut environ,&mut environ_len,envp);
-  let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot,cmdline,cmdline_len,environ,environ_len,segs,nsegs,stack_base,stack_top};tx.commit();Ok(loaded)
+  let loaded=Loaded{entry,rsp:built.rsp,cr3:root.pml4,bootstrap_cr3,image_slot,stack_slot,interp_slot,cmdline,cmdline_len,environ,environ_len,segs,nsegs,stack_base,stack_top};tx.commit();Ok(loaded)
 }
 /* Maps one PT_LOAD at base+seg.vaddr, copying file bytes and zeroing the rest. */
 fn map_segment(tx:&mut Transaction,root:&PageTableRoot,access:&Identity,image:&[u8],base:u64,seg:&elf::LoadSegment)->Result<(),&'static str>{
@@ -6839,8 +7150,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 144866 bytes
-SHA-256: 2e84ada9e92462e7cf3829e8169fb94659e04596d5f550420731bbd0e31c5270
+SIZE: 145236 bytes
+SHA-256: 2a1ac5d7665e8076183dd396581573e117ea072b44b9a9a800f94194895e825a
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -7116,7 +7427,8 @@ fn sys_kill(pid:u32,sig:i32)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }
@@ -7281,7 +7593,7 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}};
- match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
+ match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
  crate::posix_timer::release_pid(crate::task::current_pid());
  crate::task::set_current_fs_base(0);
@@ -8477,7 +8789,8 @@ fn sys_tgkill(tgid:u32,pid:u32,sig:i32)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }
@@ -9274,7 +9587,8 @@ fn sys_pidfd_send_signal(fd:usize,sig:i32,info:u64,flags:u64)->i64{
   /* A fatal signal aimed at the caller ends the caller before the syscall
      returns, exactly like Linux. A signal with a handler is delivered
      normally, so the check only applies to the default disposition. */
-  if pid==crate::task::current_pid()&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
+  let blocked=crate::task::with_current_process(|p|p.sigmask&crate::signal::bit(sig)!=0).unwrap_or(false);
+  if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
 }
@@ -9611,8 +9925,8 @@ END FILE: kernel/memory.rs
 
 ================================================================================
 FILE: kernel/net.rs
-SIZE: 22358 bytes
-SHA-256: b8383ab75e2a52f9f987bb74ef67cc9dd5ebc9249a878eb5032ecb12cf2f2d6d
+SIZE: 22573 bytes
+SHA-256: 1ec33d3b2aa19f4530637b1b8c40239c50b7ecc01bc8152984e075373be07495
 ================================================================================
 //! Ethernet, ARP, IPv4, ICMP, UDP and a minimal TCP client over virtio-net.
 //!
@@ -10209,6 +10523,10 @@ fn tcp_input(src_ip:u32,seg:&[u8],src_mac:[u8;6]){
     let rlen=t.rlen;
     t.rmem.copy_within(delta..rlen,0);
     t.rlen-=delta;
+    /* The acknowledged bytes leave the send window, so the base of the
+       window moves forward. Without this the window never shrinks and the
+       same bytes are retransmitted for ever. */
+    t.snd_una=ack;
     if seq_gt(t.snd_nxt,ack){t.snd_nxt=ack}
     t.retrans_at=ticks()+RTO_TICKS;
     t.retrans_budget=0;
@@ -10549,8 +10867,8 @@ END FILE: kernel/posix_timer.rs
 
 ================================================================================
 FILE: kernel/process.rs
-SIZE: 29688 bytes
-SHA-256: 1c268c14b5b89f1340f325e62e179dde3265cc72b990f6430d1631316ab8e07e
+SIZE: 31056 bytes
+SHA-256: 76e5222190091e133e4f20cdec920c13f48ebddb9cd51f4c498b4f9ed435d6a2
 ================================================================================
 //! Per-process state: private address space, VM ledger, brk and descriptors.
 use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX},phys::Identity},fd::FdTable,vm::{Map,VmFlags,VmKind}};
@@ -10564,6 +10882,10 @@ static SECCOMP_FILTER_REFS:crate::sync::SpinLock<[SeccompFilterRef;MAX_SECCOMP_F
    slot: the anonymous mappings use slot 130 and the images slot 128 and
    129, so the regions never share a page table entry. */
 pub const BRK_BASE:u64=0x0000_4180_0000_0000;
+/* The heap must stay inside its own PML4 slot, otherwise it would start to
+   share page-table entries with the neighbouring private regions. */
+pub const BRK_LIMIT:u64=0x0000_4200_0000_0000;
+pub const BRK_SLOT:usize=((BRK_BASE>>39)&511)as usize;
 pub fn slot_of(va:u64)->usize{((va>>39)&511)as usize}
 pub fn seccomp_filter_register(frame:u64)->Result<(),i64>{
  let mut refs=SECCOMP_FILTER_REFS.lock();let slot=refs.iter().position(|entry|entry.frame==0).ok_or(crate::errno::ENOMEM)?;refs[slot]=SeccompFilterRef{frame,refs:1};Ok(())
@@ -10578,7 +10900,7 @@ pub fn seccomp_filter_release(frame:u64)->Result<(),i64>{
 
 pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
- pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,
+ pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,pub interp_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,pub cwd:[u8;128],pub cwd_len:usize,pub root:[u8;128],pub root_len:usize,
  pub pending:u64,pub sigmask:u64,pub pending_from:[u32;64],pub sig_restart:bool,pub sig_syscall:u64,pub sig_result:i64,pub si_code:[i32;64],pub si_value:[u64;64],pub si_overrun:[u32;64],pub robust_list_head:u64,pub robust_list_len:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
@@ -10592,8 +10914,8 @@ pub struct Process{
  pub groups:[u32;32],pub ngroups:usize,
 }
 impl Process{
- pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:[0;32],ngroups:0})
+ pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<Self,i64>{
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
@@ -10639,7 +10961,7 @@ impl Process{
   fn unmap_pages(&self,start:u64,len:u64)->Result<(),i64>{let root=self.root();let phys=Identity;let end=start.checked_add(len).ok_or(crate::errno::EINVAL)?;let mut va=start;while va<end{match root.unmap_page(&phys,va){Ok(pa)=>{if self.vm.flags_at(va as usize).unwrap_or(VmFlags(0)).contains(VmFlags::EXTERNAL){crate::fd::iouring_mapping_release(pa)}else{crate::memory::release_frame(pa)?}}Err(e)=>{if e!=crate::errno::ENOENT{return Err(e)}}}va+=PAGE;}Ok(())}
   fn unmap_external_mappings(root:&PageTableRoot,vm:&Map){let access=Identity;for i in 0..vm.resource_stats().areas{if let Some(area)=vm.area(i){if !area.flags.contains(VmFlags::EXTERNAL){continue}let mut va=area.start as u64;while va<area.end as u64{if let Ok(frame)=root.unmap_page(&access,va){crate::fd::iouring_mapping_release(frame)}va+=PAGE;}}}}
  fn up(v:u64)->Result<usize,i64>{v.checked_add(PAGE-1).map(|x|(x&!(PAGE-1))as usize).ok_or(crate::errno::ENOMEM)}
- pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};/* The heap area grows: replace the old brk area instead of colliding with it. */
+ pub fn brk(&mut self,request:u64)->u64{let old=self.brk;if request==0{return old}if request<BRK_BASE||request>=BRK_LIMIT||request>=crate::usercopy::USER_MAX as u64{return old}let old_page=match Self::up(old){Ok(v)=>v,Err(_)=>return old};let new_page=match Self::up(request){Ok(v)=>v,Err(_)=>return old};if new_page>old_page{let len=new_page-old_page;let flags=match Self::vm_flags(3){Ok(v)=>v,Err(_)=>return old};/* The heap area grows: replace the old brk area instead of colliding with it. */
   if self.vm.replace(old_page,len,flags,VmKind::Brk,false).is_err(){return old}}else if new_page<old_page{return old}self.brk=request;request}
  pub fn mmap(&mut self,addr:usize,len:usize,prot:u64,flags:u64,fd:i64,offset:u64)->Result<usize,i64>{
   const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;const MAP_POPULATE:u64=0x8000;
@@ -10803,7 +11125,7 @@ impl Process{
     path. Frames carry refcounts; teardown releases them through release_frame. */
  pub fn clone_address_space(&self)->Result<u64,i64>{
   let access=Identity;
-  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot];let mut n=0usize;
+  let mut all=[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT];let mut n=0usize;
   for i in 0..all.len(){let s=all[i];if !all[..n].contains(&s){all[n]=s;n+=1;}}
   let slots=&all[..n];
   let child=self.root().clone_bootstrap(&access,slots)?;
@@ -10819,11 +11141,11 @@ impl Process{
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,interp_slot:self.interp_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ticks:0,stime_ticks:0,cutime_ticks:0,cstime_ticks:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
-  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
+  pub fn abandon(&mut self){let access=Identity;let root=self.root();Self::unmap_external_mappings(&root,&self.vm);for &slot in &[self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot,BRK_SLOT]{let _=root.destroy_private_slot(&access,slot);}let _=crate::memory::free_frame(self.cr3);if self.seccomp_filter!=0{let _=seccomp_filter_release(self.seccomp_filter as u64);self.seccomp_filter=0;self.seccomp_filter_len=0;}self.fds.close_all();}
  /* Runs on exit and on fatal user faults; ends on the bootstrap tables. */
   pub fn teardown_exit(&mut self,status:i32,vector:u64){
    let fd_descriptors=self.fds.descriptor_count();
@@ -10836,7 +11158,9 @@ impl Process{
    let mut cleanup_ok=true;
    if let Err(e)=root.destroy_private_slot(&access,self.image_slot){crate::println!("warning: image slot teardown failed errno={}",e);cleanup_ok=false}
    if self.stack_slot!=self.image_slot{if let Err(e)=root.destroy_private_slot(&access,self.stack_slot){crate::println!("warning: stack slot teardown failed errno={}",e);cleanup_ok=false}}
-   if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
+   if self.mmap_slot!=self.image_slot&&self.mmap_slot!=self.stack_slot&&self.mmap_slot!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,self.mmap_slot){crate::println!("warning: mmap slot teardown failed errno={}",e);cleanup_ok=false}}
+   if self.interp_slot!=self.image_slot&&self.interp_slot!=self.stack_slot&&self.interp_slot!=self.mmap_slot{if let Err(e)=root.destroy_private_slot(&access,self.interp_slot){crate::println!("warning: interpreter slot teardown failed errno={}",e);cleanup_ok=false}}
+   if BRK_SLOT!=self.image_slot&&BRK_SLOT!=self.stack_slot&&BRK_SLOT!=self.mmap_slot&&BRK_SLOT!=self.interp_slot{if let Err(e)=root.destroy_private_slot(&access,BRK_SLOT){crate::println!("warning: brk slot teardown failed errno={}",e);cleanup_ok=false}}
    if let Err(e)=crate::memory::free_frame(self.cr3){crate::println!("warning: process PML4 recycle failed errno={}",e);cleanup_ok=false}
    if self.seccomp_filter!=0{if let Err(e)=seccomp_filter_release(self.seccomp_filter as u64){crate::println!("warning: seccomp filter release failed errno={}",e);cleanup_ok=false}self.seccomp_filter=0;self.seccomp_filter_len=0;}
    crate::record_lock::release_pid(crate::task::current_pid());
@@ -10847,15 +11171,17 @@ impl Process{
    crate::println!("process address space reclaimed status={} vector={}",status,vector);
  }
  /* Swaps in a freshly committed exec image and tears down the old one. */
-  pub fn replace_image(&mut self,new_cr3:u64,image_slot:usize,stack_slot:usize)->Result<(),i64>{
-   let old=(self.cr3,self.image_slot,self.stack_slot,self.mmap_slot);let old_vm=self.vm.clone();
+  pub fn replace_image(&mut self,new_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<(),i64>{
+   let old=(self.cr3,self.image_slot,self.stack_slot,self.mmap_slot,self.interp_slot);let old_vm=self.vm.clone();
   unsafe{PageTableRoot{pml4:new_cr3}.activate()}
   crate::task::bind_current_address_space(new_cr3,crate::task::current_kernel_stack_top());
-  self.cr3=new_cr3;self.image_slot=image_slot;self.stack_slot=stack_slot;
+  self.cr3=new_cr3;self.image_slot=image_slot;self.stack_slot=stack_slot;self.interp_slot=interp_slot;
    let access=Identity;let root=PageTableRoot{pml4:old.0};Self::unmap_external_mappings(&root,&old_vm);
   if root.destroy_private_slot(&access,old.1).is_err(){crate::println!("warning: old exec image teardown failed")}
    if old.2!=old.1&&root.destroy_private_slot(&access,old.2).is_err(){crate::println!("warning: old exec stack teardown failed")}
    if old.3!=old.1&&old.3!=old.2&&root.destroy_private_slot(&access,old.3).is_err(){crate::println!("warning: old exec mmap teardown failed")}
+   if old.4!=old.1&&old.4!=old.2&&old.4!=old.3&&root.destroy_private_slot(&access,old.4).is_err(){crate::println!("warning: old exec interpreter teardown failed")}
+   if BRK_SLOT!=old.1&&BRK_SLOT!=old.2&&BRK_SLOT!=old.3&&BRK_SLOT!=old.4&&root.destroy_private_slot(&access,BRK_SLOT).is_err(){crate::println!("warning: old exec brk teardown failed")}
   if crate::memory::free_frame(old.0).is_err(){crate::println!("warning: old exec PML4 recycle failed")}Ok(())
  }
 }
@@ -11649,8 +11975,8 @@ END FILE: kernel/sync.rs
 
 ================================================================================
 FILE: kernel/task.rs
-SIZE: 27370 bytes
-SHA-256: 12f26b781d9ae629f6d0b2f469c24886d5125be190df51184b4b10efc3136142
+SIZE: 27391 bytes
+SHA-256: e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d
 ================================================================================
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
@@ -11739,7 +12065,7 @@ pub fn spawn_kernel(entry:fn())->Result<u32,i64>{let mut s=SCHED.lock();let slot
 static KERNEL_ENTRIES:IrqSpinLock<[Option<fn()>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static USER_STARTS:IrqSpinLock<[Option<crate::exec_runtime::Loaded>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static FORK_RESUMES:IrqSpinLock<[Option<crate::arch::x86_64::syscall::UserFrame>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
-pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot)?;proc.set_exec_meta(&loaded);let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
+pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)?;proc.set_exec_meta(&loaded);let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let ppid=s.tasks[s.current].pid;let pgid=s.tasks[s.current].pgid;let sid=s.tasks[s.current].sid;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
 pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let parent=s.current;let ppid=s.tasks[parent].pid;let pgid=s.tasks[parent].pgid;let sid=s.tasks[parent].sid;let fs_base=s.tasks[parent].fs_base;let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,is_thread:false,user_rsp:0};Ok(pid)}
 pub fn fork_process(frame:crate::arch::x86_64::syscall::UserFrame,flags:u64)->Result<u32,i64>{let child_cr3=match with_current_process(|p|p.clone_address_space()){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};let mut child=match with_current_process(|p|p.fork_child(child_cr3)){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};if let Err(e)=apply_ns_flags(&mut child,flags){child.abandon();return Err(e)}spawn_fork(child,frame)}
 extern "sysv64" fn user_thread_trampoline()->!{let slot=SCHED.lock().current;let loaded=USER_STARTS.lock()[slot].take().unwrap();crate::println!("task: entering user pid={} rip={:#x} rsp={:#x}",current_pid(),loaded.entry,loaded.rsp);unsafe{crate::arch::x86_64::user::enter(loaded.entry,loaded.rsp)}}
@@ -11773,7 +12099,8 @@ pub fn yield_now(){schedule(false)}
 pub fn on_timer_tick(user:bool){NEED_RESCHED.store(true,Ordering::Release);let now=crate::arch::x86_64::apic::ticks();account_tick(user);wake_sleepers(now);crate::posix_timer::tick(now);}
 /* Attributes one 1ms tick to the running process: CS&3 told us whether the
    interrupted context was user or kernel code. */
-fn account_tick(user:bool){let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ticks<u64::MAX{p.utime_ticks+=1}}else if p.stime_ticks<u64::MAX{p.stime_ticks+=1}}}crate::posix_timer::cpu_tick(pid,user);}
+fn account_tick(user:bool){
+ let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ticks<u64::MAX{p.utime_ticks+=1}}else if p.stime_ticks<u64::MAX{p.stime_ticks+=1}}}crate::posix_timer::cpu_tick(pid,user);}
 pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
 /* A wake that lands before the target blocks is latched in wake_pending, so a
    register-then-block waiter can never lose it. */
@@ -12893,8 +13220,8 @@ END FILE: kernel/vfs.rs
 
 ================================================================================
 FILE: kernel/vm.rs
-SIZE: 7876 bytes
-SHA-256: bbf9ec87e997228a9b3ec3d652b8014739f8e73fcf040f659f713cec629db2a1
+SIZE: 8000 bytes
+SHA-256: 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc
 ================================================================================
 //! Architecture-neutral virtual-memory area ledger. Hardware PTE work stays in arch.
 pub const PAGE_SIZE:usize=4096; pub const MAX_AREAS:usize=128;
@@ -12986,8 +13313,9 @@ impl Map{
   pub fn find_vma(&self,address:usize)->Option<Area>{self.areas[..self.len].iter().find(|a|address>=a.start&&address<a.end).copied()}
   pub fn set_cow(&mut self,start:usize,end:usize,cow:bool)->Result<(),i64>{let a=self.areas[..self.len].iter_mut().find(|a|a.start==start&&a.end==end).ok_or(crate::errno::EINVAL)?;a.cow=cow;Ok(())}
   pub fn set_locked_range(&mut self,addr:usize,len:usize,locked:bool)->Result<(),i64>{let end=addr.checked_add(len).ok_or(crate::errno::EINVAL)?;for a in self.areas[..self.len].iter_mut(){if a.start>=addr && a.end<=end {a.locked=locked}}Ok(())}
-  /* Ranges that must stay physically shared after fork. */
-  pub fn shared_writable_ranges(&self,mut cb:impl FnMut(usize,usize)){for a in &self.areas[..self.len]{if a.flags.contains(VmFlags::SHARED)&&a.flags.contains(VmFlags::WRITE){cb(a.start,a.end);}}}
+  /* Ranges that must stay physically shared after fork: MAP_SHARED
+     anonymous pages and kernel-backed mappings such as an io_uring ring. */
+  pub fn shared_writable_ranges(&self,mut cb:impl FnMut(usize,usize)){for a in &self.areas[..self.len]{if a.flags.contains(VmFlags::WRITE)&&(a.flags.contains(VmFlags::SHARED)||a.flags.contains(VmFlags::EXTERNAL)){cb(a.start,a.end);}}}
   pub fn mark_all_cow(&mut self){for i in 0..self.len{if !self.areas[i].flags.contains(VmFlags::EXTERNAL){self.areas[i].cow=true;}}}
   pub fn clear(&mut self){self.areas=[Area{start:0,end:0,flags:VmFlags(0),kind:VmKind::Anon,cow:false,locked:false};MAX_AREAS];self.len=0;self.next_hint=MMAP_BASE;}
 }
@@ -17390,8 +17718,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 6164 bytes
-SHA-256: 5ac0eec4c5984bf5627ed790a3e9a135774d0ee726e37205c2731a68c029ca3e
+SIZE: 6242 bytes
+SHA-256: a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307
 ================================================================================
 #!/bin/sh
 set -eu
@@ -17399,6 +17727,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 python3 - <<'PY'
 from pathlib import Path
+import re
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
@@ -17469,7 +17798,7 @@ for name,tokens in required.items():
     text=(r/name).read_text()
     for token in tokens:
         assert token in text,(name,token)
-assert (r/'Cargo.toml').read_text().count('version = "0.68.0"')==1
+assert (r/'Cargo.toml').read_text().count('version = "%s"'%re.search(r'^## (\S+) - ',(r/'CHANGELOG.md').read_text(),re.M).group(1))==1
 print('source consistency checks passed')
 PY
 --------------------------------------------------------------------------------
