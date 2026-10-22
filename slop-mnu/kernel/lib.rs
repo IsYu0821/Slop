@@ -101,6 +101,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     if let Some(secs)=arch::x86_64::rtc::epoch_seconds(){time::set_realtime_ns(secs.saturating_mul(1_000_000_000));println!("rtc: CLOCK_REALTIME seeded epoch={}",secs);}
     let first_tick=match arch::x86_64::apic::self_test(){Ok(v)=>v,Err(e)=>{println!("APIC timer self-test failed: {}",e);arch::halt()}};
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
+    calibrate_clock();
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);
     driver::init(); task::init(rsp0);
     if !fd::resource_self_test(){println!("fd resource-accounting self-test failed");arch::halt()}
@@ -136,6 +137,43 @@ extern "sysv64" fn kmain_high_continue()->!{
 }
 
 use core::panic::PanicInfo;
+
+/* The length of one timer tick the kernel aims for. A quarter of a
+   millisecond is the rate a Linux kernel with a 250 hertz timer uses, and
+   it keeps the cost of the timer interrupt low. */
+const TICK_TARGET_NS:u64=4_000_000;
+
+/* Measures the rate of the time stamp counter against the programmable
+   interval timer, then measures the length of a timer tick against the
+   counter and programs the timer so a tick has the wanted length. Without
+   this the monotonic clock and the processor time are counted in ticks
+   that do not stand for a real time unit. */
+fn calibrate_clock(){
+ let tsc_hz=match arch::x86_64::pit::tsc_hz(){Some(hz)=>hz,None=>{println!("time: the counter rate could not be measured, the tick keeps its default length");return}};
+ time::set_tsc_hz(tsc_hz);
+ /* The timer has to run while the length of a tick is measured, so the
+    interrupts are on for the time of the measurement. */
+ unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
+ let cycles=match arch::x86_64::apic::measure_tick_cycles(64){Some(v)=>v,None=>{unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};println!("time: the tick length could not be measured, the tick keeps its default length");return}};
+ unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
+ let measured=cycles.saturating_mul(1_000_000_000)/tsc_hz;
+ if measured==0{println!("time: the tick length could not be measured, the tick keeps its default length");return}
+ if let Some(count)=arch::x86_64::apic::program_tick_ns(TICK_TARGET_NS,measured){
+  unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
+  let cycles=arch::x86_64::apic::measure_tick_cycles(64);
+  unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
+  if let Some(cycles)=cycles{
+   let ns=cycles.saturating_mul(1_000_000_000)/tsc_hz;
+   if ns>0{
+    time::set_tick_ns(ns);
+    println!("time: counter={} Hz tick={} ns count={}",tsc_hz,ns,count);
+    return;
+   }
+  }
+ }
+ time::set_tick_ns(measured);
+ println!("time: counter={} Hz tick={} ns",tsc_hz,measured);
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain(boot_magic: u64, boot_info: u64) -> ! {

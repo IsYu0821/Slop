@@ -1,3 +1,11 @@
+## 0.70.0 - 2026-10-22
+- The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
+- The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.
+- The length of a timer tick is measured inside the interrupt, where the counter is read a few cycles after the interrupt arrives, so the delay of the interrupt cancels out over a run of ticks. The timer is then programmed so that a tick lasts a quarter of a millisecond, the rate a Linux kernel with a 250 hertz timer uses, and the tick has the same length on every machine.
+- The interval timers used the tick as a millisecond, so an alarm of five seconds asked for five thousand ticks and the time that was left was reported wrong. They use the measured length of a tick now.
+- The wall clock timer rounds its deadline down, so the time that is left is never longer than the time that was asked for. That is what Linux reports when a timer is cancelled, and it is the reason the cancellation of an alarm of five seconds reports five seconds.
+- The processor time accounting reports real nanoseconds.
+
 ## 0.69.0 - 2026-10-22
 - Fixed the virtio 1.0 notification capability, which was read with the field offsets of the configuration capabilities. The multiplier, the offset and the bar of the notification area were therefore wrong, the device was never notified, and no transmit ever completed. The notification register of a queue now sits at the area base plus the offset plus the multiplier times the queue index, and the queue index is written there.
 - The feature negotiation accepts the version 1 feature and nothing else. Accepting a feature the driver does not implement would let the device use a path that is not served here, such as a merged receive buffer, a flush or a discard.

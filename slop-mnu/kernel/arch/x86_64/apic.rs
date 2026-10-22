@@ -76,6 +76,7 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
         write(0x3e0, 0x3);
         write(0x320,TIMER_VECTOR as u32|(1<<17));
         write(0x380, 100_000);
+        TIMER_COUNT = 100_000;
         let _ = read(0x390);
     }
     Ok(())
@@ -83,6 +84,78 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
 
 pub fn ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
+}
+
+/// The count the timer was started with. The length of a tick follows from
+/// it and from the rate of the bus the timer counts at.
+static mut TIMER_COUNT: u32 = 0;
+
+/* The length of a tick is measured inside the interrupt, where the counter
+   is read a few cycles after the interrupt arrives. The span of a run of
+   ticks is the sum of the gaps between them, so the error of the delay of
+   the interrupt cancels out. */
+static LAST_TSC: AtomicU64 = AtomicU64::new(0);
+static TSC_TOTAL: AtomicU64 = AtomicU64::new(0);
+static TSC_SAMPLES: AtomicU64 = AtomicU64::new(0);
+
+/// A reading of the counter that the timer interrupt keeps.
+#[derive(Clone, Copy)]
+pub struct TickSample {
+    pub total: u64,
+    pub samples: u64,
+}
+
+/// The current reading of the counter that the timer interrupt keeps.
+pub fn tick_sample() -> TickSample {
+    TickSample {
+        total: TSC_TOTAL.load(Ordering::Relaxed),
+        samples: TSC_SAMPLES.load(Ordering::Relaxed),
+    }
+}
+
+/// The number of counter cycles one tick takes, averaged over the ticks
+/// between the two readings.
+pub fn tick_cycles(a: TickSample, b: TickSample) -> Option<u64> {
+    let n = b.samples.wrapping_sub(a.samples);
+    if n == 0 {
+        return None;
+    }
+    Some(b.total.wrapping_sub(a.total) / n)
+}
+
+/// Waits for the timer to run for a while and reports the length of a tick
+/// in counter cycles. The interrupts have to be on for the timer to run.
+pub fn measure_tick_cycles(ticks_to_watch: u64) -> Option<u64> {
+    let start = ticks();
+    let before = tick_sample();
+    let mut spins = 0u32;
+    while ticks().wrapping_sub(start) < ticks_to_watch {
+        core::hint::spin_loop();
+        spins += 1;
+        if spins > 2_000_000_000 {
+            return None;
+        }
+    }
+    let after = tick_sample();
+    tick_cycles(before, after)
+}
+
+/// Programs the timer so that a tick lasts `target_ns` nanoseconds. The
+/// length of a tick follows the count of the timer, so the count is scaled
+/// with the length that was measured. Returns the count that was
+/// programmed.
+pub fn program_tick_ns(target_ns: u64, measured_ns: u64) -> Option<u32> {
+    if measured_ns == 0 {
+        return None;
+    }
+    let old = unsafe { TIMER_COUNT } as u64;
+    let count = (old.saturating_mul(target_ns) / measured_ns).clamp(1, 0x00ff_ffff) as u32;
+    unsafe {
+        TIMER_COUNT = count;
+        write(0x380, count);
+        let _ = read(0x390);
+    }
+    Some(count)
 }
 
 pub fn self_test() -> Result<u64, &'static str> {
@@ -126,6 +199,12 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
 
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn apic_timer_rust(cs:u64) {
+    let now = super::tsc::rdtsc();
+    let last = LAST_TSC.swap(now, Ordering::Relaxed);
+    if last != 0 && now > last {
+        TSC_TOTAL.fetch_add(now - last, Ordering::Relaxed);
+        TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
+    }
     TICKS.fetch_add(1, Ordering::Relaxed);
     crate::task::on_timer_tick(cs & 3 != 0);
     crate::net::poll();

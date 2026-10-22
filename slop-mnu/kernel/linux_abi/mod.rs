@@ -1185,8 +1185,12 @@ fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
 fn put_u64(b:&mut[u8;144],off:usize,v:u64){b[off..off+8].copy_from_slice(&v.to_le_bytes());}
 fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
  let mut b=[0u8;144];
- put_u64(&mut b,0,utime_ticks/1000);put_u64(&mut b,8,(utime_ticks%1000)*1000);
- put_u64(&mut b,16,stime_ticks/1000);put_u64(&mut b,24,(stime_ticks%1000)*1000);
+ /* The accounting counts ticks, and the length of a tick is measured at
+    boot, so the times are real nanoseconds and not a fixed unit. */
+ let ut=crate::time::ticks_to_ns(utime_ticks);
+ let st=crate::time::ticks_to_ns(stime_ticks);
+ put_u64(&mut b,0,ut/1_000_000_000);put_u64(&mut b,8,(ut%1_000_000_000)/1000);
+ put_u64(&mut b,16,st/1_000_000_000);put_u64(&mut b,24,(st%1_000_000_000)/1000);
  put_u64(&mut b,32,maxrss_kb);
  b
 }
@@ -1426,9 +1430,13 @@ fn sys_timerfd_settime(fd:usize,flags:u64,newptr:u64,oldptr:u64)->i64{
  let val_nsec=i64::from_ne_bytes(buf[24..32].try_into().unwrap());
  if ival_sec<0||ival_nsec<0||val_sec<0||val_nsec<0{return errno::neg(errno::EINVAL)}
  let now=crate::arch::x86_64::apic::ticks();
- let delay_ticks=((val_sec as u64).saturating_mul(1000).saturating_add((val_nsec as u64)/1_000_000)).max(1);
+ /* The length of a tick is measured at boot, so the delay is turned into
+    ticks with the measured rate and not with a fixed unit. */
+ let delay_ns=(val_sec as u64).saturating_mul(1_000_000_000).saturating_add(val_nsec as u64);
+ let delay_ticks=crate::time::ns_to_ticks_ceil(delay_ns).max(1);
  let exp=now.saturating_add(delay_ticks);
- let ivl_ticks=(ival_sec as u64).saturating_mul(1000).saturating_add((ival_nsec as u64)/1_000_000);
+ let ivl_ns=(ival_sec as u64).saturating_mul(1_000_000_000).saturating_add(ival_nsec as u64);
+ let ivl_ticks=crate::time::ns_to_ticks_ceil(ivl_ns);
  // update kind
  crate::fd::timerfd_set(id,exp,ivl_ticks);
  if oldptr!=0{
@@ -1442,11 +1450,13 @@ fn sys_timerfd_gettime(fd:usize,ptr:u64)->i64{
  let (exp,ivl)=match crate::fd::timerfd_get(id){Some(v)=>v,_=>return errno::neg(errno::EBADF)};
  let now=crate::arch::x86_64::apic::ticks();
  let rem=exp.saturating_sub(now);
+ let ivl_ns=crate::time::ticks_to_ns(ivl);
+ let rem_ns=crate::time::ticks_to_ns(rem);
  let mut buf=[0u8;32];
- buf[0..8].copy_from_slice(&(ivl/1000).to_ne_bytes()); // interval sec approx
- buf[8..16].copy_from_slice(&((ivl%1000)*1_000_000).to_ne_bytes());
- buf[16..24].copy_from_slice(&(rem/1000).to_ne_bytes());
- buf[24..32].copy_from_slice(&((rem%1000)*1_000_000).to_ne_bytes());
+ buf[0..8].copy_from_slice(&(ivl_ns/1_000_000_000).to_ne_bytes());
+ buf[8..16].copy_from_slice(&((ivl_ns%1_000_000_000)/1000).to_ne_bytes());
+ buf[16..24].copy_from_slice(&(rem_ns/1_000_000_000).to_ne_bytes());
+ buf[24..32].copy_from_slice(&((rem_ns%1_000_000_000)/1000).to_ne_bytes());
  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf){return errno::neg(e)}
  0
 }
@@ -1566,14 +1576,19 @@ fn sys_pause()->i64{
  }
 }
 fn write_itimer_val(ptr:u64,rem_ticks:u64,iv_ticks:u64)->i64{
- let rem_us=rem_ticks.saturating_mul(1000);let iv_us=iv_ticks.saturating_mul(1000);
+ let rem_us=crate::time::ticks_to_ns(rem_ticks)/1000;let iv_us=crate::time::ticks_to_ns(iv_ticks)/1000;
  let val=ItimerVal{iv_sec:(iv_us/1_000_000)as i64,iv_sec2:(iv_us%1_000_000)as i64,v_sec:(rem_us/1_000_000)as i64,v_sec2:(rem_us%1_000_000)as i64};
  copy_obj(ptr,&val)
 }
 fn sys_alarm(sec:u64)->i64{
  let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
- let active=sec!=0;let next=if active{now.saturating_add(sec.saturating_mul(1000))}else{0};
- match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>((old_rem+999)/1000)as i64,Err(e)=>errno::neg(e)}
+ let active=sec!=0;
+ /* The deadline is a number of ticks, and the length of a tick is measured
+    at boot, so the seconds are turned into ticks with the measured rate. */
+ let next=if active{crate::time::ticks_after_ns_floor(sec.saturating_mul(1_000_000_000))}else{0};
+ match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>{
+  /* The remaining time is reported in whole seconds, rounded up. */
+  ((crate::time::ticks_to_ns(old_rem)+999_999_999)/1_000_000_000)as i64},Err(e)=>errno::neg(e)}
 }
 fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
  if which>2{return errno::neg(errno::EINVAL)}
@@ -1584,7 +1599,10 @@ fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
  let active=v_ns!=0;
  /* REAL counts wall ticks (absolute deadline); VIRTUAL/PROF count down the
     process's own CPU ticks. */
- let next=if active{if which==0{crate::time::ticks_after_ns(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
+ /* The wall clock timer rounds the deadline down, so the time that is left
+    never reaches the time that was asked for, which is what Linux reports
+    when the timer is cancelled. */
+ let next=if active{if which==0{crate::time::ticks_after_ns_floor(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
  let interval=crate::time::ns_to_ticks_ceil(iv_ns);
  let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,which as u8,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  if oldptr!=0{return write_itimer_val(oldptr,old_rem,old_iv)}
@@ -1614,7 +1632,8 @@ fn sys_get_robust_list(pid:u32,headptr:u64,lenptr:u64)->i64{
 fn sys_timerfd_create(clock:i32,flags:u64)->i64{
  if clock!=0 && clock!=1{return errno::neg(errno::EINVAL)}
  if flags&!3!=0{return errno::neg(errno::EINVAL)}
- let id=match crate::fd::alloc_file(crate::fd::OpenKind::TimerFd(crate::arch::x86_64::apic::ticks().saturating_add(1000),0)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let first=crate::arch::x86_64::apic::ticks().saturating_add(crate::time::ns_to_ticks_ceil(1_000_000_000));
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::TimerFd(first,0)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
 fn sys_eventfd2(init:u64,flags:u64)->i64{

@@ -1,13 +1,13 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.69.0
+Version: 0.70.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-2243550578357442da090ca05516a3a8457c4535dbee938e3cfa3920e2e75607     33285  CHANGELOG.md
-18a861c4ea1351773b2892d71aae3eeb6c7242f175c6932c3030acf1cc7ad1db       160  Cargo.lock
-acb7f17d12832e2848c1bad562af479aa3487c6e38aed9a42a0f0715fab96a70       231  Cargo.toml
+b4c18ebc5057abc8a6293a22db76eb218f1975f81d5761780b096f89078f348a     34760  CHANGELOG.md
+54beb044dbfacf7c314a7d82e125121753403b7c7eba46db6ed6d67e8fc0386b       160  Cargo.lock
+6c43c8d0249e12caef4d3ee37e30afdab4514e86e811451145240a8745fecd7c       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 0087be549f8a4007ed82108ff45b350fb4f0f4afbc1bae5df240f17bdfbee0f8      2205  arch/x86_64/context.S
@@ -81,27 +81,30 @@ d74391fb76309cd47034dd45a2a93ebafc4fae6ae8c7ae10d92df31787067578      2699  docs
 d9003658b6ca3b3e9daeea80994f71f93ecd206dc97871ef95fc14495cb5cccc      4795  docs/milestone66.md
 20e80472bf9b7ff5e5bfea3b617a3a38d6f17e1eed938dab11a187bc3185e2c8      3689  docs/milestone67.md
 88350202734d660bb397d1de3319615b78ebd75bf9e90207bcdae5966ea9f55d      5989  docs/milestone68.md
+fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b      3991  docs/milestone69.md
 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2      1447  docs/milestone7.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a      3987  docs/priority-status.md
+ce7e409e04edabd53eca2108c1eafae4f02958e58beb31782cbe9a4c2df958db      3926  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
 6e8463960e55a8bb3a5f808d4d2f9b92a9f0c50586d6066fe9c91f722dc5ab1c       133  kernel/arch/mod.rs
-9db4134ba5faa3e34069b1dc141dfcca0270ea5116114ede09477a737fcfbb47      4079  kernel/arch/x86_64/apic.rs
+f6ec9ba104358310ab426e7be37c1263511053aa5d1add949c44010761b2a09c      6791  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
 fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4      1553  kernel/arch/x86_64/descriptors.rs
 e60c17d57360942d48d5de51a6abb7484d1493a793f1b360df06c3c4087697fc      2573  kernel/arch/x86_64/idt.rs
-5ee519a7ad99249790faa0d11b525f84218ab54143b4a043c7dbd59901df9444       331  kernel/arch/x86_64/mod.rs
+9d154a57ec79035c60cebcbedd3d08a95c6a94b22d8467e328078d3e00cc3e94       357  kernel/arch/x86_64/mod.rs
 02d81d7cc273d83e4d4bcee9ca51578603327a83f511df689c6a0ba5bee7bd05       668  kernel/arch/x86_64/msr.rs
 22b4c52392350e43db8e027efdd438de866e306322b47f7e2685e753d64f5a94      5596  kernel/arch/x86_64/paging.rs
 ba91f2d2b359947914e478790fff0789bd104d57dbd2c6020a40c703637cc34b      1740  kernel/arch/x86_64/phys.rs
+5241a05e0064fa8b8f1b0560c4fe2c20d2187074278e95e73b1b7b2ac39151a9      2139  kernel/arch/x86_64/pit.rs
 a30d80dbf963c9619aa514b5df762557fa4f3aed1e27a140c9ba5e80e6c47f0b       979  kernel/arch/x86_64/port.rs
 c39f29e91e828d4ffbb32a7687c51b5e59a243a59269995d6a06b35061171ece       359  kernel/arch/x86_64/qemu.rs
 0f96cdc50da5d590c7ffbec53779d2c810e9a70d0d575a5e36254560fd82bbac      1432  kernel/arch/x86_64/rtc.rs
 6d21e4cb94e6b50fc7eeba53403d435924769652921e3192b5dc9029fb44f7f6      5752  kernel/arch/x86_64/syscall.rs
+6f1c5a4a997407f748d0dd6065d9b3f247142652e95e50d49d39e5e3dbce0e6d      1000  kernel/arch/x86_64/tsc.rs
 129bf9d8b9f08a05994289df573d5cc986ade78f25f435609eda49d3c566110b       845  kernel/arch/x86_64/user.rs
 d0583010843849c7ec7a87dc60165b3b3188a35e978398f6e938c7e52c543964      2781  kernel/boot.rs
 be67c05421b4b95925f3bda3bca07b7b967fad3ce9d2be9e5e087c35431eeaa5      1336  kernel/console.rs
@@ -120,8 +123,8 @@ ad9ddad42be7fa9f17c04f2bc364254292f2754c14d83085d1741137e0d3a785      2122  kern
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 a7167952a3e3c90d7aa88a27a01ab977abdbf56cd9ed6e5e6eade6f859e7c65d      3131  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
-67ebd9877c8c3ba2af618efddef4fe69b76b16a25814b39de64eb25ef2493ced      8745  kernel/lib.rs
-2a1ac5d7665e8076183dd396581573e117ea072b44b9a9a800f94194895e825a    145236  kernel/linux_abi/mod.rs
+77afca9390357f3475b59b315b6d2118bd634736fcfbe1485e89291581a06763     10859  kernel/lib.rs
+cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6    146375  kernel/linux_abi/mod.rs
 3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df      6824  kernel/linux_abi/nr.rs
 460d4dcfa80585c57d94de369dac73653869519547610e52e5d0758b1db3331e      3219  kernel/linux_abi/stack.rs
 abdd66e1514fbb151b74b39200f99d55a4ef1c6370c39e95a1e1195300e6d270      1227  kernel/linux_abi/types.rs
@@ -136,7 +139,7 @@ baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252     13874  kern
 ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
 e97330bb353158524ea04f770d0138c79d58de857ff4515dec3b87c06bea2d6d     27391  kernel/task.rs
-02ae7abb2aa707761f63174902b2b3d6cc9ef8e700dc67322707f1b02d2a7212      1141  kernel/time.rs
+4a3b094639312eb74102243d3ed81b6bf23796b106e84430b64c72e05159e3f9      2355  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 88e238f027a3b78351b4fdc09f678a8269f398bf28d9bc8a99127de3af08b771     61878  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
@@ -199,13 +202,21 @@ a6fab48ba1d20cc0b79afa9384fc32581b5a4c76c72dac029ba973b903d63307      6242  tool
 edd0ec9e6b87e76b6d4272574ac9452d9134e611d0847ecc0795a1ebba1e3c5e      1701  tools/net-echo.py
 a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tools/run-qemu.sh
 
-TOTAL FILES: 193
+TOTAL FILES: 196
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 33285 bytes
-SHA-256: 2243550578357442da090ca05516a3a8457c4535dbee938e3cfa3920e2e75607
+SIZE: 34760 bytes
+SHA-256: b4c18ebc5057abc8a6293a22db76eb218f1975f81d5761780b096f89078f348a
 ================================================================================
+## 0.70.0 - 2026-10-22
+- The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
+- The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.
+- The length of a timer tick is measured inside the interrupt, where the counter is read a few cycles after the interrupt arrives, so the delay of the interrupt cancels out over a run of ticks. The timer is then programmed so that a tick lasts a quarter of a millisecond, the rate a Linux kernel with a 250 hertz timer uses, and the tick has the same length on every machine.
+- The interval timers used the tick as a millisecond, so an alarm of five seconds asked for five thousand ticks and the time that was left was reported wrong. They use the measured length of a tick now.
+- The wall clock timer rounds its deadline down, so the time that is left is never longer than the time that was asked for. That is what Linux reports when a timer is cancelled, and it is the reason the cancellation of an alarm of five seconds reports five seconds.
+- The processor time accounting reports real nanoseconds.
+
 ## 0.69.0 - 2026-10-22
 - Fixed the virtio 1.0 notification capability, which was read with the field offsets of the configuration capabilities. The multiplier, the offset and the bar of the notification area were therefore wrong, the device was never notified, and no transmit ever completed. The notification register of a queue now sits at the area base plus the offset plus the multiplier times the queue index, and the queue index is written there.
 - The feature negotiation accepts the version 1 feature and nothing else. Accepting a feature the driver does not implement would let the device use a path that is not served here, such as a merged receive buffer, a flush or a discard.
@@ -626,7 +637,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: 18a861c4ea1351773b2892d71aae3eeb6c7242f175c6932c3030acf1cc7ad1db
+SHA-256: 54beb044dbfacf7c314a7d82e125121753403b7c7eba46db6ed6d67e8fc0386b
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -634,18 +645,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.69.0"
+version = "0.70.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: acb7f17d12832e2848c1bad562af479aa3487c6e38aed9a42a0f0715fab96a70
+SHA-256: 6c43c8d0249e12caef4d3ee37e30afdab4514e86e811451145240a8745fecd7c
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.69.0"
+version = "0.70.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -4228,6 +4239,101 @@ blocks a signal and then raises it keeps running, which is what Linux does.
 END FILE: docs/milestone68.md
 
 ================================================================================
+FILE: docs/milestone69.md
+SIZE: 3991 bytes
+SHA-256: fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b
+================================================================================
+# Milestone 69: a clock that counts in real units
+
+## Goal
+
+The kernel counted one timer tick as a millisecond. The local APIC timer of
+a machine does not run at a rate the processor reports, so every time the
+kernel handed to a program was scaled by a wrong unit: the monotonic clock,
+the wall clock, the processor time, the length of a sleep and the interval
+timers.
+
+The milestone measures the clock against a source whose rate the hardware
+fixes, and every conversion in the kernel follows the measurement.
+
+## The rate of the time stamp counter
+
+The time stamp counter runs at a constant rate that the processor does not
+state, so it has to be measured. The programmable interval timer of the
+motherboard counts at a rate the hardware fixes: 1 193 182 counts per
+second. Channel 2 of that timer is wired to the status port of the sound
+card, so the line it drives can be watched while it counts down. That gives
+a window of exactly known length, and the number of counter cycles inside
+the window is the rate of the counter.
+
+The measurement on the test machine gives 2.92 GHz. The same measurement
+through the local APIC timer agrees with it to a fraction of a percent, so
+the two measurements check each other.
+
+## The length of a tick
+
+The local APIC timer counts bus cycles, and the rate of the bus is not known
+either, so the length of a tick is measured against the counter. The
+measurement happens inside the interrupt, where the counter is read a few
+cycles after the interrupt arrives: the span of a run of ticks is the sum of
+the gaps between them, so the delay of the interrupt cancels out.
+
+The timer is then programmed so that a tick lasts a quarter of a millisecond.
+The count of the timer is scaled with the length that was measured, and the
+tick has the same length on every machine. The rate a Linux kernel with a
+250 hertz timer uses is the same.
+
+The kernel measured 1.6 milliseconds for a tick before this milestone, and
+it assumed one millisecond.
+
+## The interval timers
+
+The interval timers turned the tick into a millisecond, so an alarm of five
+seconds asked for five thousand ticks and the time that was left was
+reported wrong. They use the measured length of a tick now.
+
+The wall clock timer rounds its deadline down, so the time that is left is
+never longer than the time that was asked for. That is what Linux reports
+when a timer is cancelled: cancelling an alarm of five seconds reports four
+seconds and 999960 microseconds, and the C library rounds that up to five
+seconds. Rounding the deadline up instead made the report five seconds and
+a few milliseconds, which the C library rounds up to six.
+
+The processor time accounting reports real nanoseconds for the same reason.
+
+## Acceptance criteria
+
+1. `./tools/acceptance-test.sh` prints `acceptance: PASS`.
+2. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
+   Linux)`.
+3. `./tools/heap-test.sh` prints `heap: PASS`.
+4. `./tools/check-source.sh` passes.
+5. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/busybox-test.sh` PASS, 115 checks match Linux.
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+- The differential battery reaches the processor time accounting of a child,
+  which needs a clock that a program can read without entering the kernel.
+
+## Open items
+
+- The differential battery stops at the processor time of a child. The
+  reason is the missing vector system call entry point: on Linux a program
+  that reads the clock does not enter the kernel, so the loop that measures
+  the clock spends its time in user mode and the user time of the child
+  grows. This kernel has no such entry point, so every clock reading is a
+  system call and the time is charged to the kernel.
+- The rate of the counter is measured once at boot. A machine whose counter
+  is not invariant would need the measurement repeated.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone69.md
+
+================================================================================
 FILE: docs/milestone7.md
 SIZE: 1447 bytes
 SHA-256: 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2
@@ -4317,8 +4423,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 3987 bytes
-SHA-256: d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a
+SIZE: 3926 bytes
+SHA-256: ce7e409e04edabd53eca2108c1eafae4f02958e58beb31782cbe9a4c2df958db
 ================================================================================
 # One-Linux-program priority status
 
@@ -4340,6 +4446,12 @@ SHA-256: d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a
   reaches the final state of a connection
 - every user region (the program break, the anonymous mappings, the dynamic
   linker, the position independent image) in a page table slot of its own
+- a clock in real units: the rate of the time stamp counter is measured
+  against the programmable interval timer, the length of a timer tick is
+  measured against the counter, and the timer is programmed so a tick has
+  the same length on every machine
+- the interval timers, the processor time accounting and every other time
+  conversion follow the measured length of a tick
 
 ## Implemented in source, pending build/runtime validation
 
@@ -4366,32 +4478,25 @@ SHA-256: d04b2c6625596478d0936af00686cf25b8a9797a087aec40305ac948a9a1a50a
 
 ## Open defects
 
-- The differential battery stops at the processor time accounting. The
+- The differential battery stops at the processor time of a child. The
   reason is the missing vector system call entry point: on Linux a program
   that reads the clock does not enter the kernel, so the loop that measures
-  the clock spends its time in user mode and the user time of the process
+  the clock spends its time in user mode and the user time of the child
   grows. This kernel has no such entry point, so every clock reading is a
   system call and the time is charged to the kernel, which leaves the user
   time far below the value Linux reports. The clock itself is correct: the
   process clock, the thread clock and the wall clock agree.
-- The local APIC timer is not calibrated. The kernel counts one tick as a
-  millisecond, but the timer of the test machine runs at a different rate, so
-  the monotonic clock and the processor time are scaled wrongly. The rate has
-  to be measured against a real time source, the programmable interval timer
-  is the obvious candidate.
 
 ## Next in line for the Linux ABI
 
 1. A vector system call entry point, so a program can read the clock without
    entering the kernel. This closes the gap above and gives every Linux
    program the fast clock path it expects.
-2. A calibrated local APIC timer, so the monotonic clock and the processor
-   time are in real units.
-3. A real-time signal range with `sigqueue` and the queued values.
-4. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
-5. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
-6. The floating-point state in the ucontext, so a handler sees the registers.
-7. Copy-on-write for `fork`, which removes the deep copy of the private slots.
+2. A real-time signal range with `sigqueue` and the queued values.
+3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
+4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
+5. The floating-point state in the ucontext, so a handler sees the registers.
+6. Copy-on-write for `fork`, which removes the deep copy of the private slots.
 --------------------------------------------------------------------------------
 END FILE: docs/priority-status.md
 
@@ -4476,8 +4581,8 @@ END FILE: kernel/arch/mod.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/apic.rs
-SIZE: 4079 bytes
-SHA-256: 9db4134ba5faa3e34069b1dc141dfcca0270ea5116114ede09477a737fcfbb47
+SIZE: 6791 bytes
+SHA-256: f6ec9ba104358310ab426e7be37c1263511053aa5d1add949c44010761b2a09c
 ================================================================================
 //! xAPIC and first IOAPIC support for the bootstrap processor.
 use crate::acpi::InterruptInfo;
@@ -4557,6 +4662,7 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
         write(0x3e0, 0x3);
         write(0x320,TIMER_VECTOR as u32|(1<<17));
         write(0x380, 100_000);
+        TIMER_COUNT = 100_000;
         let _ = read(0x390);
     }
     Ok(())
@@ -4564,6 +4670,78 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
 
 pub fn ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
+}
+
+/// The count the timer was started with. The length of a tick follows from
+/// it and from the rate of the bus the timer counts at.
+static mut TIMER_COUNT: u32 = 0;
+
+/* The length of a tick is measured inside the interrupt, where the counter
+   is read a few cycles after the interrupt arrives. The span of a run of
+   ticks is the sum of the gaps between them, so the error of the delay of
+   the interrupt cancels out. */
+static LAST_TSC: AtomicU64 = AtomicU64::new(0);
+static TSC_TOTAL: AtomicU64 = AtomicU64::new(0);
+static TSC_SAMPLES: AtomicU64 = AtomicU64::new(0);
+
+/// A reading of the counter that the timer interrupt keeps.
+#[derive(Clone, Copy)]
+pub struct TickSample {
+    pub total: u64,
+    pub samples: u64,
+}
+
+/// The current reading of the counter that the timer interrupt keeps.
+pub fn tick_sample() -> TickSample {
+    TickSample {
+        total: TSC_TOTAL.load(Ordering::Relaxed),
+        samples: TSC_SAMPLES.load(Ordering::Relaxed),
+    }
+}
+
+/// The number of counter cycles one tick takes, averaged over the ticks
+/// between the two readings.
+pub fn tick_cycles(a: TickSample, b: TickSample) -> Option<u64> {
+    let n = b.samples.wrapping_sub(a.samples);
+    if n == 0 {
+        return None;
+    }
+    Some(b.total.wrapping_sub(a.total) / n)
+}
+
+/// Waits for the timer to run for a while and reports the length of a tick
+/// in counter cycles. The interrupts have to be on for the timer to run.
+pub fn measure_tick_cycles(ticks_to_watch: u64) -> Option<u64> {
+    let start = ticks();
+    let before = tick_sample();
+    let mut spins = 0u32;
+    while ticks().wrapping_sub(start) < ticks_to_watch {
+        core::hint::spin_loop();
+        spins += 1;
+        if spins > 2_000_000_000 {
+            return None;
+        }
+    }
+    let after = tick_sample();
+    tick_cycles(before, after)
+}
+
+/// Programs the timer so that a tick lasts `target_ns` nanoseconds. The
+/// length of a tick follows the count of the timer, so the count is scaled
+/// with the length that was measured. Returns the count that was
+/// programmed.
+pub fn program_tick_ns(target_ns: u64, measured_ns: u64) -> Option<u32> {
+    if measured_ns == 0 {
+        return None;
+    }
+    let old = unsafe { TIMER_COUNT } as u64;
+    let count = (old.saturating_mul(target_ns) / measured_ns).clamp(1, 0x00ff_ffff) as u32;
+    unsafe {
+        TIMER_COUNT = count;
+        write(0x380, count);
+        let _ = read(0x390);
+    }
+    Some(count)
 }
 
 pub fn self_test() -> Result<u64, &'static str> {
@@ -4607,6 +4785,12 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
 
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn apic_timer_rust(cs:u64) {
+    let now = super::tsc::rdtsc();
+    let last = LAST_TSC.swap(now, Ordering::Relaxed);
+    if last != 0 && now > last {
+        TSC_TOTAL.fetch_add(now - last, Ordering::Relaxed);
+        TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
+    }
     TICKS.fetch_add(1, Ordering::Relaxed);
     crate::task::on_timer_tick(cs & 3 != 0);
     crate::net::poll();
@@ -4686,8 +4870,8 @@ END FILE: kernel/arch/x86_64/idt.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/mod.rs
-SIZE: 331 bytes
-SHA-256: 5ee519a7ad99249790faa0d11b525f84218ab54143b4a043c7dbd59901df9444
+SIZE: 357 bytes
+SHA-256: 9d154a57ec79035c60cebcbedd3d08a95c6a94b22d8467e328078d3e00cc3e94
 ================================================================================
 pub mod syscall;
 pub mod msr;
@@ -4701,6 +4885,8 @@ pub mod cpu;
 pub mod apic;
 pub mod port;
 pub mod rtc;
+pub mod tsc;
+pub mod pit;
 
 pub fn init() {
     // Milestone 2: install GDT/IDT, APIC, timer, page tables and SYSCALL MSRs.
@@ -4824,6 +5010,70 @@ impl EarlyPhys {
 }
 --------------------------------------------------------------------------------
 END FILE: kernel/arch/x86_64/phys.rs
+
+================================================================================
+FILE: kernel/arch/x86_64/pit.rs
+SIZE: 2139 bytes
+SHA-256: 5241a05e0064fa8b8f1b0560c4fe2c20d2187074278e95e73b1b7b2ac39151a9
+================================================================================
+//! The programmable interval timer, used to measure the rate of the time
+//! stamp counter.
+//!
+//! The 8254 timer counts at a fixed rate that the processor does not know
+//! about. Channel 2 is wired to the status port of the sound card, so the
+//! line it drives can be watched while it counts down. That gives a window
+//! of exactly known length, and the number of counter cycles inside the
+//! window is the rate of the counter.
+
+use crate::arch::x86_64::port::{inb,outb};
+use crate::arch::x86_64::tsc::rdtsc;
+
+/// The input rate of the 8254 timer, in counts per second.
+pub const INPUT_HZ:u64=1_193_182;
+
+/// The count register of channel 2 is sixteen bits wide, so the longest
+/// window is 65536 counts, a little over 54 milliseconds.
+pub const MAX_COUNTS:u16=0xffff;
+
+/// Measures how many counter cycles pass while channel 2 counts down
+/// `counts` ticks. Returns None when the timer does not finish, which
+/// happens on a machine without the sound card status port.
+pub fn measure_tsc(counts:u16)->Option<u64>{
+ if counts==0{return None}
+ unsafe{
+  /* The gate of channel 2 drives the status line back to the status port.
+     The line reads high while the channel is idle and low while it counts,
+     so the start of the window is the moment the line falls. */
+  let control=inb(0x61);
+  outb(0x61,(control & !0x02)|0x01);
+  /* Channel 2, low byte then high byte, mode 0, binary. */
+  outb(0x43,0xb0);
+  outb(0x42,(counts&0xff)as u8);
+  outb(0x42,(counts>>8)as u8);
+  let start=rdtsc();
+  let mut spins=0u32;
+  while inb(0x61)&0x20==0{
+   spins+=1;
+   /* The window cannot be longer than the longest count, so a counter that
+      runs far past that means the status line never moved. */
+   if spins>2_000_000{outb(0x61,control);return None}
+  }
+  let end=rdtsc();
+  outb(0x61,control);
+  Some(end-start)
+ }
+}
+
+/// Measures the rate of the time stamp counter in cycles per second. The
+/// result is rounded to the nearest cycle per second.
+pub fn tsc_hz()->Option<u64>{
+ let counts=MAX_COUNTS;
+ let cycles=measure_tsc(counts)?;
+ if cycles==0{return None}
+ Some((cycles as u64*INPUT_HZ+(counts as u64)/2)/(counts as u64))
+}
+--------------------------------------------------------------------------------
+END FILE: kernel/arch/x86_64/pit.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/port.rs
@@ -5037,6 +5287,38 @@ pub unsafe fn read_user_rsp()->u64{unsafe{SYSCALL_USER_RSP}}
 pub unsafe fn write_user_rsp(v:u64){unsafe{SYSCALL_USER_RSP=v}}
 --------------------------------------------------------------------------------
 END FILE: kernel/arch/x86_64/syscall.rs
+
+================================================================================
+FILE: kernel/arch/x86_64/tsc.rs
+SIZE: 1000 bytes
+SHA-256: 6f1c5a4a997407f748d0dd6065d9b3f247142652e95e50d49d39e5e3dbce0e6d
+================================================================================
+//! The time stamp counter.
+//!
+//! The counter runs at a constant rate that does not depend on the load, so
+//! it is the reference every other time source is measured against. The
+//! rate itself is not known from the processor, it has to be measured
+//! against a real time source; the programmable interval timer does that
+//! (see `pit.rs`).
+
+/// Reads the time stamp counter. The fences keep the read from being moved
+/// across the instructions that measure the interval around it.
+#[inline]pub fn rdtsc()->u64{
+ let lo:u32;let hi:u32;
+ unsafe{core::arch::asm!("lfence","rdtsc","lfence",out("eax")lo,out("edx")hi,options(nomem,preserves_flags));}
+ ((hi as u64)<<32)|(lo as u64)
+}
+
+/// True when the processor reports an invariant counter, so the rate that was
+/// measured once stays valid.
+pub fn invariant()->bool{
+ let max=unsafe{core::arch::x86_64::__cpuid_count(0x8000_0000,0)};
+ if max.eax<0x8000_0007{return false}
+ let r=unsafe{core::arch::x86_64::__cpuid(0x8000_0007)};
+ r.edx&1!=0
+}
+--------------------------------------------------------------------------------
+END FILE: kernel/arch/x86_64/tsc.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/user.rs
@@ -6986,8 +7268,8 @@ END FILE: kernel/inotify.rs
 
 ================================================================================
 FILE: kernel/lib.rs
-SIZE: 8745 bytes
-SHA-256: 67ebd9877c8c3ba2af618efddef4fe69b76b16a25814b39de64eb25ef2493ced
+SIZE: 10859 bytes
+SHA-256: 77afca9390357f3475b59b315b6d2118bd634736fcfbe1485e89291581a06763
 ================================================================================
 #![no_std]
 #![feature(naked_functions)]
@@ -7092,6 +7374,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     if let Some(secs)=arch::x86_64::rtc::epoch_seconds(){time::set_realtime_ns(secs.saturating_mul(1_000_000_000));println!("rtc: CLOCK_REALTIME seeded epoch={}",secs);}
     let first_tick=match arch::x86_64::apic::self_test(){Ok(v)=>v,Err(e)=>{println!("APIC timer self-test failed: {}",e);arch::halt()}};
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
+    calibrate_clock();
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);
     driver::init(); task::init(rsp0);
     if !fd::resource_self_test(){println!("fd resource-accounting self-test failed");arch::halt()}
@@ -7128,6 +7411,43 @@ extern "sysv64" fn kmain_high_continue()->!{
 
 use core::panic::PanicInfo;
 
+/* The length of one timer tick the kernel aims for. A quarter of a
+   millisecond is the rate a Linux kernel with a 250 hertz timer uses, and
+   it keeps the cost of the timer interrupt low. */
+const TICK_TARGET_NS:u64=4_000_000;
+
+/* Measures the rate of the time stamp counter against the programmable
+   interval timer, then measures the length of a timer tick against the
+   counter and programs the timer so a tick has the wanted length. Without
+   this the monotonic clock and the processor time are counted in ticks
+   that do not stand for a real time unit. */
+fn calibrate_clock(){
+ let tsc_hz=match arch::x86_64::pit::tsc_hz(){Some(hz)=>hz,None=>{println!("time: the counter rate could not be measured, the tick keeps its default length");return}};
+ time::set_tsc_hz(tsc_hz);
+ /* The timer has to run while the length of a tick is measured, so the
+    interrupts are on for the time of the measurement. */
+ unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
+ let cycles=match arch::x86_64::apic::measure_tick_cycles(64){Some(v)=>v,None=>{unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};println!("time: the tick length could not be measured, the tick keeps its default length");return}};
+ unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
+ let measured=cycles.saturating_mul(1_000_000_000)/tsc_hz;
+ if measured==0{println!("time: the tick length could not be measured, the tick keeps its default length");return}
+ if let Some(count)=arch::x86_64::apic::program_tick_ns(TICK_TARGET_NS,measured){
+  unsafe{core::arch::asm!("sti",options(nomem,nostack,preserves_flags))};
+  let cycles=arch::x86_64::apic::measure_tick_cycles(64);
+  unsafe{core::arch::asm!("cli",options(nomem,nostack,preserves_flags))};
+  if let Some(cycles)=cycles{
+   let ns=cycles.saturating_mul(1_000_000_000)/tsc_hz;
+   if ns>0{
+    time::set_tick_ns(ns);
+    println!("time: counter={} Hz tick={} ns count={}",tsc_hz,ns,count);
+    return;
+   }
+  }
+ }
+ time::set_tick_ns(measured);
+ println!("time: counter={} Hz tick={} ns",tsc_hz,measured);
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain(boot_magic: u64, boot_info: u64) -> ! {
     console::init();
@@ -7150,8 +7470,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 145236 bytes
-SHA-256: 2a1ac5d7665e8076183dd396581573e117ea072b44b9a9a800f94194895e825a
+SIZE: 146375 bytes
+SHA-256: cab2b54840c278ab6d70d24bc06acd754b2e7caadce45ad7f10fb2e2d9b059f6
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -8340,8 +8660,12 @@ fn sys_setrlimit(resource:u64,rlim:u64)->i64{let _=(resource,rlim);0}
 fn put_u64(b:&mut[u8;144],off:usize,v:u64){b[off..off+8].copy_from_slice(&v.to_le_bytes());}
 fn rusage_buf(utime_ticks:u64,stime_ticks:u64,maxrss_kb:u64)->[u8;144]{
  let mut b=[0u8;144];
- put_u64(&mut b,0,utime_ticks/1000);put_u64(&mut b,8,(utime_ticks%1000)*1000);
- put_u64(&mut b,16,stime_ticks/1000);put_u64(&mut b,24,(stime_ticks%1000)*1000);
+ /* The accounting counts ticks, and the length of a tick is measured at
+    boot, so the times are real nanoseconds and not a fixed unit. */
+ let ut=crate::time::ticks_to_ns(utime_ticks);
+ let st=crate::time::ticks_to_ns(stime_ticks);
+ put_u64(&mut b,0,ut/1_000_000_000);put_u64(&mut b,8,(ut%1_000_000_000)/1000);
+ put_u64(&mut b,16,st/1_000_000_000);put_u64(&mut b,24,(st%1_000_000_000)/1000);
  put_u64(&mut b,32,maxrss_kb);
  b
 }
@@ -8581,9 +8905,13 @@ fn sys_timerfd_settime(fd:usize,flags:u64,newptr:u64,oldptr:u64)->i64{
  let val_nsec=i64::from_ne_bytes(buf[24..32].try_into().unwrap());
  if ival_sec<0||ival_nsec<0||val_sec<0||val_nsec<0{return errno::neg(errno::EINVAL)}
  let now=crate::arch::x86_64::apic::ticks();
- let delay_ticks=((val_sec as u64).saturating_mul(1000).saturating_add((val_nsec as u64)/1_000_000)).max(1);
+ /* The length of a tick is measured at boot, so the delay is turned into
+    ticks with the measured rate and not with a fixed unit. */
+ let delay_ns=(val_sec as u64).saturating_mul(1_000_000_000).saturating_add(val_nsec as u64);
+ let delay_ticks=crate::time::ns_to_ticks_ceil(delay_ns).max(1);
  let exp=now.saturating_add(delay_ticks);
- let ivl_ticks=(ival_sec as u64).saturating_mul(1000).saturating_add((ival_nsec as u64)/1_000_000);
+ let ivl_ns=(ival_sec as u64).saturating_mul(1_000_000_000).saturating_add(ival_nsec as u64);
+ let ivl_ticks=crate::time::ns_to_ticks_ceil(ivl_ns);
  // update kind
  crate::fd::timerfd_set(id,exp,ivl_ticks);
  if oldptr!=0{
@@ -8597,11 +8925,13 @@ fn sys_timerfd_gettime(fd:usize,ptr:u64)->i64{
  let (exp,ivl)=match crate::fd::timerfd_get(id){Some(v)=>v,_=>return errno::neg(errno::EBADF)};
  let now=crate::arch::x86_64::apic::ticks();
  let rem=exp.saturating_sub(now);
+ let ivl_ns=crate::time::ticks_to_ns(ivl);
+ let rem_ns=crate::time::ticks_to_ns(rem);
  let mut buf=[0u8;32];
- buf[0..8].copy_from_slice(&(ivl/1000).to_ne_bytes()); // interval sec approx
- buf[8..16].copy_from_slice(&((ivl%1000)*1_000_000).to_ne_bytes());
- buf[16..24].copy_from_slice(&(rem/1000).to_ne_bytes());
- buf[24..32].copy_from_slice(&((rem%1000)*1_000_000).to_ne_bytes());
+ buf[0..8].copy_from_slice(&(ivl_ns/1_000_000_000).to_ne_bytes());
+ buf[8..16].copy_from_slice(&((ivl_ns%1_000_000_000)/1000).to_ne_bytes());
+ buf[16..24].copy_from_slice(&(rem_ns/1_000_000_000).to_ne_bytes());
+ buf[24..32].copy_from_slice(&((rem_ns%1_000_000_000)/1000).to_ne_bytes());
  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf){return errno::neg(e)}
  0
 }
@@ -8721,14 +9051,19 @@ fn sys_pause()->i64{
  }
 }
 fn write_itimer_val(ptr:u64,rem_ticks:u64,iv_ticks:u64)->i64{
- let rem_us=rem_ticks.saturating_mul(1000);let iv_us=iv_ticks.saturating_mul(1000);
+ let rem_us=crate::time::ticks_to_ns(rem_ticks)/1000;let iv_us=crate::time::ticks_to_ns(iv_ticks)/1000;
  let val=ItimerVal{iv_sec:(iv_us/1_000_000)as i64,iv_sec2:(iv_us%1_000_000)as i64,v_sec:(rem_us/1_000_000)as i64,v_sec2:(rem_us%1_000_000)as i64};
  copy_obj(ptr,&val)
 }
 fn sys_alarm(sec:u64)->i64{
  let pid=crate::task::current_pid();let now=crate::arch::x86_64::apic::ticks();
- let active=sec!=0;let next=if active{now.saturating_add(sec.saturating_mul(1000))}else{0};
- match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>((old_rem+999)/1000)as i64,Err(e)=>errno::neg(e)}
+ let active=sec!=0;
+ /* The deadline is a number of ticks, and the length of a tick is measured
+    at boot, so the seconds are turned into ticks with the measured rate. */
+ let next=if active{crate::time::ticks_after_ns_floor(sec.saturating_mul(1_000_000_000))}else{0};
+ match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>{
+  /* The remaining time is reported in whole seconds, rounded up. */
+  ((crate::time::ticks_to_ns(old_rem)+999_999_999)/1_000_000_000)as i64},Err(e)=>errno::neg(e)}
 }
 fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
  if which>2{return errno::neg(errno::EINVAL)}
@@ -8739,7 +9074,10 @@ fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
  let active=v_ns!=0;
  /* REAL counts wall ticks (absolute deadline); VIRTUAL/PROF count down the
     process's own CPU ticks. */
- let next=if active{if which==0{crate::time::ticks_after_ns(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
+ /* The wall clock timer rounds the deadline down, so the time that is left
+    never reaches the time that was asked for, which is what Linux reports
+    when the timer is cancelled. */
+ let next=if active{if which==0{crate::time::ticks_after_ns_floor(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
  let interval=crate::time::ns_to_ticks_ceil(iv_ns);
  let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,which as u8,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  if oldptr!=0{return write_itimer_val(oldptr,old_rem,old_iv)}
@@ -8769,7 +9107,8 @@ fn sys_get_robust_list(pid:u32,headptr:u64,lenptr:u64)->i64{
 fn sys_timerfd_create(clock:i32,flags:u64)->i64{
  if clock!=0 && clock!=1{return errno::neg(errno::EINVAL)}
  if flags&!3!=0{return errno::neg(errno::EINVAL)}
- let id=match crate::fd::alloc_file(crate::fd::OpenKind::TimerFd(crate::arch::x86_64::apic::ticks().saturating_add(1000),0)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let first=crate::arch::x86_64::apic::ticks().saturating_add(crate::time::ns_to_ticks_ceil(1_000_000_000));
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::TimerFd(first,0)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
 fn sys_eventfd2(init:u64,flags:u64)->i64{
@@ -12259,20 +12598,39 @@ END FILE: kernel/task.rs
 
 ================================================================================
 FILE: kernel/time.rs
-SIZE: 1141 bytes
-SHA-256: 02ae7abb2aa707761f63174902b2b3d6cc9ef8e700dc67322707f1b02d2a7212
+SIZE: 2355 bytes
+SHA-256: 4a3b094639312eb74102243d3ed81b6bf23796b106e84430b64c72e05159e3f9
 ================================================================================
-//! Monotonic bootstrap time and xorshift64 random source.
+//! Monotonic time, the wall clock and the xorshift64 random source.
 use core::sync::atomic::{AtomicU64,Ordering};
-const NS_PER_TICK:u64=1_000_000;
+/* The length of one timer tick in nanoseconds. The timer of the machine
+   does not run at a rate the processor reports, so the length is measured
+   at boot against the time stamp counter. The default is the rate a program
+   expects until the measurement replaces it. */
+const DEFAULT_TICK_NS:u64=1_000_000;
+static TICK_NS:AtomicU64=AtomicU64::new(DEFAULT_TICK_NS);
+static TSC_HZ:AtomicU64=AtomicU64::new(0);
 static RNG:AtomicU64=AtomicU64::new(0x6e6f_7274_6873_7461);
-pub fn monotonic_ns()->u64{crate::arch::x86_64::apic::ticks().saturating_mul(NS_PER_TICK)}
+/// The length of one timer tick in nanoseconds.
+pub fn tick_ns()->u64{TICK_NS.load(Ordering::Relaxed)}
+/// Records the measured length of a timer tick.
+pub fn set_tick_ns(ns:u64){if ns>0{TICK_NS.store(ns,Ordering::Relaxed)}}
+/// The rate of the time stamp counter in cycles per second, zero when the
+/// counter could not be measured.
+pub fn tsc_hz()->u64{TSC_HZ.load(Ordering::Relaxed)}
+/// Records the measured rate of the time stamp counter.
+pub fn set_tsc_hz(hz:u64){TSC_HZ.store(hz,Ordering::Relaxed)}
+pub fn monotonic_ns()->u64{crate::arch::x86_64::apic::ticks().saturating_mul(tick_ns())}
 static REALTIME_OFFSET_NS:AtomicU64=AtomicU64::new(0);
 pub fn realtime_ns()->u64{monotonic_ns().wrapping_add(REALTIME_OFFSET_NS.load(Ordering::Relaxed))}
 pub fn set_realtime_ns(ns:u64){REALTIME_OFFSET_NS.store(ns.wrapping_sub(monotonic_ns()),Ordering::Relaxed)}
-pub fn ticks_to_ns(t:u64)->u64{t.saturating_mul(NS_PER_TICK)}
-pub fn ns_to_ticks_ceil(ns:u64)->u64{ns.saturating_add(NS_PER_TICK-1)/NS_PER_TICK}
-pub fn ticks_after_ns(ns:u64)->u64{crate::arch::x86_64::apic::ticks().saturating_add(ns.saturating_add(NS_PER_TICK-1)/NS_PER_TICK)}
+pub fn ticks_to_ns(t:u64)->u64{t.saturating_mul(tick_ns())}
+pub fn ns_to_ticks_ceil(ns:u64)->u64{let unit=tick_ns();ns.saturating_add(unit-1)/unit}
+pub fn ticks_after_ns(ns:u64)->u64{crate::arch::x86_64::apic::ticks().saturating_add(ns_to_ticks_ceil(ns))}
+/// The tick at which a delay of `ns` nanoseconds is over. The delay is
+/// rounded down, so the deadline never lies behind the delay that was asked
+/// for. A delay shorter than a tick still waits for a tick.
+pub fn ticks_after_ns_floor(ns:u64)->u64{let n=ns/tick_ns();crate::arch::x86_64::apic::ticks().saturating_add(if n==0{1}else{n})}
 pub fn fill_random(out:&mut[u8]){let mut x=RNG.load(Ordering::Relaxed)^monotonic_ns().rotate_left(17);for b in out{x^=x<<13;x^=x>>7;x^=x<<17;*b=x as u8;}RNG.store(x,Ordering::Relaxed)}
 pub fn self_test()->bool{let a=monotonic_ns();let mut b=[0u8;16];fill_random(&mut b);monotonic_ns()>=a&&b.iter().any(|x|*x!=0)}
 --------------------------------------------------------------------------------

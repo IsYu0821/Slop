@@ -18,6 +18,12 @@
   reaches the final state of a connection
 - every user region (the program break, the anonymous mappings, the dynamic
   linker, the position independent image) in a page table slot of its own
+- a clock in real units: the rate of the time stamp counter is measured
+  against the programmable interval timer, the length of a timer tick is
+  measured against the counter, and the timer is programmed so a tick has
+  the same length on every machine
+- the interval timers, the processor time accounting and every other time
+  conversion follow the measured length of a tick
 
 ## Implemented in source, pending build/runtime validation
 
@@ -44,29 +50,22 @@
 
 ## Open defects
 
-- The differential battery stops at the processor time accounting. The
+- The differential battery stops at the processor time of a child. The
   reason is the missing vector system call entry point: on Linux a program
   that reads the clock does not enter the kernel, so the loop that measures
-  the clock spends its time in user mode and the user time of the process
+  the clock spends its time in user mode and the user time of the child
   grows. This kernel has no such entry point, so every clock reading is a
   system call and the time is charged to the kernel, which leaves the user
   time far below the value Linux reports. The clock itself is correct: the
   process clock, the thread clock and the wall clock agree.
-- The local APIC timer is not calibrated. The kernel counts one tick as a
-  millisecond, but the timer of the test machine runs at a different rate, so
-  the monotonic clock and the processor time are scaled wrongly. The rate has
-  to be measured against a real time source, the programmable interval timer
-  is the obvious candidate.
 
 ## Next in line for the Linux ABI
 
 1. A vector system call entry point, so a program can read the clock without
    entering the kernel. This closes the gap above and gives every Linux
    program the fast clock path it expects.
-2. A calibrated local APIC timer, so the monotonic clock and the processor
-   time are in real units.
-3. A real-time signal range with `sigqueue` and the queued values.
-4. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
-5. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
-6. The floating-point state in the ucontext, so a handler sees the registers.
-7. Copy-on-write for `fork`, which removes the deep copy of the private slots.
+2. A real-time signal range with `sigqueue` and the queued values.
+3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
+4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
+5. The floating-point state in the ucontext, so a handler sees the registers.
+6. Copy-on-write for `fork`, which removes the deep copy of the private slots.
