@@ -60,6 +60,28 @@ static int pt_ready;
 static volatile sig_atomic_t pt_got_usr1, pt_got_tid;
 static __thread int pt_tls_slot;
 
+/* A handler that records the value of a real-time signal. */
+static volatile int rt_hits;
+static volatile int rt_value = -1;
+static void rt_handler(int sig, siginfo_t *si, void *uc) {
+    (void)sig; (void)uc;
+    rt_hits++;
+    /* The value of a queued signal lives in the _rt member of the
+       information, thirty two bytes into the union: the two time fields,
+       then the value. */
+    rt_value = si ? si->si_value.sival_int : -1;
+}
+
+/* A handler that records where it ran. */
+static volatile int alt_hits;
+static volatile char *alt_sp;
+static char altstack[64 * 1024] __attribute__((aligned(16)));
+static void alt_handler(int sig) {
+    (void)sig;
+    alt_sp = (char *)__builtin_frame_address(0);
+    alt_hits++;
+}
+
 static void *pt_worker(void *arg) {
     long n = (long)arg;
     for (long i = 0; i < n; i++) {
@@ -103,6 +125,9 @@ static int fail(const char *what) {
 }
 
 int main(int argc, char **argv) {
+    sigset_t rt_set;
+    sigemptyset(&rt_set);
+    sigaddset(&rt_set, SIGRTMIN);
     if (argc > 1 && strcmp(argv[1], "cloexec-child") == 0) {
         if (fcntl(9, F_GETFD) == -1 && errno == EBADF) _exit(42);
         _exit(1);
@@ -219,6 +244,85 @@ int main(int argc, char **argv) {
         return fail("capget");
     if (syscall(SYS_capset, &cap_header, cap_data) != 0) return fail("capset unchanged");
     printf("DIFF_CAP_OK\n");
+
+    /* The real-time signals: a signal of the range 32 to 64, a value that
+       travels with it, and more than one instance of it waiting. */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_sigaction = rt_handler;
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGRTMIN, &sa, 0) != 0) return fail("rt sigaction");
+        rt_hits = 0;
+        rt_value = -1;
+        /* The value travels with the signal. */
+        union sigval sv;
+        sv.sival_int = 0x1234;
+        /* The signal is blocked, so it is unblocked for delivery. */
+        sigset_t old;
+        sigemptyset(&old);
+        sigprocmask(SIG_UNBLOCK, &rt_set, &old);
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) { printf("sigqueue errno=%d\n", errno); return fail("rt sigqueue"); }
+        struct timespec ts;
+        memset(&ts, 0, sizeof ts);
+        ts.tv_sec = 2;
+        /* The signal was delivered by the handler. */
+        if (rt_hits != 1) return fail("rt hits");
+        if (rt_value != 0x1234) return fail("rt value");
+        /* The signal has been delivered, so the mask is restored. */
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        /* The signal is blocked again, so nothing else is delivered. */
+        sigprocmask(SIG_BLOCK, &rt_set, NULL);
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        if (rt_hits != 1) return fail("rt hits");
+        if (rt_value != 0x1234) return fail("rt value");
+        /* Two instances of the same signal wait at the same time. */
+        rt_hits = 0;
+        sv.sival_int = 0x11;
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) return fail("rt sigqueue 2");
+        sv.sival_int = 0x22;
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) return fail("rt sigqueue 3");
+        memset(&ts, 0, sizeof ts);
+        ts.tv_sec = 2;
+        /* The second instance was already consumed by the handler. */
+        if (rt_hits != 2) return fail("rt hits 2");
+        /* A signal outside the range is refused. */
+        errno = 0;
+        if (sigqueue(getpid(), 65, sv) != -1 || errno != EINVAL)
+            return fail("rt range");
+        printf("DIFF_RTSIG_OK\n");
+    }
+
+    /* The alternate stack: a handler that asked for one runs on it. */
+    {
+        stack_t ss, old;
+        memset(&ss, 0, sizeof ss);
+        ss.ss_sp = altstack;
+        ss.ss_size = sizeof altstack;
+        ss.ss_flags = 0;
+        if (sigaltstack(&ss, NULL) != 0) return fail("sigaltstack");
+        if (old.ss_flags & SS_DISABLE) return fail("sigaltstack old");
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = alt_handler;
+        sa.sa_flags = SA_ONSTACK;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGUSR1, &sa, 0) != 0) return fail("altstack sigaction");
+        alt_hits = 0;
+        if (raise(SIGUSR1) != 0) return fail("altstack raise");
+        if (alt_hits != 1) return fail("altstack hits");
+        if (alt_sp < (char *)altstack || alt_sp >= (char *)altstack + sizeof altstack)
+            return fail("altstack position");
+        /* A stack that is too small is refused. */
+        stack_t small;
+        memset(&small, 0, sizeof small);
+        small.ss_sp = altstack;
+        small.ss_size = 16;
+        errno = 0;
+        if (sigaltstack(&small, 0) != -1 || errno != ENOMEM) return fail("altstack small");
+        printf("DIFF_ALTSTACK_OK\n");
+    }
 
     struct slop_sock_filter { uint16_t code; uint8_t jt, jf; uint32_t k; };
     struct slop_sock_fprog { uint16_t len; struct slop_sock_filter *filter; };

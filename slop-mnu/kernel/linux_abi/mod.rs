@@ -66,6 +66,8 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
     nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
     nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
+    nr::SIGQUEUE=>sys_sigqueue(a[0] as u32,a[1] as i32,a[2]),
+    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1],a[2]),
     nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
     nr::RT_SIGRETURN=>sys_rt_sigreturn(),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
@@ -98,7 +100,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::POLL=>sys_poll(a[0],a[1] as i32,a[2] as i32),
     nr::PPOLL=>sys_ppoll(a[0],a[1] as i32,a[2],a[3]),
     nr::RT_SIGSUSPEND=>sys_rt_sigsuspend(a[0]),
-    nr::SIGALTSTACK=>0,
+    nr::SIGALTSTACK=>sys_sigaltstack(a[0],a[1]),
     nr::GETDENTS=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::PREAD64=>sys_pread64(a[0],a[1],a[2] as i32,a[3] as i64),
     nr::PWRITE64=>sys_pwrite64(a[0],a[1],a[2] as i32,a[3] as i64),
@@ -276,6 +278,55 @@ fn sys_kill(pid:u32,sig:i32)->i64{
   if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
+}
+/* Sends a signal that carries a value. The value is a union of an integer
+   and a pointer; the kernel keeps the integer. */
+fn sys_sigqueue(pid:u32,sig:i32,value:u64)->i64{
+ if !crate::signal::valid(sig){return errno::neg(errno::EINVAL)}
+ let v=value as u32 as u64;
+ match crate::signal::send_value(pid,sig,v){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+/* Sends a signal that carries a value. The information is the published
+   one: the number of the signal, the code, the sender and the value. This
+   is the call the C library makes. */
+fn sys_rt_sigqueueinfo(pid:u32,info_ptr:u64,size:u64)->i64{
+ if size<24{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;24];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut b,info_ptr as usize){return errno::neg(e)}
+ let signo=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+ let code=i32::from_ne_bytes(b[8..12].try_into().unwrap());
+ let value=u64::from_ne_bytes(b[16..24].try_into().unwrap());
+ if !crate::signal::valid(signo){return errno::neg(errno::EINVAL)}
+ if code!=crate::signal::SI_QUEUE{return errno::neg(errno::EINVAL)}
+ match crate::signal::send_value(pid,signo,value as u32 as u64){Ok(())=>1,Err(e)=>errno::neg(e)}
+}
+/* Sets or reports the alternate stack a signal handler runs on. The layout
+   is the published one: the address, the flags and the size. */
+fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
+ if oldptr!=0{
+  let (a,f,sz)=crate::task::with_current_process(|p|(p.altstack_addr,p.altstack_flags,p.altstack_size)).unwrap_or((0,0,0));
+  let mut buf=[0u8;24];
+  buf[0..8].copy_from_slice(&a.to_ne_bytes());
+  buf[8..12].copy_from_slice(&(f as u32).to_ne_bytes());
+  buf[12..20].copy_from_slice(&sz.to_ne_bytes());
+  if let Err(e)=crate::usercopy::copy_to_user(oldptr as usize,&buf){return errno::neg(e)}
+ }
+ if newptr!=0{
+  let mut buf=[0u8;24];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut buf,newptr as usize){return errno::neg(e)}
+  let addr=u64::from_ne_bytes(buf[0..8].try_into().unwrap());
+  let flags=u32::from_ne_bytes(buf[8..12].try_into().unwrap()) as u64;
+  let size=u64::from_ne_bytes(buf[12..20].try_into().unwrap());
+  if flags&!(crate::signal::SS_ONSTACK|crate::signal::SS_DISABLE)!=0{return errno::neg(errno::EINVAL)}
+  let (addr,size)=if flags&crate::signal::SS_DISABLE!=0{(0,0)}else{
+   if size<crate::signal::MINSIGSTKSZ{return errno::neg(errno::ENOMEM)}
+   if addr==0{return errno::neg(errno::ENOMEM)}
+   if addr.checked_add(size).map_or(true,|e|e>=crate::usercopy::USER_MAX as u64){return errno::neg(errno::ENOMEM)}
+   (addr,size)
+  };
+  crate::task::with_current_process(|p|{p.altstack_addr=addr;p.altstack_size=size;p.altstack_flags=(flags&crate::signal::SS_ONSTACK) as u32;});
+ }
+ 0
 }
 fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
  /* Linux reports the previous disposition in oldact before installing the new one. */
@@ -1546,8 +1597,24 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    let m=p.pending&mask&!(crate::signal::unblockable_mask());
    if m==0{return None}
    let sig=(m.trailing_zeros()as i32)+1;
-   p.pending&=!crate::signal::bit(sig);
-   Some((sig,p.si_code[sig as usize],p.si_value[sig as usize],p.si_overrun[sig as usize]))
+   /* A real-time signal keeps the next instance in the queue; the value
+      comes from the front of the queue. */
+   let value=if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
+   }else{0};
+   if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    if p.rt_len[i]>0{
+     p.rt_len[i]-=1;
+     let n=p.rt_len[i] as usize;
+     let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
+     if p.rt_len[i]>0{p.pending|=crate::signal::bit(sig);}
+    }
+   }else{
+    p.pending&=!crate::signal::bit(sig);
+   }
+   Some((sig,p.si_code[sig as usize],value,p.si_overrun[sig as usize]))
   }).flatten();
   if let Some((sig,code,value,overrun))=found{
    if infoptr!=0{
@@ -1557,7 +1624,8 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    return sig as i64
   }
   if let Some(d)=deadline{
-   if crate::arch::x86_64::apic::ticks()>=d{return errno::neg(errno::EAGAIN)}
+   /* The deadline is an absolute time, so the wait uses the clock. */
+   if crate::time::monotonic_ns()>=crate::time::ticks_to_ns(d){return errno::neg(errno::EAGAIN)}
    crate::task::sleep_until(d);
   }else{
    crate::task::block_current();

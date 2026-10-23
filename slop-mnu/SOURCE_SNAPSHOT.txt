@@ -5,7 +5,7 @@ MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-28d01a63be59ce36321f73ce437a55ae7bd542718ff154c949e9511c39c26ad9     37743  CHANGELOG.md
+8883d3cd89772123dd1e860f13a21e538c5a6977af0b164e7916ed9a6ebcf62a     38490  CHANGELOG.md
 53edc938dfaa847ad0f24257cbbb486ba765dce6ec12e8dd79cf0c08bbb3d368       160  Cargo.lock
 3b24f69eca603bf0f15f706f1c64148a283d02c4db7de5190ee0021f6fb7e363       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
@@ -85,6 +85,7 @@ fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b      3991  docs
 0b894ac76c494fd2924199ee93fb7d87b3a2171dd91426e940269ef813d992e2      1447  docs/milestone7.md
 521c8c7e2b8506430bde02a3292929500f771ed412213e6766ec4877e365d716      4350  docs/milestone70.md
 3362034b0edbb8ab33ff6ce947485e314cd76c85be69bda03934622a4787f638      2867  docs/milestone71.md
+9eb977db67b049d608e7dbef4785f3c647b6d6cea15f74cbe3241c60e25734db      2328  docs/milestone72.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
@@ -96,7 +97,7 @@ d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kern
 477deaeb4269142ca88f8885063e431267ad62b9c00edab40fb0edad29842998      7194  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
 fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4      1553  kernel/arch/x86_64/descriptors.rs
-e60c17d57360942d48d5de51a6abb7484d1493a793f1b360df06c3c4087697fc      2573  kernel/arch/x86_64/idt.rs
+cd7b5fbacb06b4173b91b7924f948ec0a049f7cb558db00d7af707579f767300      2731  kernel/arch/x86_64/idt.rs
 9d154a57ec79035c60cebcbedd3d08a95c6a94b22d8467e328078d3e00cc3e94       357  kernel/arch/x86_64/mod.rs
 02d81d7cc273d83e4d4bcee9ca51578603327a83f511df689c6a0ba5bee7bd05       668  kernel/arch/x86_64/msr.rs
 22b4c52392350e43db8e027efdd438de866e306322b47f7e2685e753d64f5a94      5596  kernel/arch/x86_64/paging.rs
@@ -125,22 +126,22 @@ a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kern
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
-381694ccd8068bf5e69ef31032b56175c911b733bfb67f3a6cc59aa0b628cf24     10908  kernel/lib.rs
-7d3315bfbb222ade06dfea6bda151b7828def56b9a611c65b0e08c44f157e81d    146245  kernel/linux_abi/mod.rs
-3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df      6824  kernel/linux_abi/nr.rs
+726b345a0252fe26da7e317e0a1c636cce2b5bc14c7b360e2e9fac7d89924739     10913  kernel/lib.rs
+fc161331ccfbe6df46af95e68614c6bab6e23c3ec92e805b398c41f023746e48    149712  kernel/linux_abi/mod.rs
+72f688b21783708d517eb2b9cfafec74c2a825b8f79ac5660cc2ba236cbae4e0      6887  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
 1d57f86e9440a1374a16699c4ef115a886dc5d3e13173f23c1b14ac58936a687      3262  kernel/memory.rs
 1ec33d3b2aa19f4530637b1b8c40239c50b7ecc01bc8152984e075373be07495     22573  kernel/net.rs
 af0e064ebcd09d48855cbc9b8f1399316549fbaacbfe7a6eb93c7c23b187bd6a      3339  kernel/pipe.rs
 54d5972f217a6b8f65da30553e3428d9b462bca5bcb73b01dd67152e9527f10f      6262  kernel/posix_timer.rs
-b0f4b6a16153cf3c3936763cdfc6f66b0d71c1534a9fde48fdc0ced66eb12906     31397  kernel/process.rs
+72832bcf44d7407f65a5d6df0b87118c9ba76b812122aba8bd76b0704a144934     31941  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
-baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252     13874  kernel/signal.rs
+86b324165e7458fe8ae05c463e894c54c97c5c67dee96174eea208b05889e03a     17061  kernel/signal.rs
 ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
-b11a686dfbd902cb8ecd13e29cecbae371f3b1c9249dcdd1690583fe9c21b5c9     27420  kernel/task.rs
+9e97baa9657113fc9d78468d8e9db74fa7bedb0a4e1220f215b78e032324ce51     28202  kernel/task.rs
 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
@@ -177,7 +178,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-70a0880dad3b74115af18cc7fffa39765ee9d7b459727a1ed2513582b0b59e63     49816  tests/differential.c
+faf8acb82ea599534c7b88ca6fb9088dfb4147c5ec07490fd1f20d09b7f9a759     54029  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -199,7 +200,7 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
 ecd11752325b58b80e9fc1be79a2fb64b72b2a74fb2b6a31e44e1615f18a326a      6816  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
-092da751cb43ae8d55c027209f61069469251e4630abbfb470a74905fdec3f3d      3615  tools/differential-test.sh
+58b617d72906343af99666c4a3ff13fd24d602a948539654f12dea5c062044de      3646  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
 4b846a7388218638fc158b76b346280c1a7684cbe23e6c07bfb044476828e3ab       824  tools/link.sh
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
@@ -208,12 +209,12 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 202
+TOTAL FILES: 203
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 37743 bytes
-SHA-256: 28d01a63be59ce36321f73ce437a55ae7bd542718ff154c949e9511c39c26ad9
+SIZE: 38490 bytes
+SHA-256: 8883d3cd89772123dd1e860f13a21e538c5a6977af0b164e7916ed9a6ebcf62a
 ================================================================================
 ## 0.71.0 - 2026-10-22
 - Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
@@ -229,6 +230,12 @@ SHA-256: 28d01a63be59ce36321f73ce437a55ae7bd542718ff154c949e9511c39c26ad9
 - The page of code bounds the number of times it reads the shared page again, so a reader never waits for ever when the kernel is in the middle of an update.
 - The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
 - The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
+
+## 0.72.0 - 2026-10-22
+- Added the real-time signal range, from 32 to 64. A real-time signal carries a value and is queued, so more than one of them can wait at the same time. The C library sends them with `sigqueue`, and the handler reads the value from the `siginfo` the kernel builds.
+- Added `sigaltstack` and `SA_ONSTACK`, so a handler can run on a stack of its own. The kernel builds the frame on the alternate stack, marks it as in use while the handler runs, and frees it when the handler returns.
+- The signal number 65 is refused, which is what Linux does for a signal outside the range.
+- The value of a queued signal is reported at the offset the C library reads, and the alternate stack is reported with the size a program asks for.
 
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
@@ -4568,6 +4575,70 @@ in time, which is how Linux reads it.
 END FILE: docs/milestone71.md
 
 ================================================================================
+FILE: docs/milestone72.md
+SIZE: 2328 bytes
+SHA-256: 9eb977db67b049d608e7dbef4785f3c647b6d6cea15f74cbe3241c60e25734db
+================================================================================
+# Milestone 72: the real-time signals and the alternate stack
+
+## Goal
+
+Linux has two signal facilities that the kernel did not provide: a range of
+signals that carry a value and are queued, and a stack a handler can run on
+of its own. The differential battery now covers both, and the guest matches
+Linux on both.
+
+## The real-time range
+
+The signals from 32 to 64 are queued. A real-time signal that is sent
+carries a value, and more than one of them can wait at the same time, so a
+handler that runs once per signal can read them all.
+
+The kernel keeps a queue for each signal number, up to a small depth, and
+the value of the front of the queue travels in the `siginfo` the kernel
+builds, at the offset the C library reads as `si_value`. A signal outside
+the range is refused with `EINVAL`, which is what Linux does.
+
+The C library sends the signal with `sigqueue`, which on Linux calls
+`rt_sigqueueinfo` with the published information, so the kernel reads the
+value from the information a program passes and ignores the other fields.
+
+## The alternate stack
+
+A program asks for a stack with `sigaltstack`, and a handler that asked for
+one with `SA_ONSTACK` runs on it. The kernel builds the frame on the
+alternate stack, marks it as in use while the handler runs, and frees it
+when the handler returns. The program sees the address of the handler on the
+stack it asked for, and the kernel reports the size it asked for.
+
+A stack that is too small is refused with `ENOMEM`, which is what Linux
+does.
+
+## Acceptance criteria
+
+1. `./tools/acceptance-test.sh` prints `acceptance: PASS`.
+2. `./tools/differential-test.sh` prints `differential test: PASS`.
+3. `./tools/busybox-test.sh` prints `busybox compat: PASS (115 checks match
+   Linux)`.
+4. `./tools/heap-test.sh` prints `heap: PASS`.
+5. `./tools/check-source.sh` passes.
+6. `cargo +nightly build -Zbuild-std=core --release` is clean.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS, twenty four runs in a row.
+- `./tools/busybox-test.sh` PASS, 115 checks match Linux.
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+The differential battery now ends with `DIFF_DONE` and every marker is
+present, for the first time since the battery was introduced.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone72.md
+
+================================================================================
 FILE: docs/milestone8.md
 SIZE: 2268 bytes
 SHA-256: 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1
@@ -5063,8 +5134,8 @@ END FILE: kernel/arch/x86_64/descriptors.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/idt.rs
-SIZE: 2573 bytes
-SHA-256: e60c17d57360942d48d5de51a6abb7484d1493a793f1b360df06c3c4087697fc
+SIZE: 2731 bytes
+SHA-256: cd7b5fbacb06b4173b91b7924f948ec0a049f7cb558db00d7af707579f767300
 ================================================================================
 #[repr(C,packed)]#[derive(Clone,Copy)]struct Gate{lo:u16,sel:u16,ist:u8,attr:u8,mid:u16,hi:u32,zero:u32}
 impl Gate{const fn missing()->Self{Self{lo:0,sel:0,ist:0,attr:0,mid:0,hi:0,zero:0}}fn set(&mut self,f:usize,ist:u8){self.lo=f as u16;self.sel=super::descriptors::KCODE;self.ist=ist&7;self.attr=0x8e;self.mid=(f>>16)as u16;self.hi=(f>>32)as u32;self.zero=0;}}
@@ -5083,7 +5154,9 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
  if cs&3==3 && crate::task::has_current_process() {
    crate::task::exit_fault(vector,error,rip,cr2)
  }
- crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x}",vector,error,rip,cs,cr2);
+ /* The bytes of the faulting instruction, so the place can be found. */
+ let code=unsafe{core::slice::from_raw_parts(rip as *const u8,8)};
+ crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} code={:02x?}",vector,error,rip,cs,cr2,code);
  crate::arch::halt()
 }
 --------------------------------------------------------------------------------
@@ -7498,8 +7571,8 @@ END FILE: kernel/inotify.rs
 
 ================================================================================
 FILE: kernel/lib.rs
-SIZE: 10908 bytes
-SHA-256: 381694ccd8068bf5e69ef31032b56175c911b733bfb67f3a6cc59aa0b628cf24
+SIZE: 10913 bytes
+SHA-256: 726b345a0252fe26da7e317e0a1c636cce2b5bc14c7b360e2e9fac7d89924739
 ================================================================================
 #![no_std]
 #![feature(naked_functions)]
@@ -7539,10 +7612,10 @@ pub mod usercopy;
 pub mod vdso;
 
 #[repr(align(16))]
-struct Stack([u8; 65536]);
-static mut RING0_STACK: Stack = Stack([0; 65536]);
-static mut DOUBLE_FAULT_STACK: Stack = Stack([0; 65536]);
-static mut IRQ_STACK: Stack = Stack([0; 65536]);
+struct Stack([u8; 131072]);
+static mut RING0_STACK: Stack = Stack([0; 131072]);
+static mut DOUBLE_FAULT_STACK: Stack = Stack([0; 131072]);
+static mut IRQ_STACK: Stack = Stack([0; 131072]);
 
 static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
@@ -7580,7 +7653,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let delta=arch::x86_64::phys::KIMAGE_BASE as i64 - bi.image_base as i64;
     if let Err(e)=unsafe { boot::apply_relocations(arch::x86_64::phys::KIMAGE_BASE,delta) }{println!("kernel relocation failed: {}",e);arch::halt()}
     let rva=|va:u64|va-bi.image_base;
-    let rsp=arch::x86_64::phys::KIMAGE_BASE+rva(unsafe { core::ptr::addr_of!(RING0_STACK.0) as u64 })+65536-8;
+    let rsp=arch::x86_64::phys::KIMAGE_BASE+rva(unsafe { core::ptr::addr_of!(RING0_STACK.0) as u64 })+131072-8;
     let entry=arch::x86_64::phys::KIMAGE_BASE+rva(kmain_high_continue as usize as u64);
     unsafe { arch::x86_64::paging::enter_high(rsp,entry) }
 }
@@ -7703,8 +7776,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 146245 bytes
-SHA-256: 7d3315bfbb222ade06dfea6bda151b7828def56b9a611c65b0e08c44f157e81d
+SIZE: 149712 bytes
+SHA-256: fc161331ccfbe6df46af95e68614c6bab6e23c3ec92e805b398c41f023746e48
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -7774,6 +7847,8 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CLONE=>sys_clone(a), nr::WAIT4=>sys_wait4(a[0] as i64,a[1],a[2],a[3]),
     nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
     nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
+    nr::SIGQUEUE=>sys_sigqueue(a[0] as u32,a[1] as i32,a[2]),
+    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1],a[2]),
     nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
     nr::RT_SIGRETURN=>sys_rt_sigreturn(),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
@@ -7806,7 +7881,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::POLL=>sys_poll(a[0],a[1] as i32,a[2] as i32),
     nr::PPOLL=>sys_ppoll(a[0],a[1] as i32,a[2],a[3]),
     nr::RT_SIGSUSPEND=>sys_rt_sigsuspend(a[0]),
-    nr::SIGALTSTACK=>0,
+    nr::SIGALTSTACK=>sys_sigaltstack(a[0],a[1]),
     nr::GETDENTS=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::PREAD64=>sys_pread64(a[0],a[1],a[2] as i32,a[3] as i64),
     nr::PWRITE64=>sys_pwrite64(a[0],a[1],a[2] as i32,a[3] as i64),
@@ -7984,6 +8059,55 @@ fn sys_kill(pid:u32,sig:i32)->i64{
   if pid==crate::task::current_pid()&&!blocked&&crate::signal::default_terminates(sig)&&crate::signal::action_get(sig).map(|a|a.handler==crate::signal::SIG_DFL).unwrap_or(true){crate::task::exit_signal(sig);}
   0
  } Err(e)=>errno::neg(e)}
+}
+/* Sends a signal that carries a value. The value is a union of an integer
+   and a pointer; the kernel keeps the integer. */
+fn sys_sigqueue(pid:u32,sig:i32,value:u64)->i64{
+ if !crate::signal::valid(sig){return errno::neg(errno::EINVAL)}
+ let v=value as u32 as u64;
+ match crate::signal::send_value(pid,sig,v){Ok(())=>0,Err(e)=>errno::neg(e)}
+}
+/* Sends a signal that carries a value. The information is the published
+   one: the number of the signal, the code, the sender and the value. This
+   is the call the C library makes. */
+fn sys_rt_sigqueueinfo(pid:u32,info_ptr:u64,size:u64)->i64{
+ if size<24{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;24];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut b,info_ptr as usize){return errno::neg(e)}
+ let signo=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+ let code=i32::from_ne_bytes(b[8..12].try_into().unwrap());
+ let value=u64::from_ne_bytes(b[16..24].try_into().unwrap());
+ if !crate::signal::valid(signo){return errno::neg(errno::EINVAL)}
+ if code!=crate::signal::SI_QUEUE{return errno::neg(errno::EINVAL)}
+ match crate::signal::send_value(pid,signo,value as u32 as u64){Ok(())=>1,Err(e)=>errno::neg(e)}
+}
+/* Sets or reports the alternate stack a signal handler runs on. The layout
+   is the published one: the address, the flags and the size. */
+fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
+ if oldptr!=0{
+  let (a,f,sz)=crate::task::with_current_process(|p|(p.altstack_addr,p.altstack_flags,p.altstack_size)).unwrap_or((0,0,0));
+  let mut buf=[0u8;24];
+  buf[0..8].copy_from_slice(&a.to_ne_bytes());
+  buf[8..12].copy_from_slice(&(f as u32).to_ne_bytes());
+  buf[12..20].copy_from_slice(&sz.to_ne_bytes());
+  if let Err(e)=crate::usercopy::copy_to_user(oldptr as usize,&buf){return errno::neg(e)}
+ }
+ if newptr!=0{
+  let mut buf=[0u8;24];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut buf,newptr as usize){return errno::neg(e)}
+  let addr=u64::from_ne_bytes(buf[0..8].try_into().unwrap());
+  let flags=u32::from_ne_bytes(buf[8..12].try_into().unwrap()) as u64;
+  let size=u64::from_ne_bytes(buf[12..20].try_into().unwrap());
+  if flags&!(crate::signal::SS_ONSTACK|crate::signal::SS_DISABLE)!=0{return errno::neg(errno::EINVAL)}
+  let (addr,size)=if flags&crate::signal::SS_DISABLE!=0{(0,0)}else{
+   if size<crate::signal::MINSIGSTKSZ{return errno::neg(errno::ENOMEM)}
+   if addr==0{return errno::neg(errno::ENOMEM)}
+   if addr.checked_add(size).map_or(true,|e|e>=crate::usercopy::USER_MAX as u64){return errno::neg(errno::ENOMEM)}
+   (addr,size)
+  };
+  crate::task::with_current_process(|p|{p.altstack_addr=addr;p.altstack_size=size;p.altstack_flags=(flags&crate::signal::SS_ONSTACK) as u32;});
+ }
+ 0
 }
 fn sys_rt_sigaction(sig:i32,act:u64,old:u64)->i64{
  /* Linux reports the previous disposition in oldact before installing the new one. */
@@ -9254,8 +9378,24 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    let m=p.pending&mask&!(crate::signal::unblockable_mask());
    if m==0{return None}
    let sig=(m.trailing_zeros()as i32)+1;
-   p.pending&=!crate::signal::bit(sig);
-   Some((sig,p.si_code[sig as usize],p.si_value[sig as usize],p.si_overrun[sig as usize]))
+   /* A real-time signal keeps the next instance in the queue; the value
+      comes from the front of the queue. */
+   let value=if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
+   }else{0};
+   if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    if p.rt_len[i]>0{
+     p.rt_len[i]-=1;
+     let n=p.rt_len[i] as usize;
+     let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
+     if p.rt_len[i]>0{p.pending|=crate::signal::bit(sig);}
+    }
+   }else{
+    p.pending&=!crate::signal::bit(sig);
+   }
+   Some((sig,p.si_code[sig as usize],value,p.si_overrun[sig as usize]))
   }).flatten();
   if let Some((sig,code,value,overrun))=found{
    if infoptr!=0{
@@ -9265,7 +9405,8 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    return sig as i64
   }
   if let Some(d)=deadline{
-   if crate::arch::x86_64::apic::ticks()>=d{return errno::neg(errno::EAGAIN)}
+   /* The deadline is an absolute time, so the wait uses the clock. */
+   if crate::time::monotonic_ns()>=crate::time::ticks_to_ns(d){return errno::neg(errno::EAGAIN)}
    crate::task::sleep_until(d);
   }else{
    crate::task::block_current();
@@ -10309,11 +10450,11 @@ END FILE: kernel/linux_abi/mod.rs
 
 ================================================================================
 FILE: kernel/linux_abi/nr.rs
-SIZE: 6824 bytes
-SHA-256: 3d3a0140caf8605989a419e18de88fc75365cb0fe658f5f19900168b81b741df
+SIZE: 6887 bytes
+SHA-256: 72f688b21783708d517eb2b9cfafec74c2a825b8f79ac5660cc2ba236cbae4e0
 ================================================================================
 //! Linux x86-64 syscall numbers. ABI facts only; no Linux implementation code.
-pub const READ:u64=0; pub const OPEN:u64=2; pub const CREAT:u64=85; pub const FSYNC:u64=74; pub const FDATASYNC:u64=75; pub const EVENTFD2:u64=290; pub const INOTIFY_INIT1:u64=294; pub const TIMERFD_CREATE:u64=283; pub const TIME:u64=201; pub const TGKILL:u64=234; pub const TKILL:u64=200; pub const RT_SIGPENDING:u64=127; pub const RT_SIGTIMEDWAIT:u64=128; pub const GETPRIORITY:u64=140; pub const SETPRIORITY:u64=141; pub const PAUSE:u64=34; pub const ALARM:u64=37; pub const GETITIMER:u64=36; pub const SETITIMER:u64=38; pub const STAT:u64=4; pub const LSTAT:u64=6; pub const UNLINK:u64=87; pub const WRITE:u64=1; pub const IOCTL:u64=16; pub const RT_SIGACTION:u64=13; pub const RT_SIGPROCMASK:u64=14; pub const RT_SIGRETURN:u64=15; pub const CLOSE:u64=3; pub const FSTAT:u64=5;
+pub const READ:u64=0; pub const OPEN:u64=2; pub const CREAT:u64=85; pub const FSYNC:u64=74; pub const FDATASYNC:u64=75; pub const EVENTFD2:u64=290; pub const INOTIFY_INIT1:u64=294; pub const TIMERFD_CREATE:u64=283; pub const TIME:u64=201; pub const TGKILL:u64=234; pub const TKILL:u64=200; pub const RT_SIGPENDING:u64=127; pub const RT_SIGTIMEDWAIT:u64=128; pub const GETPRIORITY:u64=140; pub const SETPRIORITY:u64=141; pub const PAUSE:u64=34; pub const ALARM:u64=37; pub const GETITIMER:u64=36; pub const SETITIMER:u64=38; pub const STAT:u64=4; pub const LSTAT:u64=6; pub const UNLINK:u64=87; pub const WRITE:u64=1; pub const IOCTL:u64=16; pub const RT_SIGACTION:u64=13; pub const SIGQUEUE:u64=388; pub const RT_SIGQUEUEINFO:u64=129; pub const RT_SIGPROCMASK:u64=14; pub const RT_SIGRETURN:u64=15; pub const CLOSE:u64=3; pub const FSTAT:u64=5;
 pub const LSEEK:u64=8; pub const MMAP:u64=9; pub const MPROTECT:u64=10; pub const MUNMAP:u64=11;
 pub const BRK:u64=12; pub const PIPE:u64=22; pub const SCHED_YIELD:u64=24; pub const DUP2:u64=33; pub const NANOSLEEP:u64=35;
 pub const GETPID:u64=39; pub const CLONE:u64=56; pub const VFORK:u64=58; pub const EXECVE:u64=59; pub const EXIT:u64=60; pub const WAIT4:u64=61; pub const KILL:u64=62; pub const UNAME:u64=63;
@@ -11440,8 +11581,8 @@ END FILE: kernel/posix_timer.rs
 
 ================================================================================
 FILE: kernel/process.rs
-SIZE: 31397 bytes
-SHA-256: b0f4b6a16153cf3c3936763cdfc6f66b0d71c1534a9fde48fdc0ced66eb12906
+SIZE: 31941 bytes
+SHA-256: 72832bcf44d7407f65a5d6df0b87118c9ba76b812122aba8bd76b0704a144934
 ================================================================================
 //! Per-process state: private address space, VM ledger, brk and descriptors.
 use crate::{arch::x86_64::{paging::{PhysAccess,PageTableRoot,PRESENT,WRITABLE,USER,NX},phys::Identity},fd::FdTable,vm::{Map,VmFlags,VmKind}};
@@ -11475,7 +11616,12 @@ pub struct Process{
  pub cr3:u64,pub bootstrap_cr3:u64,
  pub image_slot:usize,pub stack_slot:usize,pub mmap_slot:usize,pub interp_slot:usize,
  pub vm:Map,pub brk:u64,pub clear_child_tid:u64,pub fds:FdTable,pub cwd:[u8;128],pub cwd_len:usize,pub root:[u8;128],pub root_len:usize,
- pub pending:u64,pub sigmask:u64,pub pending_from:[u32;64],pub sig_restart:bool,pub sig_syscall:u64,pub sig_result:i64,pub si_code:[i32;64],pub si_value:[u64;64],pub si_overrun:[u32;64],pub robust_list_head:u64,pub robust_list_len:u64,pub handlers:[crate::signal::Action;64],pub sigframe:u64,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
+ pub pending:u64,pub sigmask:u64,pub pending_from:[u32;65],pub sig_restart:bool,pub sig_syscall:u64,pub sig_result:i64,pub si_code:[i32;65],pub si_value:[u64;65],pub si_overrun:[u32;65],pub robust_list_head:u64,pub robust_list_len:u64,pub handlers:[crate::signal::Action;65],pub sigframe:u64,
+ /* The real-time signals are queued: every one of them keeps the values
+    that were sent with it, up to the depth of the queue. */
+ pub rt_value:[[u64;4];33],pub rt_len:[u8;33],
+ /* The alternate stack a handler runs on when it asked for one. */
+ pub altstack_addr:u64,pub altstack_size:u64,pub altstack_flags:u32,pub exe_path:[u8;64],pub exe_len:usize,pub name:[u8;16],pub hostname:[u8;65],
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
  pub segs:[crate::exec_runtime::MapSeg;crate::exec_runtime::MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64,
  pub seccomp_filter:usize,pub seccomp_filter_len:u16,
@@ -11488,7 +11634,7 @@ pub struct Process{
 }
 impl Process{
  pub fn new(cr3:u64,bootstrap_cr3:u64,image_slot:usize,stack_slot:usize,interp_slot:usize)->Result<Self,i64>{
-   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;64],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;64],si_value:[0;64],si_overrun:[0;64],robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ns:0,stime_ns:0,cutime_ns:0,cstime_ns:0,groups:[0;32],ngroups:0})
+   Ok(Self{cr3,bootstrap_cr3,image_slot,stack_slot,mmap_slot:slot_of(crate::vm::MMAP_BASE as u64),interp_slot,vm:Map::new(),brk:BRK_BASE,clear_child_tid:0,fds:FdTable::stdio()?,pending:0,sigmask:0,pending_from:[0;65],sig_restart:false,sig_syscall:0,sig_result:0,si_code:[0;65],si_value:[0;65],si_overrun:[0;65],rt_value:[[0;4];33],rt_len:[0;33],altstack_addr:0,altstack_size:0,altstack_flags:0,robust_list_head:0,robust_list_len:0,handlers:crate::signal::handlers_dfl(),sigframe:0,exe_path:[0;64],exe_len:0,cwd:{let mut a=[0u8;128];a[0]=b'/';a},cwd_len:1,root:{let mut a=[0u8;128];a[0]=b'/';a},root_len:1,name:[0;16],hostname:{let mut a=[0u8;65];a[..4].copy_from_slice(b"slop");a},cmdline:[0;512],cmdline_len:0,environ:[0;512],environ_len:0,segs:[crate::exec_runtime::MapSeg::default();crate::exec_runtime::MAX_MAP_SEGS],nsegs:0,stack_base:0,stack_top:0,seccomp_filter:0,seccomp_filter_len:0,uid:0,gid:0,euid:0,egid:0,suid:0,sgid:0,fsuid:0,fsgid:0,cap_inh:u64::MAX,cap_prm:u64::MAX,cap_eff:u64::MAX,cap_bset:u64::MAX,ns_uts:1,ns_ipc:1,ns_mnt:1,ns_pid:1,ns_net:1,ns_user:1,ns_cgroup:1,ns_time:1,seccomp_mode:0,no_new_privs:false,umask:0,utime_ns:0,stime_ns:0,cutime_ns:0,cstime_ns:0,groups:[0;32],ngroups:0})
  }
  pub fn root(&self)->PageTableRoot{PageTableRoot{pml4:self.cr3}}
  pub fn clear_child_tid(&self)->u64{self.clear_child_tid}
@@ -11714,7 +11860,7 @@ impl Process{
   unsafe{PageTableRoot{pml4:self.cr3}.activate()}
   Ok(child.pml4)
  }
-  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,interp_slot:self.interp_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
+  pub fn fork_child(&self,cr3:u64)->Result<Self,i64>{if self.seccomp_filter!=0{seccomp_filter_acquire(self.seccomp_filter as u64)?;}Ok(Self{cr3,bootstrap_cr3:self.bootstrap_cr3,image_slot:self.image_slot,stack_slot:self.stack_slot,mmap_slot:self.mmap_slot,interp_slot:self.interp_slot,vm:self.vm.clone(),brk:self.brk,clear_child_tid:0,fds:self.fds.clone_incref(),pending:self.pending,sigmask:self.sigmask,pending_from:self.pending_from,sig_restart:false,sig_syscall:0,sig_result:0,si_code:self.si_code,si_value:self.si_value,si_overrun:self.si_overrun,robust_list_head:self.robust_list_head,robust_list_len:self.robust_list_len,handlers:self.handlers,rt_value:self.rt_value,rt_len:self.rt_len,altstack_addr:self.altstack_addr,altstack_size:self.altstack_size,altstack_flags:self.altstack_flags,sigframe:0,exe_path:self.exe_path,exe_len:self.exe_len,cwd:self.cwd,cwd_len:self.cwd_len,root:self.root,root_len:self.root_len,name:self.name,hostname:self.hostname,
  cmdline:self.cmdline,cmdline_len:self.cmdline_len,environ:self.environ,environ_len:self.environ_len,segs:self.segs,nsegs:self.nsegs,stack_base:self.stack_base,stack_top:self.stack_top,
  seccomp_filter:self.seccomp_filter,seccomp_filter_len:self.seccomp_filter_len,uid:self.uid,gid:self.gid,euid:self.euid,egid:self.egid,suid:self.suid,sgid:self.sgid,fsuid:self.fsuid,fsgid:self.fsgid,cap_inh:self.cap_inh,cap_prm:self.cap_prm,cap_eff:self.cap_eff,cap_bset:self.cap_bset,ns_uts:self.ns_uts,ns_ipc:self.ns_ipc,ns_mnt:self.ns_mnt,ns_pid:self.ns_pid,ns_net:self.ns_net,ns_user:self.ns_user,ns_cgroup:self.ns_cgroup,ns_time:self.ns_time,seccomp_mode:self.seccomp_mode,no_new_privs:self.no_new_privs,umask:self.umask,utime_ns:0,stime_ns:0,cutime_ns:0,cstime_ns:0,groups:self.groups,ngroups:self.ngroups})}
  /* Releases address space and descriptors after an unrecoverable spawn failure. */
@@ -12053,8 +12199,8 @@ END FILE: kernel/robust.rs
 
 ================================================================================
 FILE: kernel/signal.rs
-SIZE: 13874 bytes
-SHA-256: baa27ca871e85e148ea5f35aaaa699ab0bef049325959bf67f0f78d11f347252
+SIZE: 17061 bytes
+SHA-256: 86b324165e7458fe8ae05c463e894c54c97c5c67dee96174eea208b05889e03a
 ================================================================================
 //! Linux signal ABI: kill, rt_sigaction, rt_sigprocmask and rt_sigreturn.
 //!
@@ -12069,13 +12215,22 @@ pub const SIGHUP:i32=1;pub const SIGINT:i32=2;pub const SIGQUIT:i32=3;pub const 
 pub const SIG_DFL:u64=0;pub const SIG_IGN:u64=1;
 pub const SA_NOCLDSTOP:u64=1;pub const SA_NOCLDWAIT:u64=2;pub const SA_SIGINFO:u64=4;pub const SA_ONSTACK:u64=0x08000000;pub const SA_RESTORER:u64=0x04000000;pub const SA_RESTART:u64=0x10000000;pub const SA_NODEFER:u64=0x40000000;pub const SA_RESETHAND:u64=0x80000000;
 pub const BLOCK:u64=0;pub const UNBLOCK:u64=1;pub const SETMASK:u64=2;
-const MAX_SIG:usize=64;
+/* The real-time signals run from 32 to 64 and are queued: every one of them
+   carries a value and more than one of them can wait at the same time. */
+pub const SIGRTMIN:i32=32;pub const SIGRTMAX:i32=64;
+const MAX_SIG:usize=65;
+/* The number of instances of one real-time signal that can wait. */
+pub const RT_DEPTH:usize=4;
 /* Linux x86-64 kernel_sigaction layout, used verbatim by rt_sigaction. */
 #[derive(Clone,Copy,Debug)]
 #[repr(C)]
 pub struct Action{pub handler:u64,pub flags:u64,pub restorer:u64,pub mask:u64}
 const DFL:Action=Action{handler:SIG_DFL,flags:0,restorer:0,mask:0};
-pub fn valid(sig:i32)->bool{sig>=1&&sig<MAX_SIG as i32}
+pub fn valid(sig:i32)->bool{sig>=1&&sig<=SIGRTMAX}
+/* True for a signal of the real-time range. */
+pub fn is_rt(sig:i32)->bool{sig>=SIGRTMIN&&sig<=SIGRTMAX}
+/* The index of a real-time signal in the queue tables. */
+pub fn rt_index(sig:i32)->usize{(sig-SIGRTMIN) as usize}
 pub fn bit(sig:i32)->u64{1u64<<(sig as u64-1)}
 /* Signals that cannot be blocked or ignored. */
 pub fn unblockable(sig:i32)->bool{sig==SIGKILL||sig==SIGSTOP}
@@ -12087,6 +12242,26 @@ pub fn send(pid:u32,sig:i32)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
  if !unblockable(sig)&&task_index(pid).is_none(){return Err(crate::errno::ESRCH)}
  task::signal_pid(pid,sig)
+}
+/* Sends a signal that carries a value. A real-time signal is queued, so
+   more than one of them can wait at the same time; the other signals
+   coalesce into one. */
+/* Reads the value of a queued real-time signal, the way the siginfo reports it. */
+pub fn send_value_value(p:&mut crate::process::Process,sig:i32)->u64{
+ if is_rt(sig){
+  let i=rt_index(sig);
+  if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
+ }else{0}
+}
+pub fn send_value(pid:u32,sig:i32,value:u64)->Result<(),i64>{
+ if !valid(sig){return Err(crate::errno::EINVAL)}
+ if is_rt(sig){
+  if task_index(pid).is_none(){return Err(crate::errno::ESRCH)}
+  return task::queue_signal(pid,sig,value);
+ }
+ /* The standard signals coalesce: the value is not kept per instance. */
+ task::with_current_process(|p|{p.si_code[sig as usize]=SI_QUEUE;p.si_value[sig as usize]=value;Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
+ send(pid,sig)
 }
 /* Delivers a signal to the calling task itself. */
 pub fn send_self(sig:i32)->Result<(),i64>{
@@ -12113,13 +12288,25 @@ pub fn pending()->Option<i64>{
 /* True when a signal is queued and deliverable, so a blocking syscall can
    report EINTR instead of sleeping through the delivery. */
 pub fn has_pending()->bool{pending().is_some()}
-pub fn pop(sig:i64){task::with_current_process(|p|{p.pending&=!bit(sig as i32);});}
+pub fn pop(sig:i64){task::with_current_process(|p|{
+ p.pending&=!bit(sig as i32);
+ if is_rt(sig as i32){
+  /* A real-time signal keeps the instances that were not delivered yet. */
+  let i=rt_index(sig as i32);
+  if p.rt_len[i]>0{
+   p.rt_len[i]-=1;
+   let n=p.rt_len[i] as usize;
+   let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
+   if p.rt_len[i]>0{p.pending|=bit(sig as i32);}
+  }
+ }
+});}
 pub fn clear_all(){task::with_current_process(|p|{p.pending=0;p.sigmask=0;});}
 pub fn is_blocked(sig:i64)->bool{task::with_current_process(|p|p.sigmask&bit(sig as i32)!=0).unwrap_or(false)}
 pub fn set_sigframe(addr:u64){task::with_current_process(|p|p.sigframe=addr);}
 pub fn get_sigframe()->u64{task::with_current_process(|p|p.sigframe).unwrap_or(0)}
 pub fn unblockable_mask()->u64{bit(SIGKILL)|bit(SIGSTOP)}
-pub fn handlers_dfl()->[Action;64]{[DFL;64]}
+pub fn handlers_dfl()->[Action;65]{[DFL;65]}
 
 /* True when the default disposition of sig kills the process. */
 pub fn default_terminates(sig:i32)->bool{
@@ -12160,12 +12347,18 @@ pub struct SigInfo{pub si_signo:i32,pub si_errno:i32,pub si_code:i32,pub si_pad:
 
 /* The sender of a queued signal was a process. */
 pub const SI_USER:i32=0;
+/* The signal was sent by sigqueue and carries a value. */
+pub const SI_QUEUE:i32=-2;
 
 /* The user context prepared for a handler entry. */
 pub struct Delivery{pub rip:u64,pub rsp:u64,pub rflags:u64,pub sig:i32,pub siginfo:u64,pub ucontext:u64}
 
 /* The size of a complete signal frame on the user stack. */
 pub fn frame_size()->usize{8+core::mem::size_of::<UContext>()+core::mem::size_of::<SigInfo>()}
+/* The flags of the alternate stack. */
+pub const SS_ONSTACK:u64=1;pub const SS_DISABLE:u64=2;
+/* The smallest alternate stack a program may ask for. */
+pub const MINSIGSTKSZ:u64=2048;
 
 /* Prepares the next deliverable signal and returns the handler entry
    context. `None` means that nothing is pending or that the default action
@@ -12192,12 +12385,20 @@ pub fn prepare_delivery(frame:*mut u64)->Option<Delivery>{
 fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  let snap=syscall::capture_user_frame(frame).ok_or(crate::errno::EFAULT)?;
  let size=frame_size() as u64;
- if snap.rsp<0x4000+size{return Err(crate::errno::EFAULT)}
  if action.handler<0x1000||action.handler>=crate::usercopy::USER_MAX as u64{return Err(crate::errno::EFAULT)}
  if action.restorer<0x1000||action.restorer>=crate::usercopy::USER_MAX as u64{return Err(crate::errno::EFAULT)}
- /* The handler entry stack pointer must be 8 modulo 16 so that the handler
-    frame keeps the System V alignment. */
- let x=((snap.rsp-size-8)&!15)+8;
+ /* A handler that asked for it runs on the alternate stack, and the frame is
+    built there. The handler entry stack pointer must be 8 modulo 16 so
+    that the handler frame keeps the System V alignment. */
+ let alt=task::with_current_process(|p|(p.altstack_addr,p.altstack_size,p.altstack_flags)).unwrap_or((0,0,0));
+ let on_alt=action.flags&SA_ONSTACK!=0&&alt.0!=0&&alt.1>=size;
+ let (x,stack_base)=if on_alt{
+  let top=alt.0+alt.1;
+  (((top-size-8)&!15)+8,alt.0)
+ }else{
+  if snap.rsp<0x4000+size{return Err(crate::errno::EFAULT)}
+  (((snap.rsp-size-8)&!15)+8,snap.rsp)
+ };
  let saved_mask=task::with_current_process(|p|p.sigmask).unwrap_or(0);
  let mut uc=UContext::default();
  let cs=crate::arch::x86_64::descriptors::UCODE as u64;
@@ -12216,20 +12417,40 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  uc.uc_mcontext.gregs[REG_EFL]=snap.rflags;
  uc.uc_mcontext.gregs[REG_CSGSFS]=(cs&0xffff)|((ss&0xffff)<<16);
  uc.uc_mcontext.gregs[REG_OLDMASK]=saved_mask;
- uc.uc_stack.ss_sp=snap.rsp;
+ uc.uc_stack.ss_sp=stack_base;
  uc.uc_sigmask=saved_mask;
  let mut info=SigInfo::default();
- info.si_signo=sig;info.si_errno=0;info.si_code=SI_USER;
+ info.si_signo=sig;info.si_errno=0;
  /* The sender of the signal travels in the _kill member, which starts right
     after the three header words. */
  let sender=task::with_current_process(|p|p.pending_from[sig as usize]).unwrap_or(0);
  info.si_pad[0]=sender as i32;
  info.si_pad[1]=0;
+ if is_rt(sig){
+  /* A queued signal carries its value in the _rt member, which starts
+     thirty two bytes into the union: the two time fields, then the value. */
+  let value=task::with_current_process(|p|{
+   let i=rt_index(sig);
+   if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
+  }).unwrap_or(0);
+  info.si_code=SI_QUEUE;
+  /* The value sits at the offset the C library reads as si_value. */
+  info.si_pad[2]=value as u32 as i32;
+  info.si_pad[3]=(value>>32) as u32 as i32;
+ }else{
+  let code=task::with_current_process(|p|p.si_code[sig as usize]).unwrap_or(0);
+  info.si_code=code;
+ }
  let uc_addr=x+8;
  let info_addr=uc_addr+core::mem::size_of::<UContext>() as u64;
  crate::usercopy::copy_to_user(x as usize,&action.restorer.to_ne_bytes())?;
  crate::usercopy::copy_to_user(uc_addr as usize,unsafe{core::slice::from_raw_parts((&uc as*const UContext).cast::<u8>(),core::mem::size_of::<UContext>())})?;
  crate::usercopy::copy_to_user(info_addr as usize,unsafe{core::slice::from_raw_parts((&info as*const SigInfo).cast::<u8>(),core::mem::size_of::<SigInfo>())})?;
+ if on_alt{
+  /* The alternate stack is in use while the handler runs, which the
+     program sees when it asks for the stack. */
+  task::with_current_process(|p|p.altstack_flags|=SS_ONSTACK as u32);
+ }
  let mut mask=saved_mask|action.mask;
  if action.flags&SA_NODEFER==0{mask&=!bit(sig)}
  task::with_current_process(|p|p.sigmask=mask);
@@ -12277,7 +12498,7 @@ pub fn restore_frame()->Result<(),i64>{
   r15:g[REG_R15],r14:g[REG_R14],r13:g[REG_R13],r12:g[REG_R12],rbp:g[REG_RBP],rbx:g[REG_RBX],
   r10:g[REG_R10],r9:g[REG_R9],r8:g[REG_R8],rdx:g[REG_RDX],rsi:g[REG_RSI],rdi:g[REG_RDI],
   rax:rax,rip:rip,rflags:rflags,rsp:rsp};
- task::with_current_process(|p|p.sigmask=uc.uc_sigmask);
+ task::with_current_process(|p|{p.sigmask=uc.uc_sigmask;p.altstack_flags&=!(SS_ONSTACK as u32);});
  if !syscall::set_return_context(unsafe{syscall::SYSCALL_FRAME as *mut u64},&frame){return Err(crate::errno::EFAULT)}
  /* The return path takes the user-mode result from this cell, so the
     restored value has to be published here. */
@@ -12554,14 +12775,14 @@ END FILE: kernel/sync.rs
 
 ================================================================================
 FILE: kernel/task.rs
-SIZE: 27420 bytes
-SHA-256: b11a686dfbd902cb8ecd13e29cecbae371f3b1c9249dcdd1690583fe9c21b5c9
+SIZE: 28202 bytes
+SHA-256: 9e97baa9657113fc9d78468d8e9db74fa7bedb0a4e1220f215b78e032324ce51
 ================================================================================
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
 use crate::process::Process;
 use crate::sync::IrqSpinLock;
-const MAX_TASKS:usize=8;const STACK_SIZE:usize=65536;
+const MAX_TASKS:usize=8;const STACK_SIZE:usize=131072;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub active:usize,pub zombies:usize,pub runnable:usize,pub sleeping:usize,pub unused:usize}
 #[repr(align(16))]struct Stack([u8;STACK_SIZE]);
@@ -12714,6 +12935,22 @@ pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
  /* Remember the sender so the delivered siginfo can report it. */
  p.pending_from[sig as usize]=current_pid();
  p.si_code[sig as usize]=0;p.si_value[sig as usize]=0;p.si_overrun[sig as usize]=0;}
+ wake_pid(pid);
+ Ok(())
+}
+/* Queues a real-time signal with its value. The real-time signals keep
+   every instance that was sent, so more than one of them can wait at the
+   same time. */
+pub fn queue_signal(pid:u32,sig:i32,value:u64)->Result<(),i64>{
+ let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+ {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
+  let i=crate::signal::rt_index(sig);
+  let n=p.rt_len[i] as usize;
+  if n>=crate::signal::RT_DEPTH{return Err(crate::errno::EAGAIN)}
+  p.rt_value[i][n]=value;p.rt_len[i]=(n+1) as u8;
+  p.pending|=crate::signal::bit(sig);
+  p.pending_from[sig as usize]=current_pid();
+  p.si_code[sig as usize]=crate::signal::SI_QUEUE;}
  wake_pid(pid);
  Ok(())
 }
@@ -15815,8 +16052,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 49816 bytes
-SHA-256: 70a0880dad3b74115af18cc7fffa39765ee9d7b459727a1ed2513582b0b59e63
+SIZE: 54029 bytes
+SHA-256: faf8acb82ea599534c7b88ca6fb9088dfb4147c5ec07490fd1f20d09b7f9a759
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -15880,6 +16117,28 @@ static int pt_ready;
 static volatile sig_atomic_t pt_got_usr1, pt_got_tid;
 static __thread int pt_tls_slot;
 
+/* A handler that records the value of a real-time signal. */
+static volatile int rt_hits;
+static volatile int rt_value = -1;
+static void rt_handler(int sig, siginfo_t *si, void *uc) {
+    (void)sig; (void)uc;
+    rt_hits++;
+    /* The value of a queued signal lives in the _rt member of the
+       information, thirty two bytes into the union: the two time fields,
+       then the value. */
+    rt_value = si ? si->si_value.sival_int : -1;
+}
+
+/* A handler that records where it ran. */
+static volatile int alt_hits;
+static volatile char *alt_sp;
+static char altstack[64 * 1024] __attribute__((aligned(16)));
+static void alt_handler(int sig) {
+    (void)sig;
+    alt_sp = (char *)__builtin_frame_address(0);
+    alt_hits++;
+}
+
 static void *pt_worker(void *arg) {
     long n = (long)arg;
     for (long i = 0; i < n; i++) {
@@ -15923,6 +16182,9 @@ static int fail(const char *what) {
 }
 
 int main(int argc, char **argv) {
+    sigset_t rt_set;
+    sigemptyset(&rt_set);
+    sigaddset(&rt_set, SIGRTMIN);
     if (argc > 1 && strcmp(argv[1], "cloexec-child") == 0) {
         if (fcntl(9, F_GETFD) == -1 && errno == EBADF) _exit(42);
         _exit(1);
@@ -16039,6 +16301,85 @@ int main(int argc, char **argv) {
         return fail("capget");
     if (syscall(SYS_capset, &cap_header, cap_data) != 0) return fail("capset unchanged");
     printf("DIFF_CAP_OK\n");
+
+    /* The real-time signals: a signal of the range 32 to 64, a value that
+       travels with it, and more than one instance of it waiting. */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_sigaction = rt_handler;
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGRTMIN, &sa, 0) != 0) return fail("rt sigaction");
+        rt_hits = 0;
+        rt_value = -1;
+        /* The value travels with the signal. */
+        union sigval sv;
+        sv.sival_int = 0x1234;
+        /* The signal is blocked, so it is unblocked for delivery. */
+        sigset_t old;
+        sigemptyset(&old);
+        sigprocmask(SIG_UNBLOCK, &rt_set, &old);
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) { printf("sigqueue errno=%d\n", errno); return fail("rt sigqueue"); }
+        struct timespec ts;
+        memset(&ts, 0, sizeof ts);
+        ts.tv_sec = 2;
+        /* The signal was delivered by the handler. */
+        if (rt_hits != 1) return fail("rt hits");
+        if (rt_value != 0x1234) return fail("rt value");
+        /* The signal has been delivered, so the mask is restored. */
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        /* The signal is blocked again, so nothing else is delivered. */
+        sigprocmask(SIG_BLOCK, &rt_set, NULL);
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        if (rt_hits != 1) return fail("rt hits");
+        if (rt_value != 0x1234) return fail("rt value");
+        /* Two instances of the same signal wait at the same time. */
+        rt_hits = 0;
+        sv.sival_int = 0x11;
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) return fail("rt sigqueue 2");
+        sv.sival_int = 0x22;
+        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) return fail("rt sigqueue 3");
+        memset(&ts, 0, sizeof ts);
+        ts.tv_sec = 2;
+        /* The second instance was already consumed by the handler. */
+        if (rt_hits != 2) return fail("rt hits 2");
+        /* A signal outside the range is refused. */
+        errno = 0;
+        if (sigqueue(getpid(), 65, sv) != -1 || errno != EINVAL)
+            return fail("rt range");
+        printf("DIFF_RTSIG_OK\n");
+    }
+
+    /* The alternate stack: a handler that asked for one runs on it. */
+    {
+        stack_t ss, old;
+        memset(&ss, 0, sizeof ss);
+        ss.ss_sp = altstack;
+        ss.ss_size = sizeof altstack;
+        ss.ss_flags = 0;
+        if (sigaltstack(&ss, NULL) != 0) return fail("sigaltstack");
+        if (old.ss_flags & SS_DISABLE) return fail("sigaltstack old");
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = alt_handler;
+        sa.sa_flags = SA_ONSTACK;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGUSR1, &sa, 0) != 0) return fail("altstack sigaction");
+        alt_hits = 0;
+        if (raise(SIGUSR1) != 0) return fail("altstack raise");
+        if (alt_hits != 1) return fail("altstack hits");
+        if (alt_sp < (char *)altstack || alt_sp >= (char *)altstack + sizeof altstack)
+            return fail("altstack position");
+        /* A stack that is too small is refused. */
+        stack_t small;
+        memset(&small, 0, sizeof small);
+        small.ss_sp = altstack;
+        small.ss_size = 16;
+        errno = 0;
+        if (sigaltstack(&small, 0) != -1 || errno != ENOMEM) return fail("altstack small");
+        printf("DIFF_ALTSTACK_OK\n");
+    }
 
     struct slop_sock_filter { uint16_t code; uint8_t jt, jf; uint32_t k; };
     struct slop_sock_fprog { uint16_t len; struct slop_sock_filter *filter; };
@@ -18681,8 +19022,8 @@ END FILE: tools/check-toolchain.sh
 
 ================================================================================
 FILE: tools/differential-test.sh
-SIZE: 3615 bytes
-SHA-256: 092da751cb43ae8d55c027209f61069469251e4630abbfb470a74905fdec3f3d
+SIZE: 3646 bytes
+SHA-256: 58b617d72906343af99666c4a3ff13fd24d602a948539654f12dea5c062044de
 ================================================================================
 #!/bin/sh
 set -eu
@@ -18774,7 +19115,7 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_NOPIE_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1

@@ -2,7 +2,7 @@
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
 use crate::process::Process;
 use crate::sync::IrqSpinLock;
-const MAX_TASKS:usize=8;const STACK_SIZE:usize=65536;
+const MAX_TASKS:usize=8;const STACK_SIZE:usize=131072;
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct ResourceStats{pub active:usize,pub zombies:usize,pub runnable:usize,pub sleeping:usize,pub unused:usize}
 #[repr(align(16))]struct Stack([u8;STACK_SIZE]);
@@ -155,6 +155,22 @@ pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
  /* Remember the sender so the delivered siginfo can report it. */
  p.pending_from[sig as usize]=current_pid();
  p.si_code[sig as usize]=0;p.si_value[sig as usize]=0;p.si_overrun[sig as usize]=0;}
+ wake_pid(pid);
+ Ok(())
+}
+/* Queues a real-time signal with its value. The real-time signals keep
+   every instance that was sent, so more than one of them can wait at the
+   same time. */
+pub fn queue_signal(pid:u32,sig:i32,value:u64)->Result<(),i64>{
+ let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+ {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
+  let i=crate::signal::rt_index(sig);
+  let n=p.rt_len[i] as usize;
+  if n>=crate::signal::RT_DEPTH{return Err(crate::errno::EAGAIN)}
+  p.rt_value[i][n]=value;p.rt_len[i]=(n+1) as u8;
+  p.pending|=crate::signal::bit(sig);
+  p.pending_from[sig as usize]=current_pid();
+  p.si_code[sig as usize]=crate::signal::SI_QUEUE;}
  wake_pid(pid);
  Ok(())
 }

@@ -15,6 +15,8 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
  if cs&3==3 && crate::task::has_current_process() {
    crate::task::exit_fault(vector,error,rip,cr2)
  }
- crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x}",vector,error,rip,cs,cr2);
+ /* The bytes of the faulting instruction, so the place can be found. */
+ let code=unsafe{core::slice::from_raw_parts(rip as *const u8,8)};
+ crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} code={:02x?}",vector,error,rip,cs,cr2,code);
  crate::arch::halt()
 }

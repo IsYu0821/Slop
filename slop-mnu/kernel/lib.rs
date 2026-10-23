@@ -36,10 +36,10 @@ pub mod usercopy;
 pub mod vdso;
 
 #[repr(align(16))]
-struct Stack([u8; 65536]);
-static mut RING0_STACK: Stack = Stack([0; 65536]);
-static mut DOUBLE_FAULT_STACK: Stack = Stack([0; 65536]);
-static mut IRQ_STACK: Stack = Stack([0; 65536]);
+struct Stack([u8; 131072]);
+static mut RING0_STACK: Stack = Stack([0; 131072]);
+static mut DOUBLE_FAULT_STACK: Stack = Stack([0; 131072]);
+static mut IRQ_STACK: Stack = Stack([0; 131072]);
 
 static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
@@ -77,7 +77,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let delta=arch::x86_64::phys::KIMAGE_BASE as i64 - bi.image_base as i64;
     if let Err(e)=unsafe { boot::apply_relocations(arch::x86_64::phys::KIMAGE_BASE,delta) }{println!("kernel relocation failed: {}",e);arch::halt()}
     let rva=|va:u64|va-bi.image_base;
-    let rsp=arch::x86_64::phys::KIMAGE_BASE+rva(unsafe { core::ptr::addr_of!(RING0_STACK.0) as u64 })+65536-8;
+    let rsp=arch::x86_64::phys::KIMAGE_BASE+rva(unsafe { core::ptr::addr_of!(RING0_STACK.0) as u64 })+131072-8;
     let entry=arch::x86_64::phys::KIMAGE_BASE+rva(kmain_high_continue as usize as u64);
     unsafe { arch::x86_64::paging::enter_high(rsp,entry) }
 }

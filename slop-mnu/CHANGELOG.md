@@ -13,6 +13,12 @@
 - The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
 - The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
 
+## 0.72.0 - 2026-10-22
+- Added the real-time signal range, from 32 to 64. A real-time signal carries a value and is queued, so more than one of them can wait at the same time. The C library sends them with `sigqueue`, and the handler reads the value from the `siginfo` the kernel builds.
+- Added `sigaltstack` and `SA_ONSTACK`, so a handler can run on a stack of its own. The kernel builds the frame on the alternate stack, marks it as in use while the handler runs, and frees it when the handler returns.
+- The signal number 65 is refused, which is what Linux does for a signal outside the range.
+- The value of a queued signal is reported at the offset the C library reads, and the alternate stack is reported with the size a program asks for.
+
 ## 0.70.0 - 2026-10-22
 - The kernel counted one timer tick as a millisecond, but the local APIC timer of a machine does not run at a rate the processor reports. The monotonic clock, the wall clock, the processor time and every interval timer were therefore scaled by a wrong unit.
 - The time stamp counter is now measured against the programmable interval timer, whose rate is fixed by the hardware. The rate of the counter on the test machine is 2.92 GHz, and the local APIC timer ran at a rate that made a tick 1.6 milliseconds long instead of the assumed millisecond.
