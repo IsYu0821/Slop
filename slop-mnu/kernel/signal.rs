@@ -32,7 +32,11 @@ pub fn bit(sig:i32)->u64{1u64<<(sig as u64-1)}
 pub fn unblockable(sig:i32)->bool{sig==SIGKILL||sig==SIGSTOP}
 /* Classifies the disposition installed for a signal number. */
 pub enum Disposition{Handler(u64,u64,u64),Ignore,Terminate,Stop,Continue}
-fn task_index(pid:u32)->Option<usize>{let s=task::sched_pids();(0..8).find(|&i|s[i]==pid)}
+pub fn task_index(pid:u32)->Option<usize>{
+ /* The scheduler has 8 tasks, so the pid has to be in one of them. */
+ let s=task::sched_pids();
+ (0..8).find(|&i|s[i]==pid)
+}
 /* Delivers a signal to another task by marking its pending mask. */
 pub fn send(pid:u32,sig:i32)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
@@ -56,8 +60,8 @@ pub fn send_value(pid:u32,sig:i32,value:u64)->Result<(),i64>{
   return task::queue_signal(pid,sig,value);
  }
  /* The standard signals coalesce: the value is not kept per instance. */
- task::with_current_process(|p|{p.si_code[sig as usize]=SI_QUEUE;p.si_value[sig as usize]=value;Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
- send(pid,sig)
+ let sender=crate::task::current_pid();
+ task::signal_pid_value(pid,sig,value,sender)
 }
 /* Delivers a signal to the calling task itself. */
 pub fn send_self(sig:i32)->Result<(),i64>{

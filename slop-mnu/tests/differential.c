@@ -263,7 +263,19 @@ int main(int argc, char **argv) {
         sigset_t old;
         sigemptyset(&old);
         sigprocmask(SIG_UNBLOCK, &rt_set, &old);
-        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) { printf("sigqueue errno=%d\n", errno); return fail("rt sigqueue"); }
+        /* The signal is unblocked, so it is delivered by the kernel. */
+        errno = 0;
+        errno = 0;
+        siginfo_t si;
+        memset(&si, 0, sizeof si);
+        si.si_signo = SIGRTMIN;
+        si.si_code = SI_QUEUE;
+        si.si_value.sival_int = 0x1234;
+        int rq = syscall(129, getpid(), SIGRTMIN, &si);
+        printf("sigqueue ret=%d errno=%d\n", rq, errno);
+        if (rq != 0) return fail("rt sigqueue");
+        /* The signal is sent to the current process, so the target is
+           the current thread group. */
         struct timespec ts;
         memset(&ts, 0, sizeof ts);
         ts.tv_sec = 2;

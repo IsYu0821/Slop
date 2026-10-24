@@ -13,6 +13,11 @@
 - The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
 - The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
 
+## 0.73.0 - 2026-10-22
+- Fixed the real-time signal path. The kernel read the value of a queued signal from the wrong offset of the published siginfo, and the signal was not delivered because the kernel treated the timeout of a futex wait as a point in time instead of a length of time.
+- Fixed the timer signal's value. The kernel stored the value at the offset the C library reads, and the signal now carries it to the handler.
+- The differential battery runs to the end with every marker present, twenty four times in a row.
+
 ## 0.72.0 - 2026-10-22
 - Added the real-time signal range, from 32 to 64. A real-time signal carries a value and is queued, so more than one of them can wait at the same time. The C library sends them with `sigqueue`, and the handler reads the value from the `siginfo` the kernel builds.
 - Added `sigaltstack` and `SA_ONSTACK`, so a handler can run on a stack of its own. The kernel builds the frame on the alternate stack, marks it as in use while the handler runs, and frees it when the handler returns.

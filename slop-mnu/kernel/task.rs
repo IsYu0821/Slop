@@ -57,7 +57,7 @@ pub fn resource_stats()->ResourceStats{
 pub fn with_current_process<R>(f:impl FnOnce(&mut Process)->R)->Option<R>{let slot=SCHED.lock().current;let mut procs=PROCS.lock();procs[slot].as_mut().map(f)}
 pub fn has_current_process()->bool{let slot=SCHED.lock().current;PROCS.lock()[slot].is_some()}
 /* Immutable view of another live process, for /proc/<pid> introspection. */
-pub fn with_process_pid<R>(pid:u32,f:impl FnOnce(&Process)->R)->Option<R>{let slot={let s=SCHED.lock();(0..MAX_TASKS).find(|&i|s.tasks[i].pid==pid&&s.tasks[i].state!=State::Unused&&!s.tasks[i].is_thread)?};let procs=PROCS.lock();procs[slot].as_ref().map(f)}
+pub fn with_process_pid<R>(pid:u32,f:impl FnOnce(&Process)->R)->Option<R>{let slot={let s=SCHED.lock();(0..MAX_TASKS).find(|&i|s.tasks[i].pid==pid&&s.tasks[i].state!=State::Unused)?};let procs=PROCS.lock();procs[slot].as_ref().map(f)}
 pub fn live_pids(mut cb:impl FnMut(u32)){let s=SCHED.lock();let mut seen=[0u32;MAX_TASKS];let mut n=0usize;for t in &s.tasks{if t.state==State::Unused||t.is_thread||seen[..n].contains(&t.pid){continue}seen[n]=t.pid;n+=1;cb(t.pid);}}
 pub fn thread_count(pid:u32)->usize{let s=SCHED.lock();s.tasks.iter().filter(|t|t.pid==pid&&t.state!=State::Unused).count().max(1)}
 pub fn ppid_of(pid:u32)->u32{let s=SCHED.lock();s.tasks.iter().find(|t|t.pid==pid&&t.state!=State::Unused).map(|t|t.ppid).unwrap_or(0)}
@@ -171,6 +171,17 @@ pub fn queue_signal(pid:u32,sig:i32,value:u64)->Result<(),i64>{
   p.pending|=crate::signal::bit(sig);
   p.pending_from[sig as usize]=current_pid();
   p.si_code[sig as usize]=crate::signal::SI_QUEUE;}
+ wake_pid(pid);
+ Ok(())
+}
+/* Sends a standard signal that carries a value. */
+pub fn signal_pid_value(pid:u32,sig:i32,value:u64,sender:u32)->Result<(),i64>{
+ let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+ {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
+  p.pending|=crate::signal::bit(sig);
+  p.pending_from[sig as usize]=sender;
+  p.si_code[sig as usize]=crate::signal::SI_QUEUE;
+  p.si_value[sig as usize]=value;}
  wake_pid(pid);
  Ok(())
 }

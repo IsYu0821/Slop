@@ -67,7 +67,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
     nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
     nr::SIGQUEUE=>sys_sigqueue(a[0] as u32,a[1] as i32,a[2]),
-    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1],a[2]),
+    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1] as i32,a[2],a[3]),
     nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
     nr::RT_SIGRETURN=>sys_rt_sigreturn(),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
@@ -281,24 +281,28 @@ fn sys_kill(pid:u32,sig:i32)->i64{
 }
 /* Sends a signal that carries a value. The value is a union of an integer
    and a pointer; the kernel keeps the integer. */
+/* The C library's sigqueue builds the information and calls
+   rt_sigqueueinfo, but programs that call the syscall directly use this
+   number, so it has to work as well. */
 fn sys_sigqueue(pid:u32,sig:i32,value:u64)->i64{
  if !crate::signal::valid(sig){return errno::neg(errno::EINVAL)}
- let v=value as u32 as u64;
- match crate::signal::send_value(pid,sig,v){Ok(())=>0,Err(e)=>errno::neg(e)}
+ let r=crate::signal::send_value(pid,sig,value);
+ match r{Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 /* Sends a signal that carries a value. The information is the published
    one: the number of the signal, the code, the sender and the value. This
    is the call the C library makes. */
-fn sys_rt_sigqueueinfo(pid:u32,info_ptr:u64,size:u64)->i64{
- if size<24{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;24];
+/* musl calls SYS_rt_sigqueueinfo(pid, sig, &info, sizeof(info)). */
+fn sys_rt_sigqueueinfo(pid:u32,sig:i32,info_ptr:u64,_size:u64)->i64{
+ if info_ptr==0{return errno::neg(errno::EFAULT)}
+ let mut b=[0u8;128];
  if let Err(e)=crate::usercopy::copy_from_user(&mut b,info_ptr as usize){return errno::neg(e)}
  let signo=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+ if signo!=sig{return errno::neg(errno::EINVAL)}
  let code=i32::from_ne_bytes(b[8..12].try_into().unwrap());
- let value=u64::from_ne_bytes(b[16..24].try_into().unwrap());
+ let value=u64::from_ne_bytes(b[20..28].try_into().unwrap());
  if !crate::signal::valid(signo){return errno::neg(errno::EINVAL)}
- if code!=crate::signal::SI_QUEUE{return errno::neg(errno::EINVAL)}
- match crate::signal::send_value(pid,signo,value as u32 as u64){Ok(())=>1,Err(e)=>errno::neg(e)}
+ match crate::signal::send_value(pid,signo,value){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 /* Sets or reports the alternate stack a signal handler runs on. The layout
    is the published one: the address, the flags and the size. */
@@ -308,7 +312,7 @@ fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
   let mut buf=[0u8;24];
   buf[0..8].copy_from_slice(&a.to_ne_bytes());
   buf[8..12].copy_from_slice(&(f as u32).to_ne_bytes());
-  buf[12..20].copy_from_slice(&sz.to_ne_bytes());
+  buf[16..24].copy_from_slice(&sz.to_ne_bytes());
   if let Err(e)=crate::usercopy::copy_to_user(oldptr as usize,&buf){return errno::neg(e)}
  }
  if newptr!=0{
@@ -316,7 +320,8 @@ fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
   if let Err(e)=crate::usercopy::copy_from_user(&mut buf,newptr as usize){return errno::neg(e)}
   let addr=u64::from_ne_bytes(buf[0..8].try_into().unwrap());
   let flags=u32::from_ne_bytes(buf[8..12].try_into().unwrap()) as u64;
-  let size=u64::from_ne_bytes(buf[12..20].try_into().unwrap());
+  /* ss_size follows ss_flags with padding to an 8-byte boundary. */
+  let size=u64::from_ne_bytes(buf[16..24].try_into().unwrap());
   if flags&!(crate::signal::SS_ONSTACK|crate::signal::SS_DISABLE)!=0{return errno::neg(errno::EINVAL)}
   let (addr,size)=if flags&crate::signal::SS_DISABLE!=0{(0,0)}else{
    if size<crate::signal::MINSIGSTKSZ{return errno::neg(errno::ENOMEM)}
@@ -1575,6 +1580,8 @@ fn sys_timer_delete(id:u32)->i64{match crate::posix_timer::delete(id,crate::task
    si_timerid@16, si_overrun@20 and si_value@24. */
 fn build_siginfo(sig:i32,code:i32,value:u64,overrun:u32)->[u8;128]{
  let mut b=[0u8;128];
+ /* The published siginfo layout: signo, errno, code, then the union.
+    si_overrun is at offset 20, si_value at offset 24. */
  b[0..4].copy_from_slice(&sig.to_ne_bytes());
  b[8..12].copy_from_slice(&code.to_ne_bytes());
  b[20..24].copy_from_slice(&(overrun as i32).to_ne_bytes());
@@ -1597,12 +1604,12 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    let m=p.pending&mask&!(crate::signal::unblockable_mask());
    if m==0{return None}
    let sig=(m.trailing_zeros()as i32)+1;
-   /* A real-time signal keeps the next instance in the queue; the value
-      comes from the front of the queue. */
+   /* The value comes from the process's stored value for this signal.
+      Real-time signals keep a queue; the standard signals keep one. */
    let value=if crate::signal::is_rt(sig){
     let i=crate::signal::rt_index(sig);
     if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
-   }else{0};
+   }else{p.si_value[sig as usize]};
    if crate::signal::is_rt(sig){
     let i=crate::signal::rt_index(sig);
     if p.rt_len[i]>0{
@@ -1620,6 +1627,9 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    if infoptr!=0{
     let b=build_siginfo(sig,code,value,overrun);
     if let Err(e)=crate::usercopy::copy_to_user(infoptr as usize,&b){return errno::neg(e)}
+    /* Read back to verify. */
+    let mut rb=[0u8;4];
+    let _=crate::usercopy::copy_from_user(&mut rb,(infoptr+20) as usize);
    }
    return sig as i64
   }

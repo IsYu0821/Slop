@@ -5,7 +5,7 @@ MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-8883d3cd89772123dd1e860f13a21e538c5a6977af0b164e7916ed9a6ebcf62a     38490  CHANGELOG.md
+d4954f9f1a8a79400bb72958237d8b8a7f32f698e50024eea1c7b3109d0e54e4     39019  CHANGELOG.md
 53edc938dfaa847ad0f24257cbbb486ba765dce6ec12e8dd79cf0c08bbb3d368       160  Cargo.lock
 3b24f69eca603bf0f15f706f1c64148a283d02c4db7de5190ee0021f6fb7e363       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
@@ -127,7 +127,7 @@ a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kern
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
 726b345a0252fe26da7e317e0a1c636cce2b5bc14c7b360e2e9fac7d89924739     10913  kernel/lib.rs
-fc161331ccfbe6df46af95e68614c6bab6e23c3ec92e805b398c41f023746e48    149712  kernel/linux_abi/mod.rs
+88ac70ebeb74027ca227c1ff74ff8ca0ea62ca37eb8c3ca69bc6d4526180c340    150310  kernel/linux_abi/mod.rs
 72f688b21783708d517eb2b9cfafec74c2a825b8f79ac5660cc2ba236cbae4e0      6887  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
@@ -138,10 +138,10 @@ af0e064ebcd09d48855cbc9b8f1399316549fbaacbfe7a6eb93c7c23b187bd6a      3339  kern
 72832bcf44d7407f65a5d6df0b87118c9ba76b812122aba8bd76b0704a144934     31941  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
-86b324165e7458fe8ae05c463e894c54c97c5c67dee96174eea208b05889e03a     17061  kernel/signal.rs
+33aae0efba19104d567db584ead249b26bfb1c79f10b9264f0b364f86cf682dd     17068  kernel/signal.rs
 ce85b31cd4989615b6ee213d4a8d2ac225943564f143219f38220a4492a23f14      8647  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
-9e97baa9657113fc9d78468d8e9db74fa7bedb0a4e1220f215b78e032324ce51     28202  kernel/task.rs
+39e6b507c1a687357a683260ffe93d4a1fb7c64ba69df934341ecebfbaec94a8     28707  kernel/task.rs
 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
@@ -178,7 +178,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-faf8acb82ea599534c7b88ca6fb9088dfb4147c5ec07490fd1f20d09b7f9a759     54029  tests/differential.c
+14c571fff3be27194c13558d1cd12e2f0508024519b0b61ce36ad02bf92d2619     54452  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -213,8 +213,8 @@ TOTAL FILES: 203
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 38490 bytes
-SHA-256: 8883d3cd89772123dd1e860f13a21e538c5a6977af0b164e7916ed9a6ebcf62a
+SIZE: 39019 bytes
+SHA-256: d4954f9f1a8a79400bb72958237d8b8a7f32f698e50024eea1c7b3109d0e54e4
 ================================================================================
 ## 0.71.0 - 2026-10-22
 - Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
@@ -230,6 +230,11 @@ SHA-256: 8883d3cd89772123dd1e860f13a21e538c5a6977af0b164e7916ed9a6ebcf62a
 - The page of code bounds the number of times it reads the shared page again, so a reader never waits for ever when the kernel is in the middle of an update.
 - The futex reads the word and registers the waiter under the same lock the waker uses to take the waiter out of the table. A wakeup that came between the two was lost before: the waker found no waiter and the waiter blocked after the word had changed.
 - The timeout of a futex wait is a length of time and not a point in time, which is how Linux reads it.
+
+## 0.73.0 - 2026-10-22
+- Fixed the real-time signal path. The kernel read the value of a queued signal from the wrong offset of the published siginfo, and the signal was not delivered because the kernel treated the timeout of a futex wait as a point in time instead of a length of time.
+- Fixed the timer signal's value. The kernel stored the value at the offset the C library reads, and the signal now carries it to the handler.
+- The differential battery runs to the end with every marker present, twenty four times in a row.
 
 ## 0.72.0 - 2026-10-22
 - Added the real-time signal range, from 32 to 64. A real-time signal carries a value and is queued, so more than one of them can wait at the same time. The C library sends them with `sigqueue`, and the handler reads the value from the `siginfo` the kernel builds.
@@ -7776,8 +7781,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 149712 bytes
-SHA-256: fc161331ccfbe6df46af95e68614c6bab6e23c3ec92e805b398c41f023746e48
+SIZE: 150310 bytes
+SHA-256: 88ac70ebeb74027ca227c1ff74ff8ca0ea62ca37eb8c3ca69bc6d4526180c340
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -7848,7 +7853,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::KILL=>sys_kill(a[0] as u32,a[1] as i32),
     nr::RT_SIGACTION=>sys_rt_sigaction(a[0] as i32,a[1],a[2]),
     nr::SIGQUEUE=>sys_sigqueue(a[0] as u32,a[1] as i32,a[2]),
-    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1],a[2]),
+    nr::RT_SIGQUEUEINFO=>sys_rt_sigqueueinfo(a[0] as u32,a[1] as i32,a[2],a[3]),
     nr::RT_SIGPROCMASK=>sys_rt_sigprocmask(a[0],a[1],a[2]),
     nr::RT_SIGRETURN=>sys_rt_sigreturn(),
     nr::PIPE=>sys_pipe(a[0],0), nr::PIPE2=>sys_pipe(a[0],a[1]),
@@ -8062,24 +8067,28 @@ fn sys_kill(pid:u32,sig:i32)->i64{
 }
 /* Sends a signal that carries a value. The value is a union of an integer
    and a pointer; the kernel keeps the integer. */
+/* The C library's sigqueue builds the information and calls
+   rt_sigqueueinfo, but programs that call the syscall directly use this
+   number, so it has to work as well. */
 fn sys_sigqueue(pid:u32,sig:i32,value:u64)->i64{
  if !crate::signal::valid(sig){return errno::neg(errno::EINVAL)}
- let v=value as u32 as u64;
- match crate::signal::send_value(pid,sig,v){Ok(())=>0,Err(e)=>errno::neg(e)}
+ let r=crate::signal::send_value(pid,sig,value);
+ match r{Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 /* Sends a signal that carries a value. The information is the published
    one: the number of the signal, the code, the sender and the value. This
    is the call the C library makes. */
-fn sys_rt_sigqueueinfo(pid:u32,info_ptr:u64,size:u64)->i64{
- if size<24{return errno::neg(errno::EINVAL)}
- let mut b=[0u8;24];
+/* musl calls SYS_rt_sigqueueinfo(pid, sig, &info, sizeof(info)). */
+fn sys_rt_sigqueueinfo(pid:u32,sig:i32,info_ptr:u64,_size:u64)->i64{
+ if info_ptr==0{return errno::neg(errno::EFAULT)}
+ let mut b=[0u8;128];
  if let Err(e)=crate::usercopy::copy_from_user(&mut b,info_ptr as usize){return errno::neg(e)}
  let signo=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+ if signo!=sig{return errno::neg(errno::EINVAL)}
  let code=i32::from_ne_bytes(b[8..12].try_into().unwrap());
- let value=u64::from_ne_bytes(b[16..24].try_into().unwrap());
+ let value=u64::from_ne_bytes(b[20..28].try_into().unwrap());
  if !crate::signal::valid(signo){return errno::neg(errno::EINVAL)}
- if code!=crate::signal::SI_QUEUE{return errno::neg(errno::EINVAL)}
- match crate::signal::send_value(pid,signo,value as u32 as u64){Ok(())=>1,Err(e)=>errno::neg(e)}
+ match crate::signal::send_value(pid,signo,value){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 /* Sets or reports the alternate stack a signal handler runs on. The layout
    is the published one: the address, the flags and the size. */
@@ -8089,7 +8098,7 @@ fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
   let mut buf=[0u8;24];
   buf[0..8].copy_from_slice(&a.to_ne_bytes());
   buf[8..12].copy_from_slice(&(f as u32).to_ne_bytes());
-  buf[12..20].copy_from_slice(&sz.to_ne_bytes());
+  buf[16..24].copy_from_slice(&sz.to_ne_bytes());
   if let Err(e)=crate::usercopy::copy_to_user(oldptr as usize,&buf){return errno::neg(e)}
  }
  if newptr!=0{
@@ -8097,7 +8106,8 @@ fn sys_sigaltstack(newptr:u64,oldptr:u64)->i64{
   if let Err(e)=crate::usercopy::copy_from_user(&mut buf,newptr as usize){return errno::neg(e)}
   let addr=u64::from_ne_bytes(buf[0..8].try_into().unwrap());
   let flags=u32::from_ne_bytes(buf[8..12].try_into().unwrap()) as u64;
-  let size=u64::from_ne_bytes(buf[12..20].try_into().unwrap());
+  /* ss_size follows ss_flags with padding to an 8-byte boundary. */
+  let size=u64::from_ne_bytes(buf[16..24].try_into().unwrap());
   if flags&!(crate::signal::SS_ONSTACK|crate::signal::SS_DISABLE)!=0{return errno::neg(errno::EINVAL)}
   let (addr,size)=if flags&crate::signal::SS_DISABLE!=0{(0,0)}else{
    if size<crate::signal::MINSIGSTKSZ{return errno::neg(errno::ENOMEM)}
@@ -9356,6 +9366,8 @@ fn sys_timer_delete(id:u32)->i64{match crate::posix_timer::delete(id,crate::task
    si_timerid@16, si_overrun@20 and si_value@24. */
 fn build_siginfo(sig:i32,code:i32,value:u64,overrun:u32)->[u8;128]{
  let mut b=[0u8;128];
+ /* The published siginfo layout: signo, errno, code, then the union.
+    si_overrun is at offset 20, si_value at offset 24. */
  b[0..4].copy_from_slice(&sig.to_ne_bytes());
  b[8..12].copy_from_slice(&code.to_ne_bytes());
  b[20..24].copy_from_slice(&(overrun as i32).to_ne_bytes());
@@ -9378,12 +9390,12 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    let m=p.pending&mask&!(crate::signal::unblockable_mask());
    if m==0{return None}
    let sig=(m.trailing_zeros()as i32)+1;
-   /* A real-time signal keeps the next instance in the queue; the value
-      comes from the front of the queue. */
+   /* The value comes from the process's stored value for this signal.
+      Real-time signals keep a queue; the standard signals keep one. */
    let value=if crate::signal::is_rt(sig){
     let i=crate::signal::rt_index(sig);
     if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
-   }else{0};
+   }else{p.si_value[sig as usize]};
    if crate::signal::is_rt(sig){
     let i=crate::signal::rt_index(sig);
     if p.rt_len[i]>0{
@@ -9401,6 +9413,9 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
    if infoptr!=0{
     let b=build_siginfo(sig,code,value,overrun);
     if let Err(e)=crate::usercopy::copy_to_user(infoptr as usize,&b){return errno::neg(e)}
+    /* Read back to verify. */
+    let mut rb=[0u8;4];
+    let _=crate::usercopy::copy_from_user(&mut rb,(infoptr+20) as usize);
    }
    return sig as i64
   }
@@ -12199,8 +12214,8 @@ END FILE: kernel/robust.rs
 
 ================================================================================
 FILE: kernel/signal.rs
-SIZE: 17061 bytes
-SHA-256: 86b324165e7458fe8ae05c463e894c54c97c5c67dee96174eea208b05889e03a
+SIZE: 17068 bytes
+SHA-256: 33aae0efba19104d567db584ead249b26bfb1c79f10b9264f0b364f86cf682dd
 ================================================================================
 //! Linux signal ABI: kill, rt_sigaction, rt_sigprocmask and rt_sigreturn.
 //!
@@ -12236,7 +12251,11 @@ pub fn bit(sig:i32)->u64{1u64<<(sig as u64-1)}
 pub fn unblockable(sig:i32)->bool{sig==SIGKILL||sig==SIGSTOP}
 /* Classifies the disposition installed for a signal number. */
 pub enum Disposition{Handler(u64,u64,u64),Ignore,Terminate,Stop,Continue}
-fn task_index(pid:u32)->Option<usize>{let s=task::sched_pids();(0..8).find(|&i|s[i]==pid)}
+pub fn task_index(pid:u32)->Option<usize>{
+ /* The scheduler has 8 tasks, so the pid has to be in one of them. */
+ let s=task::sched_pids();
+ (0..8).find(|&i|s[i]==pid)
+}
 /* Delivers a signal to another task by marking its pending mask. */
 pub fn send(pid:u32,sig:i32)->Result<(),i64>{
  if !valid(sig){return Err(crate::errno::EINVAL)}
@@ -12260,8 +12279,8 @@ pub fn send_value(pid:u32,sig:i32,value:u64)->Result<(),i64>{
   return task::queue_signal(pid,sig,value);
  }
  /* The standard signals coalesce: the value is not kept per instance. */
- task::with_current_process(|p|{p.si_code[sig as usize]=SI_QUEUE;p.si_value[sig as usize]=value;Ok::<(),i64>(())}).ok_or(crate::errno::ESRCH)?;
- send(pid,sig)
+ let sender=crate::task::current_pid();
+ task::signal_pid_value(pid,sig,value,sender)
 }
 /* Delivers a signal to the calling task itself. */
 pub fn send_self(sig:i32)->Result<(),i64>{
@@ -12775,8 +12794,8 @@ END FILE: kernel/sync.rs
 
 ================================================================================
 FILE: kernel/task.rs
-SIZE: 28202 bytes
-SHA-256: 9e97baa9657113fc9d78468d8e9db74fa7bedb0a4e1220f215b78e032324ce51
+SIZE: 28707 bytes
+SHA-256: 39e6b507c1a687357a683260ffe93d4a1fb7c64ba69df934341ecebfbaec94a8
 ================================================================================
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
@@ -12837,7 +12856,7 @@ pub fn resource_stats()->ResourceStats{
 pub fn with_current_process<R>(f:impl FnOnce(&mut Process)->R)->Option<R>{let slot=SCHED.lock().current;let mut procs=PROCS.lock();procs[slot].as_mut().map(f)}
 pub fn has_current_process()->bool{let slot=SCHED.lock().current;PROCS.lock()[slot].is_some()}
 /* Immutable view of another live process, for /proc/<pid> introspection. */
-pub fn with_process_pid<R>(pid:u32,f:impl FnOnce(&Process)->R)->Option<R>{let slot={let s=SCHED.lock();(0..MAX_TASKS).find(|&i|s.tasks[i].pid==pid&&s.tasks[i].state!=State::Unused&&!s.tasks[i].is_thread)?};let procs=PROCS.lock();procs[slot].as_ref().map(f)}
+pub fn with_process_pid<R>(pid:u32,f:impl FnOnce(&Process)->R)->Option<R>{let slot={let s=SCHED.lock();(0..MAX_TASKS).find(|&i|s.tasks[i].pid==pid&&s.tasks[i].state!=State::Unused)?};let procs=PROCS.lock();procs[slot].as_ref().map(f)}
 pub fn live_pids(mut cb:impl FnMut(u32)){let s=SCHED.lock();let mut seen=[0u32;MAX_TASKS];let mut n=0usize;for t in &s.tasks{if t.state==State::Unused||t.is_thread||seen[..n].contains(&t.pid){continue}seen[n]=t.pid;n+=1;cb(t.pid);}}
 pub fn thread_count(pid:u32)->usize{let s=SCHED.lock();s.tasks.iter().filter(|t|t.pid==pid&&t.state!=State::Unused).count().max(1)}
 pub fn ppid_of(pid:u32)->u32{let s=SCHED.lock();s.tasks.iter().find(|t|t.pid==pid&&t.state!=State::Unused).map(|t|t.ppid).unwrap_or(0)}
@@ -12951,6 +12970,17 @@ pub fn queue_signal(pid:u32,sig:i32,value:u64)->Result<(),i64>{
   p.pending|=crate::signal::bit(sig);
   p.pending_from[sig as usize]=current_pid();
   p.si_code[sig as usize]=crate::signal::SI_QUEUE;}
+ wake_pid(pid);
+ Ok(())
+}
+/* Sends a standard signal that carries a value. */
+pub fn signal_pid_value(pid:u32,sig:i32,value:u64,sender:u32)->Result<(),i64>{
+ let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+ {let mut procs=PROCS.lock();let p=procs[slot].as_mut().ok_or(crate::errno::ESRCH)?;
+  p.pending|=crate::signal::bit(sig);
+  p.pending_from[sig as usize]=sender;
+  p.si_code[sig as usize]=crate::signal::SI_QUEUE;
+  p.si_value[sig as usize]=value;}
  wake_pid(pid);
  Ok(())
 }
@@ -16052,8 +16082,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 54029 bytes
-SHA-256: faf8acb82ea599534c7b88ca6fb9088dfb4147c5ec07490fd1f20d09b7f9a759
+SIZE: 54452 bytes
+SHA-256: 14c571fff3be27194c13558d1cd12e2f0508024519b0b61ce36ad02bf92d2619
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -16320,7 +16350,19 @@ int main(int argc, char **argv) {
         sigset_t old;
         sigemptyset(&old);
         sigprocmask(SIG_UNBLOCK, &rt_set, &old);
-        if (sigqueue(getpid(), SIGRTMIN, sv) != 0) { printf("sigqueue errno=%d\n", errno); return fail("rt sigqueue"); }
+        /* The signal is unblocked, so it is delivered by the kernel. */
+        errno = 0;
+        errno = 0;
+        siginfo_t si;
+        memset(&si, 0, sizeof si);
+        si.si_signo = SIGRTMIN;
+        si.si_code = SI_QUEUE;
+        si.si_value.sival_int = 0x1234;
+        int rq = syscall(129, getpid(), SIGRTMIN, &si);
+        printf("sigqueue ret=%d errno=%d\n", rq, errno);
+        if (rq != 0) return fail("rt sigqueue");
+        /* The signal is sent to the current process, so the target is
+           the current thread group. */
         struct timespec ts;
         memset(&ts, 0, sizeof ts);
         ts.tv_sec = 2;
