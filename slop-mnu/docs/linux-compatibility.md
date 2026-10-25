@@ -32,6 +32,15 @@ errors (`ENOTDIR`, `EBADF`) and flag handling (`AT_SYMLINK_NOFOLLOW`,
 `execveat(AT_EMPTY_PATH)` executes the open file. Dirfd paths are
 snapshots taken at open. `mknodat` stays `ENOSYS`.
 
+## On-disk links and renames
+
+ext2 supports `link` (sharing inodes, `nlink` accounted, symlinks
+followed), `rename` (file and empty-directory replacement with Linux
+errors, `..` and parent counts fixed on moves) and symlinks (fast
+inline targets up to 60 bytes, block-backed beyond, fully traversed
+by path resolution and `readlink`). `stat` reports the real link
+count. `mknodat` stays `ENOSYS`.
+
 ## signalfd
 
 `signalfd`/`signalfd4` deliver masked signals as 128-byte `signalfd_siginfo` structs sharing the process pending bit with handlers and `sigwaitinfo`/`sigtimedwait`: consuming via one path consumes the shared pending state but never a child task state, and `wait4`/`waitid` never consume the pending bit. Child stop/continue/exit arrive as `SIGCHLD` with `CLD_STOPPED=5`/`CLD_CONTINUED=6`/`CLD_EXITED=1`/`CLD_KILLED=2`, the child pid/uid and the stop signal / `SIGCONT` / exit code / termsig. `SA_NOCLDSTOP` suppresses only stop/continue generation, never waiting. `poll`/`select`/`epoll` report signalfd readability exactly when a masked signal is pending. No core dumps: signal deaths report `CLD_KILLED`, never `CLD_DUMPED`.

@@ -2092,6 +2092,61 @@ int main(int argc, char **argv) {
         /* Shrink, directory listing, error cases, removal. */
         if (truncate(big, 100) != 0) return fail("ext2 shrink");
         if (stat(big, &st) != 0 || st.st_size != 100) return fail("ext2 shrink size");
+        /* Links share the inode, symlinks resolve, renames move names. */
+        {
+            char l1[128], sl[128], f1r[128], sub2[128], sub3[128];
+            snprintf(l1, sizeof l1, "%s/a-link", base);
+            snprintf(sl, sizeof sl, "%s/a-sym", base);
+            snprintf(f1r, sizeof f1r, "%s/a-renamed", base);
+            snprintf(sub2, sizeof sub2, "%s/sub2", base);
+            snprintf(sub3, sizeof sub3, "%s/sub3", base);
+            (void)unlink(l1); (void)unlink(sl); (void)unlink(f1r);
+            (void)rmdir(sub2); (void)rmdir(sub3);
+            if (link(f1, l1) != 0) return fail("ext2 link");
+            struct stat la, lb;
+            if (stat(f1, &la) != 0 || stat(l1, &lb) != 0) return fail("ext2 link stat");
+            if (la.st_ino != lb.st_ino || la.st_nlink != 2) return fail("ext2 link shared");
+            int lf = open(l1, O_RDONLY);
+            if (lf < 0) return fail("ext2 link open");
+            char lh[16] = {0};
+            if (read(lf, lh, sizeof lh) != 16 || memcmp(lh, "0123456789abcdef", 16) != 0) return fail("ext2 link content");
+            close(lf);
+            if (unlink(l1) != 0) return fail("ext2 link unlink");
+            if (stat(f1, &la) != 0 || la.st_nlink != 1) return fail("ext2 link nlink");
+            if (symlink("a.txt", sl) != 0) return fail("ext2 symlink");
+            char rl[16] = {0};
+            if (readlink(sl, rl, sizeof rl) != 5 || memcmp(rl, "a.txt", 5) != 0) return fail("ext2 readlink");
+            struct stat ls, fs;
+            if (lstat(sl, &ls) != 0 || !S_ISLNK(ls.st_mode) || ls.st_size != 5) return fail("ext2 lstat link");
+            if (stat(sl, &fs) != 0 || !S_ISREG(fs.st_mode) || fs.st_size != 16) return fail("ext2 stat through");
+            int sfd = open(sl, O_RDONLY);
+            if (sfd < 0) return fail("ext2 open through");
+            if (read(sfd, lh, 5) != 5 || memcmp(lh, "01234", 5) != 0) return fail("ext2 link read");
+            close(sfd);
+            /* A long target exercises the block-backed symlink path. */
+            {
+                char tgt[101];
+                memset(tgt, 'x', 100);
+                tgt[100] = 0;
+                char sl2[128];
+                snprintf(sl2, sizeof sl2, "%s/b-sym", base);
+                (void)unlink(sl2);
+                if (symlink(tgt, sl2) != 0) return fail("ext2 symlink long");
+                char rb[104] = {0};
+                if (readlink(sl2, rb, sizeof rb) != 100 || memcmp(rb, tgt, 100) != 0) return fail("ext2 readlink long");
+                if (unlink(sl2) != 0) return fail("ext2 symlink long unlink");
+            }
+            if (unlink(sl) != 0) return fail("ext2 symlink unlink");
+            if (rename(f1, f1r) != 0) return fail("ext2 rename");
+            if (stat(f1, &st) == 0 || errno != ENOENT) return fail("ext2 rename gone");
+            if (stat(f1r, &st) != 0 || st.st_size != 16) return fail("ext2 rename target");
+            if (rename(f1r, f1) != 0) return fail("ext2 rename back");
+            if (mkdir(sub2, 0700) != 0) return fail("ext2 mkdir sub2");
+            if (rename(sub2, sub3) != 0) return fail("ext2 rename dir");
+            if (stat(sub2, &st) == 0 || errno != ENOENT) return fail("ext2 rename dir gone");
+            if (stat(sub3, &st) != 0 || !S_ISDIR(st.st_mode)) return fail("ext2 rename dir target");
+            if (rmdir(sub3) != 0) return fail("ext2 rmdir sub3");
+        }
         DIR *dd = opendir(sub);
         if (!dd) return fail("ext2 opendir");
         int saw_b = 0, entries = 0;

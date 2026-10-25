@@ -94,11 +94,17 @@ ABI correction facts (v0.78.0):
 - `NICE` is syscall 134 (`PAUSE` is 34); `TIMES` is syscall 100: public Linux man-pages and the published x86-64 syscall table. Implementer: opencode. Reviewer: pending. Tests: `check-source.sh` pins the numbers and the differential battery runs `times()` through the new dispatch.
 
 
-Dirfd-relative *at facts (v0.79.0):
-- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
+Dirfd-relative *at facts (v0.79.0):- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
 - `fstatat(AT_FDCWD, "", buf, AT_EMPTY_PATH)` stats the working directory itself; with a real fd it stats (or executes, for `execveat`) the open file: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (cwd stat, empty-path statx/fstatat, dirfd execveat).
 - `renameat2` with `RENAME_NOREPLACE=1` reports `EEXIST` over an existing target and other flag bits report `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (noreplace then plain).
 - The `statx` buffer follows the published UAPI (`ino` at offset 32, 16-byte timestamps, uid/gid/device fields): public `sys/stat.h`/`linux/stat.h` header layout, verified against the native header. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` reads `stx_size` byte-identical on native Linux and in the guest.
+
+
+On-disk link/rename/symlink facts (v0.80.0):
+- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, and linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
+- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, and renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
+- `symlink` stores the target verbatim (fast inline up to 60 bytes, block-backed beyond), `readlink` returns it byte for byte, `lstat` reports the link and `stat` follows it: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` including a 100-byte slow-symlink round trip.
+- `stat` reports the on-disk link count (`st_nlink`/`stx_nlink`): public `sys/stat.h` field semantics. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (nlink 2 shared, nlink 1 after unlink).
 
 
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.

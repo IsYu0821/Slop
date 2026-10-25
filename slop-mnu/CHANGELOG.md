@@ -1,3 +1,10 @@
+## 0.80.0 - 2026-10-26
+- ext2 rename/link/symlink: `rename` with replace/empty-dir/`ENOTEMPTY`/`EISDIR`/`ENOTDIR`/subtree semantics and `..`/link-count fixups, `link` with `EPERM` on directories and `EEXIST` on clashes, symlinks stored inline (fast, ≤60 bytes) or in data blocks with a matching reader.
+- Symlink traversal now works on disk: path resolution follows ext2 links, and `readlink`/`lstat`/`stat`-through/`open`-through all agree with Linux.
+- `stat` family reports real ext2 link counts instead of hardcoded 1.
+- Fixed `unlink` of symlinks (`truncate_file` refuses them; blocks are freed directly, with fast symlinks detected via `i_blocks == 0`).
+- The `DIFF_EXT2_OK` battery covers link/symlink/rename round trips byte for byte on native Linux and in the guest, net-zero on the platter.
+
 ## 0.79.0 - 2026-10-26
 - Dirfd-relative `*at`: `openat`, `mkdirat`, `unlinkat`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`, `faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat` and `execveat` now resolve relative paths against directory fds with native `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`/`AT_REMOVEDIR`/`AT_EMPTY_PATH` semantics (`ENOTDIR` for files, `EBADF` for bad fds, absolute paths ignore dirfd).
 - New `renameat2` dispatch (syscall 316) with `RENAME_NOREPLACE`; `AT_EMPTY_PATH` operates on (or executes) the fd itself, and stats the cwd under `AT_FDCWD`.

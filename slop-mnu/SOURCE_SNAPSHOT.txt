@@ -1,13 +1,13 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.79.0
+Version: 0.80.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-0d4035c8306ba0af110f7edbaeaca56fbeac9b638a6cb241fdfff6bc8f4b6fd5     45541  CHANGELOG.md
-939e513add19092404e0a6a1ea692d81758a6265acd3a8dc1a120eddb62a4c67       160  Cargo.lock
-13f424ec4e875719fc9aef338c2420221ffc845fb55cfd6c212a8d6bcff33dc5       231  Cargo.toml
+bebdff0ac767041d5f6a1034c9a90b13a7d66dc11ed31ed495a8d710c1114927     46345  CHANGELOG.md
+39f8622962077448f2c46863cbd426a642618d01d747284cac17e2552cd4704a       160  Cargo.lock
+2edf06306d5dd8486606635efbc52e313f15692a0951ed218018eb4d608c4cc6       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch/x86_64/context.S
@@ -17,9 +17,9 @@ a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch
 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8      5224  arch/x86_64/syscall.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
-541671ec1ff92f17378b4af8a780cde8bf3ecd46077aceaca1c5b3d4ce3ed93c     21686  docs/compat-ledger.md
+37f46e81d0ac5036e28c2e1e58a7b566f32be592a6558aa6b6e9c3d712e0938b     22883  docs/compat-ledger.md
 97057bcc13875bbf53fb744a0b55addb8160a2642e1a51546935766d3f10d418       699  docs/driver-compat.md
-fb1c40b9fe856d7e8f80e054b6e3b07e9275c14d6e6d29c31738c715d1c456fb      5611  docs/linux-compatibility.md
+1248dbc64f1e013088af07f135ebacfa21e871a459eb1fd92119b04084a48bd2      6009  docs/linux-compatibility.md
 adf305597381fd64308507aa10f380cf0eb4dcceb55ad3fc9d685e74f539e50c      1019  docs/milestone10.md
 17588f19f4370b709a150a2c6532cef9382d61ff2576cf2762ad84bff3be4487      1173  docs/milestone11.md
 43882c07a24b12630f5985f2166b686acbe2c976372654083a6b470e8b1e2500      1170  docs/milestone12.md
@@ -93,9 +93,10 @@ cdbe1818ec56942fdd79af3d122c8b44ff27c00e6f3facd258ef7c9255cab196      4024  docs
 775c3c016da5511a951511c5472a05691083839e6db42b2a077e8c7fb1523319      4709  docs/milestone78.md
 ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs/milestone79.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
+b59c7983c6e2190d8a1d2d95706859d8f22fbdb4de3e7b20f29f919d50a21ca2      4240  docs/milestone80.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-13926854eb613da8419eeb2edeb2c8d279555e72b68a4c89ed6af27db4193d6d      5506  docs/priority-status.md
+c3d3c4d7d8fbb12b8227fdefb77e40e8f3932f7dca82c9f8299aebec27395e73      5643  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
@@ -127,13 +128,13 @@ f1d6863f8dd9382088474eb747b0c2f00a391f242563b4fb0c54bf074515ebc0     11756  kern
 cfb042a535fc7e5c42c5e80117071b25f8b7b1136adcb6dc792a5c9f7cf2e450      1395  kernel/errno.rs
 34384129aeb59712cf08ff8cce15570dcdceeb1ac6ea26da0222f722194016a5      2150  kernel/exec.rs
 a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kernel/exec_runtime.rs
-84b14faaafbf24eec640bc1caec12a2fc1ba4e47a01986b62c84254bf068fc14     36451  kernel/ext2.rs
+f383d700650a853870732d2e99c2d26ff3e3ef2bd84654d4d5569cc9a95354bf     45201  kernel/ext2.rs
 95d0c81708bc27888ddbe5d7c09dc9a10852302065e4ff30661624fa1af9e440     24580  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
 c975b5a4beb12a7b5cc89a9c468f4dd02b44ad5efb1586606034c19e6217f7d4     10913  kernel/lib.rs
-46f132e62feaf51998408066e2d70eec163b84a1368b8a561d49bc2861e6d834    176272  kernel/linux_abi/mod.rs
+bc3159baed92eed254d38deed920ba2d05a42bb94ae40da3e120e91708e8f7ed    176749  kernel/linux_abi/mod.rs
 ccc5f8af0ab871179379a7a27f64194caa6e3c0b6d6017f8a9019f56483d03d4      6888  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
@@ -151,7 +152,7 @@ e597b60c1488f947cde1fc5a75a0fa9fd91337525c679aaec6c07efcdd651bee     39811  kern
 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
-e3776b23a7ce16dc6913c93270857735423df59f38c08de080826e81830bf652     65250  kernel/vfs.rs
+bd796c796a40ff96d158385dd7e0cea5ac996f697fe11eb6c15a7178006e1deb     66586  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
 be8a5f3290b6dc4700424b8e42ade0d690d530979aca36436d09350aac051c5c       100  libc/errno.c
@@ -184,7 +185,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-1058bef0c3fbf645bc626ee13a1f2b9fa76051cc69faef1c6092100b36ce696d     99313  tests/differential.c
+8417c38bace0b10a3e3b46232eaec567a8e7a62c7512c0b2760d474e03b60718    102715  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -205,7 +206,7 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-96ef98ab5c62886850c39b65750095350f3b1e84f07a34463d6b762a40d602a5      8239  tools/check-source.sh
+199c70b7dcfc5a599149fb04ab2febbb26cfee62a80053eee3678adf87234dd0      8314  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
 3f9ced3e6c1c405d4a12ff07c4107b037d159dba25de4232f4529ea37e2658cd      5978  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
@@ -216,13 +217,20 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 210
+TOTAL FILES: 211
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 45541 bytes
-SHA-256: 0d4035c8306ba0af110f7edbaeaca56fbeac9b638a6cb241fdfff6bc8f4b6fd5
+SIZE: 46345 bytes
+SHA-256: bebdff0ac767041d5f6a1034c9a90b13a7d66dc11ed31ed495a8d710c1114927
 ================================================================================
+## 0.80.0 - 2026-10-26
+- ext2 rename/link/symlink: `rename` with replace/empty-dir/`ENOTEMPTY`/`EISDIR`/`ENOTDIR`/subtree semantics and `..`/link-count fixups, `link` with `EPERM` on directories and `EEXIST` on clashes, symlinks stored inline (fast, ≤60 bytes) or in data blocks with a matching reader.
+- Symlink traversal now works on disk: path resolution follows ext2 links, and `readlink`/`lstat`/`stat`-through/`open`-through all agree with Linux.
+- `stat` family reports real ext2 link counts instead of hardcoded 1.
+- Fixed `unlink` of symlinks (`truncate_file` refuses them; blocks are freed directly, with fast symlinks detected via `i_blocks == 0`).
+- The `DIFF_EXT2_OK` battery covers link/symlink/rename round trips byte for byte on native Linux and in the guest, net-zero on the platter.
+
 ## 0.79.0 - 2026-10-26
 - Dirfd-relative `*at`: `openat`, `mkdirat`, `unlinkat`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`, `faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat` and `execveat` now resolve relative paths against directory fds with native `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`/`AT_REMOVEDIR`/`AT_EMPTY_PATH` semantics (`ENOTDIR` for files, `EBADF` for bad fds, absolute paths ignore dirfd).
 - New `renameat2` dispatch (syscall 316) with `RENAME_NOREPLACE`; `AT_EMPTY_PATH` operates on (or executes) the fd itself, and stats the cwd under `AT_FDCWD`.
@@ -720,7 +728,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: 939e513add19092404e0a6a1ea692d81758a6265acd3a8dc1a120eddb62a4c67
+SHA-256: 39f8622962077448f2c46863cbd426a642618d01d747284cac17e2552cd4704a
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -728,18 +736,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.78.0"
+version = "0.80.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 13f424ec4e875719fc9aef338c2420221ffc845fb55cfd6c212a8d6bcff33dc5
+SHA-256: 2edf06306d5dd8486606635efbc52e313f15692a0951ed218018eb4d608c4cc6
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.79.0"
+version = "0.80.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -1506,8 +1514,8 @@ END FILE: docs/architecture.md
 
 ================================================================================
 FILE: docs/compat-ledger.md
-SIZE: 21686 bytes
-SHA-256: 541671ec1ff92f17378b4af8a780cde8bf3ecd46077aceaca1c5b3d4ce3ed93c
+SIZE: 22883 bytes
+SHA-256: 37f46e81d0ac5036e28c2e1e58a7b566f32be592a6558aa6b6e9c3d712e0938b
 ================================================================================
 # Compatibility provenance ledger
 
@@ -1605,11 +1613,17 @@ ABI correction facts (v0.78.0):
 - `NICE` is syscall 134 (`PAUSE` is 34); `TIMES` is syscall 100: public Linux man-pages and the published x86-64 syscall table. Implementer: opencode. Reviewer: pending. Tests: `check-source.sh` pins the numbers and the differential battery runs `times()` through the new dispatch.
 
 
-Dirfd-relative *at facts (v0.79.0):
-- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
+Dirfd-relative *at facts (v0.79.0):- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
 - `fstatat(AT_FDCWD, "", buf, AT_EMPTY_PATH)` stats the working directory itself; with a real fd it stats (or executes, for `execveat`) the open file: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (cwd stat, empty-path statx/fstatat, dirfd execveat).
 - `renameat2` with `RENAME_NOREPLACE=1` reports `EEXIST` over an existing target and other flag bits report `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (noreplace then plain).
 - The `statx` buffer follows the published UAPI (`ino` at offset 32, 16-byte timestamps, uid/gid/device fields): public `sys/stat.h`/`linux/stat.h` header layout, verified against the native header. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` reads `stx_size` byte-identical on native Linux and in the guest.
+
+
+On-disk link/rename/symlink facts (v0.80.0):
+- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, and linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
+- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, and renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
+- `symlink` stores the target verbatim (fast inline up to 60 bytes, block-backed beyond), `readlink` returns it byte for byte, `lstat` reports the link and `stat` follows it: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` including a 100-byte slow-symlink round trip.
+- `stat` reports the on-disk link count (`st_nlink`/`stx_nlink`): public `sys/stat.h` field semantics. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (nlink 2 shared, nlink 1 after unlink).
 
 
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.
@@ -1636,8 +1650,8 @@ END FILE: docs/driver-compat.md
 
 ================================================================================
 FILE: docs/linux-compatibility.md
-SIZE: 5611 bytes
-SHA-256: fb1c40b9fe856d7e8f80e054b6e3b07e9275c14d6e6d29c31738c715d1c456fb
+SIZE: 6009 bytes
+SHA-256: 1248dbc64f1e013088af07f135ebacfa21e871a459eb1fd92119b04084a48bd2
 ================================================================================
 # Linux compatibility target
 
@@ -1672,6 +1686,15 @@ errors (`ENOTDIR`, `EBADF`) and flag handling (`AT_SYMLINK_NOFOLLOW`,
 `AT_REMOVEDIR`, `AT_EMPTY_PATH`, `RENAME_NOREPLACE`).
 `execveat(AT_EMPTY_PATH)` executes the open file. Dirfd paths are
 snapshots taken at open. `mknodat` stays `ENOSYS`.
+
+## On-disk links and renames
+
+ext2 supports `link` (sharing inodes, `nlink` accounted, symlinks
+followed), `rename` (file and empty-directory replacement with Linux
+errors, `..` and parent counts fixed on moves) and symlinks (fast
+inline targets up to 60 bytes, block-backed beyond, fully traversed
+by path resolution and `readlink`). `stat` reports the real link
+count. `mknodat` stays `ENOSYS`.
 
 ## signalfd
 
@@ -5506,6 +5529,107 @@ The acceptance ELF is linked at `0x0000004000000000`, outside the low physical i
 END FILE: docs/milestone8.md
 
 ================================================================================
+FILE: docs/milestone80.md
+SIZE: 4240 bytes
+SHA-256: b59c7983c6e2190d8a1d2d95706859d8f22fbdb4de3e7b20f29f919d50a21ca2
+================================================================================
+# Milestone 80: rename, link and symlink on ext2
+
+## Goal
+
+Until now the on-disk filesystem could create, write and delete, but
+not rename, hard-link or symlink: `rename`, `link` and `symlink` on
+`/mnt` failed with `EROFS`, so `mv`, `ln` and anything resolving a
+symlink on disk was impossible. This milestone completes the classic
+trio on ext2, byte-identical to Linux.
+
+## Native behavior observed
+
+Probes fixed the contract before any kernel code changed:
+
+- `link` of a directory reports `EPERM`; linking onto an existing
+  name reports `EEXIST`; linking through a symlink follows it.
+- `rename` onto an existing empty directory replaces it; onto a
+  non-empty directory reports `ENOTEMPTY`; file-onto-directory
+  reports `EISDIR`; directory-onto-file reports `ENOTDIR`; moving a
+  directory into its own subtree reports `EINVAL`; renaming onto
+  itself succeeds silently.
+- `symlink` stores an arbitrary target verbatim; `readlink` returns
+  it byte for byte; `lstat` reports the link, `stat` follows it.
+
+## Implementation
+
+- `kernel/ext2.rs`: `link_path` (nlink++, dirent insert, symlink
+  targets resolved first like Linux), `rename_path` (replace files
+  and empty dirs, `..` rewrite plus parent link-count fixups on
+  directory moves, subtree/self guards), `symlink_path` (fast
+  symlinks inline the target in the block area when it fits 60
+  bytes, longer targets use data blocks up to 4 KiB),
+  `readlink_into` (both layouts).
+- `vfs.rs`: `readlink_content` routes symlink reads per inode kind
+  (ext2 via the new reader, memory inodes via their pointer);
+  `resolve_inner` follows ext2 symlinks through it, so `open`,
+  `stat` and friends traverse on-disk links like Linux. `vfs::link`
+  on the root filesystem now resolves its final-component symlink
+  too (previously it linked the link itself).
+- `vfs::rename`/`vfs::link`/`vfs::symlink` dispatch to the new ext2
+  paths instead of `EROFS`; tmpfs keeps `EOPNOTSUPP` for links.
+- `stat`/`lstat`/`fstat`/`newfstatat`/`statx` now report the real
+  ext2 link count (`st_nlink`, `stx_nlink`) instead of a hardcoded 1;
+  `ls`, `find` and link-count checks observe the truth. Other
+  filesystems keep reporting 1.
+- Incidental fix: `unlink` of a symlink failed with `EINVAL`
+  because the cleanup called `truncate_file`, which refuses
+  non-regular files. Symlink blocks are freed directly now (fast
+  symlinks, whose block area holds target text rather than block
+  numbers, are detected via `i_blocks == 0` and never passed to the
+  block allocator).
+
+## Tests added
+
+- The `DIFF_EXT2_OK` battery is extended in place (net-zero files and
+  blocks, so the host platter gates stay exact): hard-link create/
+  content/nlink/unlink round trip, symlink create/`readlink`/`lstat`/
+  `stat`-through/open-through round trip, a 100-byte slow-symlink
+  round trip exercising the block-backed layout, file rename there
+  and back, empty-directory rename.
+- The `DIFF_AT_OK` battery already covers `linkat`/`symlinkat`/
+  `readlinkat`/`renameat`/`renameat2` through dirfds (on the
+  fully-capable root side); ext2 adds the on-disk side.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS (guest and native logs contain
+  `DIFF_AT_OK` and the extended `DIFF_EXT2_OK`; host `e2fsck` clean,
+  free counts exact, guest bytes verified on the platter).
+- `./tools/busybox-test.sh` PASS (115 checks match Linux).
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+## Known limits
+
+- ext2 symlinks cap the target at 4 KiB; longer targets report
+  `ENAMETOOLONG`.
+- No `mknod` on any filesystem yet (`ENOSYS`).
+- Directory `nlink` on ext2 still reports the stored count only
+  where the tests observe it; `stat` elsewhere keeps reporting 1.
+- Files stay capped at 8 pages (32 KiB) as before.
+- External (host-initiated) connections still need `hostfwd` plumbing.
+
+## Next candidates
+
+- ext2 block accounting follow-ups (directory `nlink` truth, free-space
+  reporting beyond the current exact-count gate).
+- `SCM_RIGHTS` fd passing over `AF_UNIX` (real dbus/systemd IPC).
+- `AF_UNIX` `SEQPACKET`.
+- `hostfwd` + host-side connector so the host can reach guest servers.
+- SMP bring-up.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone80.md
+
+================================================================================
 FILE: docs/milestone9.md
 SIZE: 1111 bytes
 SHA-256: 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b
@@ -5538,8 +5662,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 5506 bytes
-SHA-256: 13926854eb613da8419eeb2edeb2c8d279555e72b68a4c89ed6af27db4193d6d
+SIZE: 5643 bytes
+SHA-256: c3d3c4d7d8fbb12b8227fdefb77e40e8f3932f7dca82c9f8299aebec27395e73
 ================================================================================
 # One-Linux-program priority status
 
@@ -5621,9 +5745,11 @@ SHA-256: 13926854eb613da8419eeb2edeb2c8d279555e72b68a4c89ed6af27db4193d6d
   `sendto`/`recvfrom` with source reporting, connected `send`/`recv`
   with `getpeername`, boundaries, abstract names, `socketpair` pairs
 - dirfd-relative `*at`: `openat`/`mkdirat`/`unlinkat`/`renameat`(+2)/
-  `linkat`/`symlinkat`/`readlinkat`/`newfstatat`/`statx`/`faccessat`/
+  `linkat`/`symlinkat`/`readlinkat`/`newfstatat`/  `statx`/`faccessat`/
   `fchmodat`/`fchownat`/`utimensat`/`execveat` against directory fds,
   `AT_EMPTY_PATH` fd execution, UAPI-true `statx` layout
+- ext2 link/rename/symlink: shared inodes with `nlink`, empty-dir
+  replacement renames, fast and block-backed symlinks with traversal
 
 ## Open defects
 
@@ -7665,8 +7791,8 @@ END FILE: kernel/exec_runtime.rs
 
 ================================================================================
 FILE: kernel/ext2.rs
-SIZE: 36451 bytes
-SHA-256: 84b14faaafbf24eec640bc1caec12a2fc1ba4e47a01986b62c84254bf068fc14
+SIZE: 45201 bytes
+SHA-256: f383d700650a853870732d2e99c2d26ff3e3ef2bd84654d4d5569cc9a95354bf
 ================================================================================
 //! Minimal read-only ext2 filesystem on the first virtio-blk device.
 use crate::{errno, vfs};
@@ -8518,8 +8644,225 @@ pub fn unlink_path(path:&str)->Result<(),i64>{
   patch_inode(inum,None,None,Some(links-1),None,true,None)?;
   return Ok(())
  }
+ if inode.i_mode&0o170000==0o120000{
+  /* Symlinks have no truncate path; free any data blocks directly. */
+  free_all_blocks(inum);
+  free_inode(&superblock()?,inum,false)?;
+  return Ok(())
+ }
  truncate_file(inum,0)?;
  free_inode(&superblock()?,inum,false)?;
+ Ok(())
+}
+/* Hard link: the new name points at the old inode; directories are refused
+   like Linux (EPERM) and the target must not exist. */
+pub fn link_path(old:&str,new:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let (ndir,nname)=split_parent(new)?;
+ let ndir_inum=lookup_inum(ndir)?;
+ /* Linux links the target of a symlink, so follow up to 8 links. */
+ let mut curbuf=[0u8;128];
+ let mut curlen=core::cmp::min(old.len(),127);
+ curbuf[..curlen].copy_from_slice(&old.as_bytes()[..curlen]);
+ let mut found=false;
+ for _ in 0..8{
+  let cur=core::str::from_utf8(&curbuf[..curlen]).map_err(|_|errno::EINVAL)?;
+  let t=lookup(cur)?;
+  if t.mode&0o170000!=0o120000{found=true;break}
+  let mut tb=[0u8;128];
+  let n=readlink_into(t.rdev as u32,&mut tb)?;
+  let ts=core::str::from_utf8(&tb[..n]).map_err(|_|errno::EINVAL)?;
+  let (d,_)=split_parent(cur)?;
+  let dl=d.len();let tl=ts.len();
+  let mut next=[0u8;128];let mut nl=0usize;
+  if ts.starts_with('/'){
+   if tl>127{return Err(errno::ENAMETOOLONG)}
+   next[..tl].copy_from_slice(ts.as_bytes());nl=tl;
+  }else{
+   if dl+1+tl>127{return Err(errno::ENAMETOOLONG)}
+   next[..dl].copy_from_slice(d.as_bytes());
+   next[dl]=b'/';
+   next[dl+1..dl+1+tl].copy_from_slice(ts.as_bytes());nl=dl+1+tl;
+  }
+  curbuf[..nl].copy_from_slice(&next[..nl]);curlen=nl;
+ }
+ if !found{return Err(errno::ELOOP)}
+ let ol=core::str::from_utf8(&curbuf[..curlen]).map_err(|_|errno::EINVAL)?;
+ let sb=superblock()?;
+ let target=lookup(ol)?;
+ if target.mode&0o170000==0o040000{return Err(errno::EPERM)}
+ let oinum=target.rdev as u32;
+ let oinode=read_inode(&sb,oinum)?;
+ let ftype=match oinode.i_mode&0o170000{0o100000=>1u8,0o120000=>7u8,_=>1u8};
+ dir_insert(ndir_inum,oinum,nname.as_bytes(),ftype)?;
+ let cur=read_inode(&sb,oinum)?;
+ patch_inode(oinum,None,None,Some(cur.i_links_count.saturating_add(1)),None,true,None)?;
+ Ok(())
+}
+/* Creates a symlink. Targets of 60 bytes or fewer live in the inode's
+   block-pointer area (fast symlink), like Linux; longer targets use
+   data blocks (capped at 4 KiB here). */
+/* Frees every data block of an inode without touching link counts.
+   Fast symlinks (i_blocks == 0) hold their target inline and need no
+   block work; every other file or directory owns real blocks. */
+fn free_all_blocks(inum:u32){
+ if let Ok(sb)=superblock(){
+  if let Ok(inode)=read_inode(&sb,inum){
+   if inode.i_blocks!=0{
+    let mut blks=inode.i_block;
+    if let Ok(freed)=free_from(&sb,&mut blks,0){
+     let cur=inode_sector_count(inum).unwrap_or(0);
+     let _=patch_inode(inum,None,Some(0),None,Some(cur.saturating_sub(freed)),true,Some(blks));
+    }
+   }else{
+    let _=patch_inode(inum,None,Some(0),None,None,true,None);
+   }
+  }
+ }
+}
+pub fn symlink_path(path:&str,target:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let (dir,name)=split_parent(path)?;
+ let dir_inum=lookup_inum(dir)?;
+ let sb=superblock()?;
+ let inum=alloc_inode(&sb,false)?;
+ zero_inode(inum)?;
+ let t=target.as_bytes();
+ if t.len()>4096{let _=free_inode(&superblock()?,inum,false);return Err(errno::ENAMETOOLONG)}
+ let mut e=[0u8;512];
+ read_inode_raw(&sb,inum,&mut e)?;
+ let isz=sb.s_inode_size as usize;
+ let tm=(crate::time::realtime_ns()/1_000_000_000) as u32;
+ e[0..2].copy_from_slice(&((0o120000|0o777) as u16).to_le_bytes());
+ e[4..8].copy_from_slice(&(t.len() as u32).to_le_bytes());
+ e[12..16].copy_from_slice(&tm.to_le_bytes());
+ e[16..20].copy_from_slice(&tm.to_le_bytes());
+ e[26..28].copy_from_slice(&1u16.to_le_bytes());
+ if t.len()<=60{
+  e[40..40+t.len()].copy_from_slice(t);
+  e[28..32].copy_from_slice(&0u32.to_le_bytes());
+  write_inode_raw(&sb,inum,&e[..isz])?;
+ }else{
+  let mut blks=[0u32;15];
+  let mut newb=0u32;
+  let mut done=0usize;
+  while done<t.len(){
+   let idx=done/block_size(&sb);
+   if idx>=12{free_all_blocks(inum);let _=free_inode(&superblock()?,inum,false);return Err(errno::ENAMETOOLONG)}
+   let blk=file_block(&sb,&mut blks,idx,true,&mut newb)?;
+   if blk==0{free_all_blocks(inum);let _=free_inode(&superblock()?,inum,false);return Err(errno::ENOSPC)}
+   let n=core::cmp::min(t.len()-done,block_size(&sb));
+   let mut block=[0u8;4096];
+   block[..n].copy_from_slice(&t[done..done+n]);
+   write_block(blk,block_size(&sb),&block)?;
+   done+=n;
+  }
+  e[28..32].copy_from_slice(&((newb*(block_size(&sb)/512) as u32)).to_le_bytes());
+  for i in 0..15{e[40+i*4..44+i*4].copy_from_slice(&blks[i].to_le_bytes());}
+  write_inode_raw(&sb,inum,&e[..isz])?;
+ }
+ if let Err(err)=dir_insert(dir_inum,inum,name.as_bytes(),7){
+  /* truncate_file refuses symlinks; free any blocks directly so a
+     failed create never leaks. */
+  free_all_blocks(inum);
+  let _=free_inode(&superblock()?,inum,false);
+  return Err(err);
+ }
+ Ok(())
+}
+/* Reads a symlink body: fast targets come from the inode area, longer
+   ones from data blocks. */
+pub fn readlink_into(inum:u32,out:&mut [u8])->Result<usize,i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let sb=superblock()?;
+ let inode=read_inode(&sb,inum)?;
+ if inode.i_mode&0o170000!=0o120000{return Err(errno::EINVAL)}
+ let size=inode.i_size_lo as usize;
+ if size>out.len(){return Err(errno::ENAMETOOLONG)}
+ if size==0{return Ok(0)}
+ if size<=60{
+  let raw=unsafe{core::slice::from_raw_parts((&inode.i_block as *const [u32;15]).cast::<u8>(),60)};
+  out[..size].copy_from_slice(&raw[..size]);
+  return Ok(size);
+ }
+ let mut blks=inode.i_block;
+ let mut done=0usize;
+ while done<size{
+  let mut newb=0u32;
+  let blk=file_block(&sb,&mut blks,done/block_size(&sb),false,&mut newb)?;
+  if blk==0{break}
+  let mut block=[0u8;4096];
+  read_block(blk,block_size(&sb),&mut block)?;
+  let n=core::cmp::min(size-done,core::cmp::min(block_size(&sb),out.len()-done));
+  out[done..done+n].copy_from_slice(&block[..n]);
+  done+=n;
+ }
+ Ok(done)
+}
+/* Renames within one filesystem, replacing files and empty directories.
+   Moving a directory rewrites its ".." and the parent link counts. */
+pub fn rename_path(old:&str,new:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ if old==new{return Ok(())}
+ if new.starts_with(old)&&new.as_bytes().get(old.len())==Some(&b'/'){return Err(errno::EINVAL)}
+ let (odir,oname)=split_parent(old)?;
+ let (ndir,nname)=split_parent(new)?;
+ let odir_inum=lookup_inum(odir)?;
+ let ndir_inum=lookup_inum(ndir)?;
+ let sb=superblock()?;
+ let otarget=lookup(old)?;
+ let oinum=otarget.rdev as u32;
+ let oinode=read_inode(&sb,oinum)?;
+ let odir_mode=oinode.i_mode&0o170000;
+ if odir_mode!=0o100000&&odir_mode!=0o040000{return Err(errno::EINVAL)}
+ if let Ok(ntarget)=lookup(new){
+  let ninum=ntarget.rdev as u32;
+  if ninum==oinum{return Ok(())}
+  let ninode=read_inode(&sb,ninum)?;
+  let ndir_mode=ninode.i_mode&0o170000;
+  if odir_mode==0o040000{
+   if ndir_mode!=0o040000{return Err(errno::ENOTDIR)}
+   if !dir_is_empty(ninum)?{return Err(errno::ENOTEMPTY)}
+   dir_remove(ndir_inum,nname.as_bytes())?;
+   let nblks=read_inode(&sb,ninum)?.i_block;
+   let mut nb=nblks;
+   let _=free_from(&sb,&mut nb,0)?;
+   free_inode(&superblock()?,ninum,true)?;
+   let psb=superblock()?;
+   let pinode=read_inode(&psb,ndir_inum)?;
+   patch_inode(ndir_inum,None,None,Some(pinode.i_links_count.saturating_sub(1)),None,true,None)?;
+  }else{
+   if ndir_mode==0o040000{return Err(errno::EISDIR)}
+   dir_remove(ndir_inum,nname.as_bytes())?;
+   truncate_file(ninum,0)?;
+   free_inode(&superblock()?,ninum,false)?;
+  }
+ }
+ let ftype=if odir_mode==0o040000{2u8}else{1u8};
+ dir_insert(ndir_inum,oinum,nname.as_bytes(),ftype)?;
+ dir_remove(odir_inum,oname.as_bytes())?;
+ if odir_mode==0o040000{
+  /* Point ".." at the new parent. */
+  let mut blks=read_inode(&sb,oinum)?.i_block;
+  let mut newb=0u32;
+  let blk=file_block(&sb,&mut blks,0,false,&mut newb)?;
+  if blk!=0{
+   let mut block=[0u8;4096];
+   read_block(blk,block_size(&sb),&mut block)?;
+   if block.len()>=16{
+    block[12..16].copy_from_slice(&ndir_inum.to_le_bytes());
+    write_block(blk,block_size(&sb),&block)?;
+   }
+  }
+  if odir_inum!=ndir_inum{
+   let psb=superblock()?;
+   let poinode=read_inode(&psb,odir_inum)?;
+   patch_inode(odir_inum,None,None,Some(poinode.i_links_count.saturating_sub(1)),None,true,None)?;
+   let psb2=superblock()?;
+   let pninode=read_inode(&psb2,ndir_inum)?;
+   patch_inode(ndir_inum,None,None,Some(pninode.i_links_count.saturating_add(1)),None,true,None)?;
+  }
+ }
  Ok(())
 }
 pub fn mkdir_path(path:&str,mode:u32)->Result<vfs::Inode,i64>{
@@ -8610,6 +8953,17 @@ pub fn rmdir_path(path:&str)->Result<(),i64>{
  Ok(())
 }
 pub fn truncate(inum:u32,size:u64)->Result<(),i64>{truncate_file(inum,size)}
+/// Link count for stat (1 plus real hard links); 1 when unreadable.
+pub fn nlink(inum:u32)->u32{
+ if !ready(){return 1}
+ match superblock().and_then(|sb|read_inode(&sb,inum)){
+  Ok(inode)=>{
+   let n=inode.i_links_count as u32;
+   if n==0{1}else{n}
+  }
+  Err(_)=>1,
+ }
+}
 pub fn file_size(inum:u32)->Option<u64>{
  let sb=superblock().ok()?;
  let inode=read_inode(&sb,inum).ok()?;
@@ -9461,8 +9815,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 176272 bytes
-SHA-256: 46f132e62feaf51998408066e2d70eec163b84a1368b8a561d49bc2861e6d834
+SIZE: 176749 bytes
+SHA-256: bc3159baed92eed254d38deed920ba2d05a42bb94ae40da3e120e91708e8f7ed
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -9640,6 +9994,11 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::EXIT|nr::EXIT_GROUP=>crate::task::exit(a[0] as i32), _=>errno::neg(errno::ENOSYS),
 }}
 fn fd_id(fd:u64)->Option<u32>{let r=crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten();r}
+fn fd_nlink(ino:u64,rdev:u64)->u32{
+ if crate::vfs::is_ext2_ino(ino)&&rdev!=0&&rdev<=u32::MAX as u64{
+  crate::ext2::nlink(rdev as u32)
+ }else{1}
+}
 fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn proc_unit(f:impl FnOnce(&mut crate::process::Process)->Result<(),i64>)->i64{match crate::task::with_current_process(f){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn proc_u64(f:impl FnOnce(&mut crate::process::Process)->Result<u64,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
@@ -9673,7 +10032,7 @@ fn sys_write(fd:u64,ptr:u64,len:u64)->i64 {
 fn sys_close(fd:u64)->i64{unit(crate::fd::close(fd as usize))}
 fn sys_fstat(fd:u64,ptr:u64)->i64 {let id=match fd_id(fd){Some(id)=>id,None=>return errno::neg(errno::EBADF)};let mut st=Stat::default();
  match crate::fd::kind(id){
-  Some(crate::fd::OpenKind::Inode(n))=>{let live=crate::vfs::inode_size(n.ino).unwrap_or(n.size);st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=1;st.st_size=live as i64;st.st_blocks=((live+511)/512)as i64;},
+  Some(crate::fd::OpenKind::Inode(n))=>{let live=crate::vfs::inode_size(n.ino).unwrap_or(n.size);st.st_ino=n.ino;st.st_mode=n.mode;st.st_nlink=fd_nlink(n.ino,n.rdev) as u64;st.st_size=live as i64;st.st_blocks=((live+511)/512)as i64;},
   Some(crate::fd::OpenKind::Console)=>{st.st_mode=S_IFCHR|0o666;st.st_nlink=1;},
   Some(crate::fd::OpenKind::PipeRead(_))|Some(crate::fd::OpenKind::PipeWrite(_))=>{st.st_mode=S_IFIFO|0o600;st.st_nlink=1;},
   Some(crate::fd::OpenKind::Socket(_))=>{st.st_mode=0o140000|0o600;st.st_nlink=1;},
@@ -9956,12 +10315,12 @@ fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{
    let n=if cwdlen==0{1}else{cwdlen};
    let p=core::str::from_utf8(&cwd[..n.min(128)]).unwrap_or("/");
    let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
-   let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;return copy_obj(ptr,&st);
+   let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=fd_nlink(node.ino,node.rdev) as u64;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;return copy_obj(ptr,&st);
   }
   return sys_fstat(dirfd as u64,ptr);
  }
  let (out,n)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
- let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=fd_nlink(node.ino,node.rdev) as u64;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
 fn sys_uname(ptr:u64)->i64{let ns=crate::task::with_current_process(|p|p.ns_uts).unwrap_or(1);let hn=crate::task::uts_hostname(ns);let nodename=core::str::from_utf8(&hn).unwrap_or("slop").trim_end_matches('\0');let u=UtsName{sysname:field("Linux"),nodename:field(nodename),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.51.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
@@ -10196,7 +10555,7 @@ fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
  let mut st=Statx::zeroed();
  st.stx_ino=inode.ino;
  st.stx_mode=inode.mode as u16;
- st.stx_nlink=1;
+ st.stx_nlink=fd_nlink(inode.ino,inode.rdev);
  st.stx_size=inode.size;
  st.stx_blksize=4096;
  st.stx_blocks=((inode.size+511)/512)as u64;
@@ -10271,8 +10630,10 @@ fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
- let n=core::cmp::min(node.size as usize,bufsiz as usize);
- if let Err(e)=crate::usercopy::copy_to_user(buf as usize,unsafe{core::slice::from_raw_parts(node.data,n)}){return errno::neg(e)}
+ let mut tb=[0u8;4096];
+ let len=match crate::vfs::readlink_content(&node,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let n=core::cmp::min(len,bufsiz as usize);
+ if let Err(e)=crate::usercopy::copy_to_user(buf as usize,&tb[..n]){return errno::neg(e)}
  n as i64
 }
 fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
@@ -11115,7 +11476,7 @@ fn sys_stat(path_ptr:u64,ptr:u64)->i64{
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(path){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  let mut st=Stat::default();
- st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
+ st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=fd_nlink(node.ino,node.rdev) as u64;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
  copy_obj(ptr,&st)
 }
 fn sys_lstat(path_ptr:u64,ptr:u64)->i64{
@@ -11123,7 +11484,7 @@ fn sys_lstat(path_ptr:u64,ptr:u64)->i64{
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(path){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  let mut st=Stat::default();
- st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
+ st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=fd_nlink(node.ino,node.rdev) as u64;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;
  copy_obj(ptr,&st)
 }
 fn sys_unlink(path_ptr:u64)->i64{
@@ -11543,8 +11904,10 @@ fn sys_readlink(path_ptr:u64,buf:u64,bufsiz:u64)->i64{
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
- let m=core::cmp::min(node.size as usize,bufsiz as usize);
- if let Err(e)=crate::usercopy::copy_to_user(buf as usize,unsafe{core::slice::from_raw_parts(node.data,m)}){return errno::neg(e)}
+ let mut tb=[0u8;4096];
+ let len=match crate::vfs::readlink_content(&node,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let m=core::cmp::min(len,bufsiz as usize);
+ if let Err(e)=crate::usercopy::copy_to_user(buf as usize,&tb[..m]){return errno::neg(e)}
  return m as i64;
 }
 fn sys_close_range(first:usize,last:usize,flags:u64)->i64{
@@ -16259,8 +16622,8 @@ END FILE: kernel/vdso.rs
 
 ================================================================================
 FILE: kernel/vfs.rs
-SIZE: 65250 bytes
-SHA-256: e3776b23a7ce16dc6913c93270857735423df59f38c08de080826e81830bf652
+SIZE: 66586 bytes
+SHA-256: bd796c796a40ff96d158385dd7e0cea5ac996f697fe11eb6c15a7178006e1deb
 ================================================================================
 //! Allocation-free initramfs VFS with read/write support.
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
@@ -16611,8 +16974,8 @@ pub fn rename(old:&str,new:&str)->Result<()>{
   if old=="/"||new=="/"{return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
-  if let Some(kind)=old_route.kind{match kind{
-   MountKind::Ext2=>return Err(errno::EROFS),
+ if let Some(kind)=old_route.kind{match kind{
+  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},
    MountKind::Tmpfs=>{
     let old_rel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;
     let new_rel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;
@@ -16901,7 +17264,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   if target.len()>4095{return Err(errno::ENAMETOOLONG)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
@@ -16919,9 +17282,14 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
   if !old.starts_with('/')||!new.starts_with('/')||new.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
-  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
-  let mut m=ROOT.lock();
- let oldnode=m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==old.as_bytes()).ok_or(errno::ENOENT)?;
+  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::link_path(orel,nrel)?;return lookup(new)},None=>{}}
+ /* Linux links the target of a symlink, so resolve first (before taking
+    the root lock, which lookup also needs). */
+ let mut rout=[0u8;128];
+ let rn=resolve_follow(b"/",old,true,&mut rout)?;
+ let oldp=core::str::from_utf8(&rout[..rn]).map_err(|_|errno::EINVAL)?;
+ let mut m=ROOT.lock();
+ let oldnode=m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==oldp.as_bytes()).ok_or(errno::ENOENT)?;
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
@@ -17022,11 +17390,9 @@ fn resolve_inner(cwd:&[u8],input:&str,follow_last:bool,out:&mut [u8;128],depth:u
   if should_follow{
    let pathstr=core::str::from_utf8(&out[..outlen]).map_err(|_|errno::EINVAL)?;
    if let Ok(inode)=lookup(pathstr){
-    if inode.mode & 0o170000 == S_IFLNK {
-     let tlen=inode.size as usize;
-     if tlen>=128 {return Err(errno::ENAMETOOLONG)}
-     let mut target=[0u8;128];
-     if tlen>0 {target[..tlen].copy_from_slice(unsafe{core::slice::from_raw_parts(inode.data,tlen)});}
+   if inode.mode & 0o170000 == S_IFLNK {
+    let mut target=[0u8;128];
+    let tlen=match readlink_content(&inode,&mut target){Ok(v)=>v,Err(_)=>break};
      let tstr=core::str::from_utf8(&target[..tlen]).map_err(|_|errno::EINVAL)?;
      if tstr.starts_with('/'){
       /* An absolute link target is resolved from the root, not from the
@@ -17057,6 +17423,19 @@ fn resolve_inner(cwd:&[u8],input:&str,follow_last:bool,out:&mut [u8;128],depth:u
 }
 
 pub fn lookup(path:&str)->Result<Inode>{lookup_in_namespace(path,current_mount_ns())}
+/* Reads a symlink body: ext2 inodes keep fast targets in the inode area
+   and longer ones in data blocks, while memory inodes carry a pointer. */
+pub fn readlink_content(node:&Inode,out:&mut[u8])->Result<usize>{
+ if node.mode&0o170000!=S_IFLNK{return Err(errno::EINVAL)}
+ let n=node.size as usize;
+ if n>out.len(){return Err(errno::ENAMETOOLONG)}
+ if n==0{return Ok(0)}
+ if node.data.is_null()&&crate::ext2::ready()&&is_ext2_ino(node.ino)&&tmpfs_fs_id(node.ino).is_none(){
+  return crate::ext2::readlink_into(node.rdev as u32,out);
+ }
+ out[..n].copy_from_slice(unsafe{core::slice::from_raw_parts(node.data,n)});
+ Ok(n)
+}
 pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::ENOENT)}
   let route=route_path(path,ns);
@@ -19007,8 +19386,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 99313 bytes
-SHA-256: 1058bef0c3fbf645bc626ee13a1f2b9fa76051cc69faef1c6092100b36ce696d
+SIZE: 102715 bytes
+SHA-256: 8417c38bace0b10a3e3b46232eaec567a8e7a62c7512c0b2760d474e03b60718
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -21104,6 +21483,61 @@ int main(int argc, char **argv) {
         /* Shrink, directory listing, error cases, removal. */
         if (truncate(big, 100) != 0) return fail("ext2 shrink");
         if (stat(big, &st) != 0 || st.st_size != 100) return fail("ext2 shrink size");
+        /* Links share the inode, symlinks resolve, renames move names. */
+        {
+            char l1[128], sl[128], f1r[128], sub2[128], sub3[128];
+            snprintf(l1, sizeof l1, "%s/a-link", base);
+            snprintf(sl, sizeof sl, "%s/a-sym", base);
+            snprintf(f1r, sizeof f1r, "%s/a-renamed", base);
+            snprintf(sub2, sizeof sub2, "%s/sub2", base);
+            snprintf(sub3, sizeof sub3, "%s/sub3", base);
+            (void)unlink(l1); (void)unlink(sl); (void)unlink(f1r);
+            (void)rmdir(sub2); (void)rmdir(sub3);
+            if (link(f1, l1) != 0) return fail("ext2 link");
+            struct stat la, lb;
+            if (stat(f1, &la) != 0 || stat(l1, &lb) != 0) return fail("ext2 link stat");
+            if (la.st_ino != lb.st_ino || la.st_nlink != 2) return fail("ext2 link shared");
+            int lf = open(l1, O_RDONLY);
+            if (lf < 0) return fail("ext2 link open");
+            char lh[16] = {0};
+            if (read(lf, lh, sizeof lh) != 16 || memcmp(lh, "0123456789abcdef", 16) != 0) return fail("ext2 link content");
+            close(lf);
+            if (unlink(l1) != 0) return fail("ext2 link unlink");
+            if (stat(f1, &la) != 0 || la.st_nlink != 1) return fail("ext2 link nlink");
+            if (symlink("a.txt", sl) != 0) return fail("ext2 symlink");
+            char rl[16] = {0};
+            if (readlink(sl, rl, sizeof rl) != 5 || memcmp(rl, "a.txt", 5) != 0) return fail("ext2 readlink");
+            struct stat ls, fs;
+            if (lstat(sl, &ls) != 0 || !S_ISLNK(ls.st_mode) || ls.st_size != 5) return fail("ext2 lstat link");
+            if (stat(sl, &fs) != 0 || !S_ISREG(fs.st_mode) || fs.st_size != 16) return fail("ext2 stat through");
+            int sfd = open(sl, O_RDONLY);
+            if (sfd < 0) return fail("ext2 open through");
+            if (read(sfd, lh, 5) != 5 || memcmp(lh, "01234", 5) != 0) return fail("ext2 link read");
+            close(sfd);
+            /* A long target exercises the block-backed symlink path. */
+            {
+                char tgt[101];
+                memset(tgt, 'x', 100);
+                tgt[100] = 0;
+                char sl2[128];
+                snprintf(sl2, sizeof sl2, "%s/b-sym", base);
+                (void)unlink(sl2);
+                if (symlink(tgt, sl2) != 0) return fail("ext2 symlink long");
+                char rb[104] = {0};
+                if (readlink(sl2, rb, sizeof rb) != 100 || memcmp(rb, tgt, 100) != 0) return fail("ext2 readlink long");
+                if (unlink(sl2) != 0) return fail("ext2 symlink long unlink");
+            }
+            if (unlink(sl) != 0) return fail("ext2 symlink unlink");
+            if (rename(f1, f1r) != 0) return fail("ext2 rename");
+            if (stat(f1, &st) == 0 || errno != ENOENT) return fail("ext2 rename gone");
+            if (stat(f1r, &st) != 0 || st.st_size != 16) return fail("ext2 rename target");
+            if (rename(f1r, f1) != 0) return fail("ext2 rename back");
+            if (mkdir(sub2, 0700) != 0) return fail("ext2 mkdir sub2");
+            if (rename(sub2, sub3) != 0) return fail("ext2 rename dir");
+            if (stat(sub2, &st) == 0 || errno != ENOENT) return fail("ext2 rename dir gone");
+            if (stat(sub3, &st) != 0 || !S_ISDIR(st.st_mode)) return fail("ext2 rename dir target");
+            if (rmdir(sub3) != 0) return fail("ext2 rmdir sub3");
+        }
         DIR *dd = opendir(sub);
         if (!dd) return fail("ext2 opendir");
         int saw_b = 0, entries = 0;
@@ -22754,8 +23188,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 8239 bytes
-SHA-256: 96ef98ab5c62886850c39b65750095350f3b1e84f07a34463d6b762a40d602a5
+SIZE: 8314 bytes
+SHA-256: 199c70b7dcfc5a599149fb04ab2febbb26cfee62a80053eee3678adf87234dd0
 ================================================================================
 #!/bin/sh
 set -eu
@@ -22828,7 +23262,7 @@ required={
  'kernel/driver/virtio.rs':['MODERN_BLK','MODERN_NET','modern_caps','negotiate_modern','queue_setup','notify_base','VIRTIO_F_VERSION_1'],
  'kernel/net.rs':['OUR_IP','csum_pseudo','arp_lookup','udp_send','tcp_connect','tcp_listen','tcp_accept','is_loopback','LOOPBACK','SynRcvd','pub fn poll','EHOSTUNREACH'],
  'kernel/socket.rs':['INET_UDP_BASE','INET_TCP_BASE','pub fn inet_kind','close_by_id'],
- 'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count'],
+ 'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count','link_path','rename_path','symlink_path','readlink_into','free_all_blocks'],
  'tools/run-qemu.sh':['virtio-net-pci','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
  'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net','/lib/vdso.so'],

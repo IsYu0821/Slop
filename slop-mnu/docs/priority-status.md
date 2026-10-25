@@ -78,9 +78,11 @@
   `sendto`/`recvfrom` with source reporting, connected `send`/`recv`
   with `getpeername`, boundaries, abstract names, `socketpair` pairs
 - dirfd-relative `*at`: `openat`/`mkdirat`/`unlinkat`/`renameat`(+2)/
-  `linkat`/`symlinkat`/`readlinkat`/`newfstatat`/`statx`/`faccessat`/
+  `linkat`/`symlinkat`/`readlinkat`/`newfstatat`/  `statx`/`faccessat`/
   `fchmodat`/`fchownat`/`utimensat`/`execveat` against directory fds,
   `AT_EMPTY_PATH` fd execution, UAPI-true `statx` layout
+- ext2 link/rename/symlink: shared inodes with `nlink`, empty-dir
+  replacement renames, fast and block-backed symlinks with traversal
 
 ## Open defects
 

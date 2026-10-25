@@ -848,8 +848,225 @@ pub fn unlink_path(path:&str)->Result<(),i64>{
   patch_inode(inum,None,None,Some(links-1),None,true,None)?;
   return Ok(())
  }
+ if inode.i_mode&0o170000==0o120000{
+  /* Symlinks have no truncate path; free any data blocks directly. */
+  free_all_blocks(inum);
+  free_inode(&superblock()?,inum,false)?;
+  return Ok(())
+ }
  truncate_file(inum,0)?;
  free_inode(&superblock()?,inum,false)?;
+ Ok(())
+}
+/* Hard link: the new name points at the old inode; directories are refused
+   like Linux (EPERM) and the target must not exist. */
+pub fn link_path(old:&str,new:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let (ndir,nname)=split_parent(new)?;
+ let ndir_inum=lookup_inum(ndir)?;
+ /* Linux links the target of a symlink, so follow up to 8 links. */
+ let mut curbuf=[0u8;128];
+ let mut curlen=core::cmp::min(old.len(),127);
+ curbuf[..curlen].copy_from_slice(&old.as_bytes()[..curlen]);
+ let mut found=false;
+ for _ in 0..8{
+  let cur=core::str::from_utf8(&curbuf[..curlen]).map_err(|_|errno::EINVAL)?;
+  let t=lookup(cur)?;
+  if t.mode&0o170000!=0o120000{found=true;break}
+  let mut tb=[0u8;128];
+  let n=readlink_into(t.rdev as u32,&mut tb)?;
+  let ts=core::str::from_utf8(&tb[..n]).map_err(|_|errno::EINVAL)?;
+  let (d,_)=split_parent(cur)?;
+  let dl=d.len();let tl=ts.len();
+  let mut next=[0u8;128];let mut nl=0usize;
+  if ts.starts_with('/'){
+   if tl>127{return Err(errno::ENAMETOOLONG)}
+   next[..tl].copy_from_slice(ts.as_bytes());nl=tl;
+  }else{
+   if dl+1+tl>127{return Err(errno::ENAMETOOLONG)}
+   next[..dl].copy_from_slice(d.as_bytes());
+   next[dl]=b'/';
+   next[dl+1..dl+1+tl].copy_from_slice(ts.as_bytes());nl=dl+1+tl;
+  }
+  curbuf[..nl].copy_from_slice(&next[..nl]);curlen=nl;
+ }
+ if !found{return Err(errno::ELOOP)}
+ let ol=core::str::from_utf8(&curbuf[..curlen]).map_err(|_|errno::EINVAL)?;
+ let sb=superblock()?;
+ let target=lookup(ol)?;
+ if target.mode&0o170000==0o040000{return Err(errno::EPERM)}
+ let oinum=target.rdev as u32;
+ let oinode=read_inode(&sb,oinum)?;
+ let ftype=match oinode.i_mode&0o170000{0o100000=>1u8,0o120000=>7u8,_=>1u8};
+ dir_insert(ndir_inum,oinum,nname.as_bytes(),ftype)?;
+ let cur=read_inode(&sb,oinum)?;
+ patch_inode(oinum,None,None,Some(cur.i_links_count.saturating_add(1)),None,true,None)?;
+ Ok(())
+}
+/* Creates a symlink. Targets of 60 bytes or fewer live in the inode's
+   block-pointer area (fast symlink), like Linux; longer targets use
+   data blocks (capped at 4 KiB here). */
+/* Frees every data block of an inode without touching link counts.
+   Fast symlinks (i_blocks == 0) hold their target inline and need no
+   block work; every other file or directory owns real blocks. */
+fn free_all_blocks(inum:u32){
+ if let Ok(sb)=superblock(){
+  if let Ok(inode)=read_inode(&sb,inum){
+   if inode.i_blocks!=0{
+    let mut blks=inode.i_block;
+    if let Ok(freed)=free_from(&sb,&mut blks,0){
+     let cur=inode_sector_count(inum).unwrap_or(0);
+     let _=patch_inode(inum,None,Some(0),None,Some(cur.saturating_sub(freed)),true,Some(blks));
+    }
+   }else{
+    let _=patch_inode(inum,None,Some(0),None,None,true,None);
+   }
+  }
+ }
+}
+pub fn symlink_path(path:&str,target:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let (dir,name)=split_parent(path)?;
+ let dir_inum=lookup_inum(dir)?;
+ let sb=superblock()?;
+ let inum=alloc_inode(&sb,false)?;
+ zero_inode(inum)?;
+ let t=target.as_bytes();
+ if t.len()>4096{let _=free_inode(&superblock()?,inum,false);return Err(errno::ENAMETOOLONG)}
+ let mut e=[0u8;512];
+ read_inode_raw(&sb,inum,&mut e)?;
+ let isz=sb.s_inode_size as usize;
+ let tm=(crate::time::realtime_ns()/1_000_000_000) as u32;
+ e[0..2].copy_from_slice(&((0o120000|0o777) as u16).to_le_bytes());
+ e[4..8].copy_from_slice(&(t.len() as u32).to_le_bytes());
+ e[12..16].copy_from_slice(&tm.to_le_bytes());
+ e[16..20].copy_from_slice(&tm.to_le_bytes());
+ e[26..28].copy_from_slice(&1u16.to_le_bytes());
+ if t.len()<=60{
+  e[40..40+t.len()].copy_from_slice(t);
+  e[28..32].copy_from_slice(&0u32.to_le_bytes());
+  write_inode_raw(&sb,inum,&e[..isz])?;
+ }else{
+  let mut blks=[0u32;15];
+  let mut newb=0u32;
+  let mut done=0usize;
+  while done<t.len(){
+   let idx=done/block_size(&sb);
+   if idx>=12{free_all_blocks(inum);let _=free_inode(&superblock()?,inum,false);return Err(errno::ENAMETOOLONG)}
+   let blk=file_block(&sb,&mut blks,idx,true,&mut newb)?;
+   if blk==0{free_all_blocks(inum);let _=free_inode(&superblock()?,inum,false);return Err(errno::ENOSPC)}
+   let n=core::cmp::min(t.len()-done,block_size(&sb));
+   let mut block=[0u8;4096];
+   block[..n].copy_from_slice(&t[done..done+n]);
+   write_block(blk,block_size(&sb),&block)?;
+   done+=n;
+  }
+  e[28..32].copy_from_slice(&((newb*(block_size(&sb)/512) as u32)).to_le_bytes());
+  for i in 0..15{e[40+i*4..44+i*4].copy_from_slice(&blks[i].to_le_bytes());}
+  write_inode_raw(&sb,inum,&e[..isz])?;
+ }
+ if let Err(err)=dir_insert(dir_inum,inum,name.as_bytes(),7){
+  /* truncate_file refuses symlinks; free any blocks directly so a
+     failed create never leaks. */
+  free_all_blocks(inum);
+  let _=free_inode(&superblock()?,inum,false);
+  return Err(err);
+ }
+ Ok(())
+}
+/* Reads a symlink body: fast targets come from the inode area, longer
+   ones from data blocks. */
+pub fn readlink_into(inum:u32,out:&mut [u8])->Result<usize,i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ let sb=superblock()?;
+ let inode=read_inode(&sb,inum)?;
+ if inode.i_mode&0o170000!=0o120000{return Err(errno::EINVAL)}
+ let size=inode.i_size_lo as usize;
+ if size>out.len(){return Err(errno::ENAMETOOLONG)}
+ if size==0{return Ok(0)}
+ if size<=60{
+  let raw=unsafe{core::slice::from_raw_parts((&inode.i_block as *const [u32;15]).cast::<u8>(),60)};
+  out[..size].copy_from_slice(&raw[..size]);
+  return Ok(size);
+ }
+ let mut blks=inode.i_block;
+ let mut done=0usize;
+ while done<size{
+  let mut newb=0u32;
+  let blk=file_block(&sb,&mut blks,done/block_size(&sb),false,&mut newb)?;
+  if blk==0{break}
+  let mut block=[0u8;4096];
+  read_block(blk,block_size(&sb),&mut block)?;
+  let n=core::cmp::min(size-done,core::cmp::min(block_size(&sb),out.len()-done));
+  out[done..done+n].copy_from_slice(&block[..n]);
+  done+=n;
+ }
+ Ok(done)
+}
+/* Renames within one filesystem, replacing files and empty directories.
+   Moving a directory rewrites its ".." and the parent link counts. */
+pub fn rename_path(old:&str,new:&str)->Result<(),i64>{
+ if !ready(){return Err(errno::ENODEV)}
+ if old==new{return Ok(())}
+ if new.starts_with(old)&&new.as_bytes().get(old.len())==Some(&b'/'){return Err(errno::EINVAL)}
+ let (odir,oname)=split_parent(old)?;
+ let (ndir,nname)=split_parent(new)?;
+ let odir_inum=lookup_inum(odir)?;
+ let ndir_inum=lookup_inum(ndir)?;
+ let sb=superblock()?;
+ let otarget=lookup(old)?;
+ let oinum=otarget.rdev as u32;
+ let oinode=read_inode(&sb,oinum)?;
+ let odir_mode=oinode.i_mode&0o170000;
+ if odir_mode!=0o100000&&odir_mode!=0o040000{return Err(errno::EINVAL)}
+ if let Ok(ntarget)=lookup(new){
+  let ninum=ntarget.rdev as u32;
+  if ninum==oinum{return Ok(())}
+  let ninode=read_inode(&sb,ninum)?;
+  let ndir_mode=ninode.i_mode&0o170000;
+  if odir_mode==0o040000{
+   if ndir_mode!=0o040000{return Err(errno::ENOTDIR)}
+   if !dir_is_empty(ninum)?{return Err(errno::ENOTEMPTY)}
+   dir_remove(ndir_inum,nname.as_bytes())?;
+   let nblks=read_inode(&sb,ninum)?.i_block;
+   let mut nb=nblks;
+   let _=free_from(&sb,&mut nb,0)?;
+   free_inode(&superblock()?,ninum,true)?;
+   let psb=superblock()?;
+   let pinode=read_inode(&psb,ndir_inum)?;
+   patch_inode(ndir_inum,None,None,Some(pinode.i_links_count.saturating_sub(1)),None,true,None)?;
+  }else{
+   if ndir_mode==0o040000{return Err(errno::EISDIR)}
+   dir_remove(ndir_inum,nname.as_bytes())?;
+   truncate_file(ninum,0)?;
+   free_inode(&superblock()?,ninum,false)?;
+  }
+ }
+ let ftype=if odir_mode==0o040000{2u8}else{1u8};
+ dir_insert(ndir_inum,oinum,nname.as_bytes(),ftype)?;
+ dir_remove(odir_inum,oname.as_bytes())?;
+ if odir_mode==0o040000{
+  /* Point ".." at the new parent. */
+  let mut blks=read_inode(&sb,oinum)?.i_block;
+  let mut newb=0u32;
+  let blk=file_block(&sb,&mut blks,0,false,&mut newb)?;
+  if blk!=0{
+   let mut block=[0u8;4096];
+   read_block(blk,block_size(&sb),&mut block)?;
+   if block.len()>=16{
+    block[12..16].copy_from_slice(&ndir_inum.to_le_bytes());
+    write_block(blk,block_size(&sb),&block)?;
+   }
+  }
+  if odir_inum!=ndir_inum{
+   let psb=superblock()?;
+   let poinode=read_inode(&psb,odir_inum)?;
+   patch_inode(odir_inum,None,None,Some(poinode.i_links_count.saturating_sub(1)),None,true,None)?;
+   let psb2=superblock()?;
+   let pninode=read_inode(&psb2,ndir_inum)?;
+   patch_inode(ndir_inum,None,None,Some(pninode.i_links_count.saturating_add(1)),None,true,None)?;
+  }
+ }
  Ok(())
 }
 pub fn mkdir_path(path:&str,mode:u32)->Result<vfs::Inode,i64>{
@@ -940,6 +1157,17 @@ pub fn rmdir_path(path:&str)->Result<(),i64>{
  Ok(())
 }
 pub fn truncate(inum:u32,size:u64)->Result<(),i64>{truncate_file(inum,size)}
+/// Link count for stat (1 plus real hard links); 1 when unreadable.
+pub fn nlink(inum:u32)->u32{
+ if !ready(){return 1}
+ match superblock().and_then(|sb|read_inode(&sb,inum)){
+  Ok(inode)=>{
+   let n=inode.i_links_count as u32;
+   if n==0{1}else{n}
+  }
+  Err(_)=>1,
+ }
+}
 pub fn file_size(inum:u32)->Option<u64>{
  let sb=superblock().ok()?;
  let inode=read_inode(&sb,inum).ok()?;

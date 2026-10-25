@@ -347,8 +347,8 @@ pub fn rename(old:&str,new:&str)->Result<()>{
   if old=="/"||new=="/"{return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
-  if let Some(kind)=old_route.kind{match kind{
-   MountKind::Ext2=>return Err(errno::EROFS),
+ if let Some(kind)=old_route.kind{match kind{
+  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},
    MountKind::Tmpfs=>{
     let old_rel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;
     let new_rel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;
@@ -637,7 +637,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   if target.len()>4095{return Err(errno::ENAMETOOLONG)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
@@ -655,9 +655,14 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
   if !old.starts_with('/')||!new.starts_with('/')||new.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
-  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
-  let mut m=ROOT.lock();
- let oldnode=m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==old.as_bytes()).ok_or(errno::ENOENT)?;
+  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::link_path(orel,nrel)?;return lookup(new)},None=>{}}
+ /* Linux links the target of a symlink, so resolve first (before taking
+    the root lock, which lookup also needs). */
+ let mut rout=[0u8;128];
+ let rn=resolve_follow(b"/",old,true,&mut rout)?;
+ let oldp=core::str::from_utf8(&rout[..rn]).map_err(|_|errno::EINVAL)?;
+ let mut m=ROOT.lock();
+ let oldnode=m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==oldp.as_bytes()).ok_or(errno::ENOENT)?;
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
@@ -758,11 +763,9 @@ fn resolve_inner(cwd:&[u8],input:&str,follow_last:bool,out:&mut [u8;128],depth:u
   if should_follow{
    let pathstr=core::str::from_utf8(&out[..outlen]).map_err(|_|errno::EINVAL)?;
    if let Ok(inode)=lookup(pathstr){
-    if inode.mode & 0o170000 == S_IFLNK {
-     let tlen=inode.size as usize;
-     if tlen>=128 {return Err(errno::ENAMETOOLONG)}
-     let mut target=[0u8;128];
-     if tlen>0 {target[..tlen].copy_from_slice(unsafe{core::slice::from_raw_parts(inode.data,tlen)});}
+   if inode.mode & 0o170000 == S_IFLNK {
+    let mut target=[0u8;128];
+    let tlen=match readlink_content(&inode,&mut target){Ok(v)=>v,Err(_)=>break};
      let tstr=core::str::from_utf8(&target[..tlen]).map_err(|_|errno::EINVAL)?;
      if tstr.starts_with('/'){
       /* An absolute link target is resolved from the root, not from the
@@ -793,6 +796,19 @@ fn resolve_inner(cwd:&[u8],input:&str,follow_last:bool,out:&mut [u8;128],depth:u
 }
 
 pub fn lookup(path:&str)->Result<Inode>{lookup_in_namespace(path,current_mount_ns())}
+/* Reads a symlink body: ext2 inodes keep fast targets in the inode area
+   and longer ones in data blocks, while memory inodes carry a pointer. */
+pub fn readlink_content(node:&Inode,out:&mut[u8])->Result<usize>{
+ if node.mode&0o170000!=S_IFLNK{return Err(errno::EINVAL)}
+ let n=node.size as usize;
+ if n>out.len(){return Err(errno::ENAMETOOLONG)}
+ if n==0{return Ok(0)}
+ if node.data.is_null()&&crate::ext2::ready()&&is_ext2_ino(node.ino)&&tmpfs_fs_id(node.ino).is_none(){
+  return crate::ext2::readlink_into(node.rdev as u32,out);
+ }
+ out[..n].copy_from_slice(unsafe{core::slice::from_raw_parts(node.data,n)});
+ Ok(n)
+}
 pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::ENOENT)}
   let route=route_path(path,ns);

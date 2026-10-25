@@ -69,7 +69,7 @@ required={
  'kernel/driver/virtio.rs':['MODERN_BLK','MODERN_NET','modern_caps','negotiate_modern','queue_setup','notify_base','VIRTIO_F_VERSION_1'],
  'kernel/net.rs':['OUR_IP','csum_pseudo','arp_lookup','udp_send','tcp_connect','tcp_listen','tcp_accept','is_loopback','LOOPBACK','SynRcvd','pub fn poll','EHOSTUNREACH'],
  'kernel/socket.rs':['INET_UDP_BASE','INET_TCP_BASE','pub fn inet_kind','close_by_id'],
- 'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count'],
+ 'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count','link_path','rename_path','symlink_path','readlink_into','free_all_blocks'],
  'tools/run-qemu.sh':['virtio-net-pci','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
  'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net','/lib/vdso.so'],
