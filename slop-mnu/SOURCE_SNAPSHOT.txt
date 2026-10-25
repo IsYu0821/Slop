@@ -1,13 +1,13 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.78.0
+Version: 0.79.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-ecef45ff0ad0c7c56af6e9fe65b6b2b9952ed8e1c756dfe3a94313132f466364     44689  CHANGELOG.md
+0d4035c8306ba0af110f7edbaeaca56fbeac9b638a6cb241fdfff6bc8f4b6fd5     45541  CHANGELOG.md
 939e513add19092404e0a6a1ea692d81758a6265acd3a8dc1a120eddb62a4c67       160  Cargo.lock
-77255cf93c20af3aa597d263f14af2db453a120313657606bae4fded39026cc0       231  Cargo.toml
+13f424ec4e875719fc9aef338c2420221ffc845fb55cfd6c212a8d6bcff33dc5       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch/x86_64/context.S
@@ -17,9 +17,9 @@ a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch
 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8      5224  arch/x86_64/syscall.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
-9d0e304bd58f019260901418fba25a0814645ede8264b3f1557917e41b075ada     20553  docs/compat-ledger.md
+541671ec1ff92f17378b4af8a780cde8bf3ecd46077aceaca1c5b3d4ce3ed93c     21686  docs/compat-ledger.md
 97057bcc13875bbf53fb744a0b55addb8160a2642e1a51546935766d3f10d418       699  docs/driver-compat.md
-c32e9ebf89d9663941556e2d8a106e7f74b835e6685d82f74d451298e2975a8e      5084  docs/linux-compatibility.md
+fb1c40b9fe856d7e8f80e054b6e3b07e9275c14d6e6d29c31738c715d1c456fb      5611  docs/linux-compatibility.md
 adf305597381fd64308507aa10f380cf0eb4dcceb55ad3fc9d685e74f539e50c      1019  docs/milestone10.md
 17588f19f4370b709a150a2c6532cef9382d61ff2576cf2762ad84bff3be4487      1173  docs/milestone11.md
 43882c07a24b12630f5985f2166b686acbe2c976372654083a6b470e8b1e2500      1170  docs/milestone12.md
@@ -91,10 +91,11 @@ fe548e93b2bb2ce63da37f4da4407f91bcbf708dc0a2e296706f460a4ec4336b      3991  docs
 cdbe1818ec56942fdd79af3d122c8b44ff27c00e6f3facd258ef7c9255cab196      4024  docs/milestone75.md
 17edfa577d8379bd97194e090fdfcc97f26864e0fbf70b8c7b68e70157943fe9      4464  docs/milestone76.md
 775c3c016da5511a951511c5472a05691083839e6db42b2a077e8c7fb1523319      4709  docs/milestone78.md
+ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs/milestone79.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-2ab65b714eb5a86e96af9b64879c600641a93682d3534433f781cd82ec881675      5239  docs/priority-status.md
+13926854eb613da8419eeb2edeb2c8d279555e72b68a4c89ed6af27db4193d6d      5506  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
@@ -132,7 +133,7 @@ a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kern
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
 c975b5a4beb12a7b5cc89a9c468f4dd02b44ad5efb1586606034c19e6217f7d4     10913  kernel/lib.rs
-f0ae1fc6830ddbcbec1f07a2401de354b14986e4482c6f441af67e1d856739d7    167301  kernel/linux_abi/mod.rs
+46f132e62feaf51998408066e2d70eec163b84a1368b8a561d49bc2861e6d834    176272  kernel/linux_abi/mod.rs
 ccc5f8af0ab871179379a7a27f64194caa6e3c0b6d6017f8a9019f56483d03d4      6888  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
@@ -183,7 +184,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-dca053b40b699658e03f0372163da8d4e3300ad273f83293da434f89b32e9c83     89655  tests/differential.c
+1058bef0c3fbf645bc626ee13a1f2b9fa76051cc69faef1c6092100b36ce696d     99313  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -204,9 +205,9 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-d5e1810653d6dfcd782470eb1ad65f84ad2b72542835c9c9f4d60fbe2aaf37e4      8170  tools/check-source.sh
+96ef98ab5c62886850c39b65750095350f3b1e84f07a34463d6b762a40d602a5      8239  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
-cb1047229934bd6ba5be00eafa8ddf9527a1b1d184631e26837901743e0589f2      5956  tools/differential-test.sh
+3f9ced3e6c1c405d4a12ff07c4107b037d159dba25de4232f4529ea37e2658cd      5978  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
 4b846a7388218638fc158b76b346280c1a7684cbe23e6c07bfb044476828e3ab       824  tools/link.sh
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
@@ -215,13 +216,19 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 209
+TOTAL FILES: 210
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 44689 bytes
-SHA-256: ecef45ff0ad0c7c56af6e9fe65b6b2b9952ed8e1c756dfe3a94313132f466364
+SIZE: 45541 bytes
+SHA-256: 0d4035c8306ba0af110f7edbaeaca56fbeac9b638a6cb241fdfff6bc8f4b6fd5
 ================================================================================
+## 0.79.0 - 2026-10-26
+- Dirfd-relative `*at`: `openat`, `mkdirat`, `unlinkat`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`, `faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat` and `execveat` now resolve relative paths against directory fds with native `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`/`AT_REMOVEDIR`/`AT_EMPTY_PATH` semantics (`ENOTDIR` for files, `EBADF` for bad fds, absolute paths ignore dirfd).
+- New `renameat2` dispatch (syscall 316) with `RENAME_NOREPLACE`; `AT_EMPTY_PATH` operates on (or executes) the fd itself, and stats the cwd under `AT_FDCWD`.
+- Fixed the in-kernel `statx` layout to the published UAPI (`ino` at offset 32, 16-byte timestamps); the new byte-identical battery caught the drift.
+- The differential battery covers it with `DIFF_AT_OK` on native Linux and in the guest, across ext2 and root mounts.
+
 ## 0.78.0 - 2026-10-26
 - `AF_UNIX` datagrams carry addresses: `bind` (`EADDRINUSE`/`EINVAL`), unconnected-`send` `ENOTCONN`, `sendto` to unknown paths `ENOENT`, `recvfrom` source reporting (empty for unbound senders), connected `send`/`recv` with `getpeername`, message-boundary preservation, abstract names (leading NUL) and `socketpair(SOCK_DGRAM)` as a connected pair.
 - Per-socket datagram inbox (8 x 4 KiB messages with sender paths) blocking on the existing wait queues with `EAGAIN` for nonblocking sockets; `listen`/`accept` on datagrams report `EOPNOTSUPP` as on Linux.
@@ -728,11 +735,11 @@ END FILE: Cargo.lock
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 77255cf93c20af3aa597d263f14af2db453a120313657606bae4fded39026cc0
+SHA-256: 13f424ec4e875719fc9aef338c2420221ffc845fb55cfd6c212a8d6bcff33dc5
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.78.0"
+version = "0.79.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -1499,8 +1506,8 @@ END FILE: docs/architecture.md
 
 ================================================================================
 FILE: docs/compat-ledger.md
-SIZE: 20553 bytes
-SHA-256: 9d0e304bd58f019260901418fba25a0814645ede8264b3f1557917e41b075ada
+SIZE: 21686 bytes
+SHA-256: 541671ec1ff92f17378b4af8a780cde8bf3ecd46077aceaca1c5b3d4ce3ed93c
 ================================================================================
 # Compatibility provenance ledger
 
@@ -1598,6 +1605,13 @@ ABI correction facts (v0.78.0):
 - `NICE` is syscall 134 (`PAUSE` is 34); `TIMES` is syscall 100: public Linux man-pages and the published x86-64 syscall table. Implementer: opencode. Reviewer: pending. Tests: `check-source.sh` pins the numbers and the differential battery runs `times()` through the new dispatch.
 
 
+Dirfd-relative *at facts (v0.79.0):
+- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
+- `fstatat(AT_FDCWD, "", buf, AT_EMPTY_PATH)` stats the working directory itself; with a real fd it stats (or executes, for `execveat`) the open file: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (cwd stat, empty-path statx/fstatat, dirfd execveat).
+- `renameat2` with `RENAME_NOREPLACE=1` reports `EEXIST` over an existing target and other flag bits report `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (noreplace then plain).
+- The `statx` buffer follows the published UAPI (`ino` at offset 32, 16-byte timestamps, uid/gid/device fields): public `sys/stat.h`/`linux/stat.h` header layout, verified against the native header. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` reads `stx_size` byte-identical on native Linux and in the guest.
+
+
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.
 --------------------------------------------------------------------------------
 END FILE: docs/compat-ledger.md
@@ -1622,8 +1636,8 @@ END FILE: docs/driver-compat.md
 
 ================================================================================
 FILE: docs/linux-compatibility.md
-SIZE: 5084 bytes
-SHA-256: c32e9ebf89d9663941556e2d8a106e7f74b835e6685d82f74d451298e2975a8e
+SIZE: 5611 bytes
+SHA-256: fb1c40b9fe856d7e8f80e054b6e3b07e9275c14d6e6d29c31738c715d1c456fb
 ================================================================================
 # Linux compatibility target
 
@@ -1647,6 +1661,17 @@ The `ucontext_t` carries the 512-byte FXSAVE area with the SSE registers at offs
 (pipe to pipe, non-consuming) and `fallocate` (extend, `KEEP_SIZE`,
 `PUNCH_HOLE`) move file content with native offset, flag and error
 semantics. Files stay capped at 8 pages (32 KiB); beyond that `ENOSPC`.
+
+## Dirfd-relative lookup
+
+Every `*at` syscall (`openat`, `mkdirat`, `unlinkat`, `renameat`,
+`renameat2`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`,
+`faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat`,
+`execveat`) resolves relative paths against directory fds with native
+errors (`ENOTDIR`, `EBADF`) and flag handling (`AT_SYMLINK_NOFOLLOW`,
+`AT_REMOVEDIR`, `AT_EMPTY_PATH`, `RENAME_NOREPLACE`).
+`execveat(AT_EMPTY_PATH)` executes the open file. Dirfd paths are
+snapshots taken at open. `mknodat` stays `ENOSYS`.
 
 ## signalfd
 
@@ -5350,6 +5375,103 @@ before the fix and pass after it.
 END FILE: docs/milestone78.md
 
 ================================================================================
+FILE: docs/milestone79.md
+SIZE: 4012 bytes
+SHA-256: ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd
+================================================================================
+# Milestone 79: dirfd-relative *at
+
+## Goal
+
+Until now every `*at` syscall except the bare path forms rejected any
+directory fd with `EINVAL` (or `ENOSYS`), so any program that avoids
+absolute paths – which is nearly all real software, from coreutils to
+CPython – stopped at the first `openat`. This milestone resolves
+relative paths against directory fds, like Linux, plus `renameat2`
+and `AT_EMPTY_PATH` file-descriptor execution.
+
+## Native behavior observed
+
+Probes fixed the contract before any kernel code changed:
+
+- a non-directory fd as dirfd reports `ENOTDIR`; a bad fd reports
+  `EBADF`; an absolute path ignores dirfd.
+- `fstatat(AT_FDCWD, "", buf, AT_EMPTY_PATH)` stats the working
+  directory itself (it succeeds, it does not report `ENOENT`).
+- `renameat2` with `RENAME_NOREPLACE` reports `EEXIST` when the target
+  exists; other flag bits report `EINVAL`.
+- `statx` flag bits beyond the mask/type set are accepted and ignored.
+
+## Implementation
+
+- `kernel/linux_abi/mod.rs`: `fd_abs_path` / `dirfd_abs_path`
+  snapshots (the open fd's absolute path is recorded at open, so a
+  later `rename` cannot confuse it), `at_resolve` joins relative
+  paths onto the dirfd and reuses the existing
+  root/chroot-aware resolver. All `*at` syscalls
+  (`openat`, `mkdirat`, `unlinkat`, `renameat`, `linkat`,
+  `symlinkat`, `readlinkat`, `newfstatat`, `faccessat`,
+  `fchmodat`, `fchownat`, `statx`, `utimensat`, `execveat`) go
+  through it with native `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`/
+  `AT_REMOVEDIR`/`AT_EMPTY_PATH` semantics.
+- `renameat2` (syscall 316) is newly dispatched with `0` and
+  `RENAME_NOREPLACE` supported; exotic flags report `EINVAL`.
+- `AT_EMPTY_PATH` with an empty path operates on the fd itself
+  (`newfstatat`, `statx`, `fchmodat`, `fchownat`, `utimensat`) or
+  executes it (`execveat`); with `AT_FDCWD` it stats the cwd.
+- `sys_execve` was split into resolve + `sys_execve_resolved` so
+  `execveat` reuses the whole loader/CR3/`argv` path.
+- Incidental fix: the in-kernel `statx` layout did not match the
+  published UAPI (`ino` belongs at offset 32, not 36; timestamps are
+  16 bytes, not 24). The new `*at` battery, which compares `stx_size`
+  byte for byte, caught it. Layout, uid/gid and device fields now
+  follow the UAPI.
+
+## Tests added
+
+- `DIFF_AT_OK`: dirfd create/read, absolute-path bypass, bad-fd
+  `EBADF`, file-fd `ENOTDIR`, `mkdirat` + `EEXIST`, subdir open,
+  `..` through a subdir fd, `statx` (+ `AT_EMPTY_PATH`), `fstatat`
+  (+ `AT_EMPTY_PATH`, cwd), `faccessat`, `fchmodat`, `fchownat`,
+  `utimensat` (+ `NOFOLLOW`), `symlinkat`/`readlinkat`/`lstat`-vs-
+  `stat`, `linkat` (+ follow, + `EEXIST`), `renameat`/`renameat2`
+  (+ `NOREPLACE` `EEXIST`), `execveat` of the bundled helper
+  through a dirfd (exit 17), `unlinkat` (+ `REMOVEDIR`).
+- The link/symlink/rename leg runs on the root/tmpfs side because
+  ext2 stays read-only for those operations, exactly mirroring how
+  real software spans mounts with different capabilities.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS (guest and native logs contain
+  `DIFF_AT_OK`; host `e2fsck` clean, free counts exact, guest bytes
+  verified on the platter).
+- `./tools/busybox-test.sh` PASS (115 checks match Linux).
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+## Known limits
+
+- `mknodat` stays `ENOSYS` (no device/fifo node creation yet).
+- Dirfd paths are snapshots at open; a later rename of the directory
+  is not tracked (Linux keeps it live via dentries).
+- No `SCM_RIGHTS` ancillary data yet.
+- Files stay capped at 8 pages (32 KiB) as before.
+- External (host-initiated) connections still need `hostfwd` plumbing.
+
+## Next candidates
+
+- ext2 `symlink`/`link`/`rename` so renames and links work on disk.
+- `SCM_RIGHTS` fd passing over `AF_UNIX` (real dbus/systemd IPC).
+- `AF_UNIX` `SEQPACKET`.
+- `hostfwd` + host-side connector so the host can reach guest servers.
+- SMP bring-up.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone79.md
+
+================================================================================
 FILE: docs/milestone8.md
 SIZE: 2268 bytes
 SHA-256: 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1
@@ -5416,8 +5538,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 5239 bytes
-SHA-256: 2ab65b714eb5a86e96af9b64879c600641a93682d3534433f781cd82ec881675
+SIZE: 5506 bytes
+SHA-256: 13926854eb613da8419eeb2edeb2c8d279555e72b68a4c89ed6af27db4193d6d
 ================================================================================
 # One-Linux-program priority status
 
@@ -5498,6 +5620,10 @@ SHA-256: 2ab65b714eb5a86e96af9b64879c600641a93682d3534433f781cd82ec881675
 - `AF_UNIX` datagrams with addresses: `bind` conflicts, unconnected
   `sendto`/`recvfrom` with source reporting, connected `send`/`recv`
   with `getpeername`, boundaries, abstract names, `socketpair` pairs
+- dirfd-relative `*at`: `openat`/`mkdirat`/`unlinkat`/`renameat`(+2)/
+  `linkat`/`symlinkat`/`readlinkat`/`newfstatat`/`statx`/`faccessat`/
+  `fchmodat`/`fchownat`/`utimensat`/`execveat` against directory fds,
+  `AT_EMPTY_PATH` fd execution, UAPI-true `statx` layout
 
 ## Open defects
 
@@ -9335,8 +9461,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 167301 bytes
-SHA-256: f0ae1fc6830ddbcbec1f07a2401de354b14986e4482c6f441af67e1d856739d7
+SIZE: 176272 bytes
+SHA-256: 46f132e62feaf51998408066e2d70eec163b84a1368b8a561d49bc2861e6d834
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -9376,7 +9502,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::GETITIMER=>sys_getitimer(a[0],a[1]), nr::SETITIMER=>sys_setitimer(a[0],a[1],a[2]),
     nr::STAT=>sys_stat(a[0],a[1]), nr::LSTAT=>sys_lstat(a[0],a[1]), nr::UNLINK=>sys_unlink(a[0]),
     nr::SYMLINK=>sys_symlink(a[0],a[1]), nr::LINK=>sys_link(a[0],a[1]),
-    nr::SYMLINKAT=>sys_symlink(a[0],a[2]), nr::LINKAT=>sys_link(a[0],a[2]),
+    nr::SYMLINKAT=>sys_symlinkat(a[0],a[1] as i64,a[2]), nr::LINKAT=>sys_linkat(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
     nr::OPENAT=>sys_openat(a[0] as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat(a[0] as i64,a[1],a[2],a[3]),
     nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
@@ -9493,7 +9619,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CHDIR=>sys_chdir(a[0]), nr::FCHDIR=>sys_fchdir(a[0] as usize),
     nr::MKDIR=>sys_mkdir(a[0],a[1] as u32), nr::MKDIRAT=>sys_mkdirat(a[0] as i64,a[1],a[2] as u32),
     nr::RMDIR=>sys_rmdir(a[0]),
-    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]),
+    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]), nr::RENAMEAT2=>sys_renameat_flags(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
     nr::CHMOD=>sys_chmod(a[0],a[1] as u32), nr::FCHMOD=>sys_fchmod(a[0] as usize,a[1] as u32), nr::FCHMODAT=>sys_fchmodat(a[0] as i64,a[1],a[2] as u32,a[3]),
     nr::TRUNCATE=>sys_truncate(a[0],a[1]), nr::FTRUNCATE=>sys_ftruncate(a[0] as usize,a[1]),
     nr::DUP=>sys_dup(a[0] as usize),
@@ -9504,7 +9630,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
     nr::UTIMENSAT=>sys_utimensat(a[0] as i64,a[1],a[2],a[3]),
-    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>0,
+    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>sys_fchownat(a[0] as i64,a[1],a[2] as u32,a[3] as u32,a[4]),
     nr::UTIME=>0,
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4],a[5]),
@@ -9714,9 +9840,9 @@ fn sys_rt_sigsuspend(newset:u64)->i64{
 }
 fn sys_rt_sigreturn()->i64{unsafe{crate::arch::x86_64::syscall::signal_restore_frame()}}
 fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_REMOVEDIR:u64=0x200;
- if dirfd!=AT_FDCWD||flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ const AT_REMOVEDIR:u64=0x200;
+ if flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
+ let (out,n)=match at_resolve(dirfd,path,false){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if flags&AT_REMOVEDIR!=0{match crate::vfs::rmdir(p){Ok(())=>0,Err(e)=>errno::neg(e)}}else{match crate::vfs::unlink(p){Ok(())=>0,Err(e)=>errno::neg(e)}}
 }
@@ -9812,12 +9938,30 @@ fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
 }
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100; if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ const AT_FDCWD:i64=-100; if flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
+ let (out,n)=match at_resolve(dirfd,path,true){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  open_common(p,flags,0o644)
 }
-fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0x100!=0{return errno::neg(errno::EINVAL)}let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
+fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_NO_AUTOMOUNT:u64=0x800;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW|AT_NO_AUTOMOUNT)!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];
+ let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+  if dirfd==AT_FDCWD{
+   /* Linux stats the working directory itself in this case. */
+   let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+   let n=if cwdlen==0{1}else{cwdlen};
+   let p=core::str::from_utf8(&cwd[..n.min(128)]).unwrap_or("/");
+   let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+   let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;return copy_obj(ptr,&st);
+  }
+  return sys_fstat(dirfd as u64,ptr);
+ }
+ let (out,n)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
 fn sys_uname(ptr:u64)->i64{let ns=crate::task::with_current_process(|p|p.ns_uts).unwrap_or(1);let hn=crate::task::uts_hostname(ns);let nodename=core::str::from_utf8(&hn).unwrap_or("slop").trim_end_matches('\0');let u=UtsName{sysname:field("Linux"),nodename:field(nodename),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.51.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
@@ -9832,6 +9976,9 @@ fn copy_exec_vec(base:u64,buf:&mut[[u8;EXEC_MAX_STR];EXEC_MAX_VEC],lens:&mut[usi
 fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let mut path_buf=[0u8;EXEC_MAX_STR];let pn=core::cmp::min(nr,path_buf.len()-1);path_buf[..pn].copy_from_slice(&out[..pn]);path_buf[pn]=0;
  let path=match core::str::from_utf8(&path_buf[..pn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ sys_execve_resolved(path,argv_ptr,envp_ptr)
+}
+fn sys_execve_resolved(path:&str,argv_ptr:u64,envp_ptr:u64)->i64{
 
  let image=match crate::vfs::image(path){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut ab=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut al=[0usize;EXEC_MAX_VEC];let ac=match copy_exec_vec(argv_ptr,&mut ab,&mut al){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -10014,17 +10161,35 @@ fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
  match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout){Ok(v)=>v,Err(e)=>errno::neg(e)}
 }
 
-/* statx: fills a linux statx buffer from the path or fd. */
-#[repr(C)] struct Statx{stx_mask:u32,stx_blksize:u32,stx_attributes:u64,stx_nlink:u32,stx_uid:u32,stx_gid:u32,stx_mode:u16,_pad0:[u8;6],stx_ino:u64,stx_size:u64,stx_blocks:u64,stx_attributes_mask:u64,atime:[i64;3],btime:[i64;3],ctime:[i64;3],mtime:[i64;3]}
-impl Statx{fn zeroed()->Self{Self{stx_mask:0,stx_blksize:0,stx_attributes:0,stx_nlink:0,stx_uid:0,stx_gid:0,stx_mode:0,_pad0:[0;6],stx_ino:0,stx_size:0,stx_blocks:0,stx_attributes_mask:0,atime:[0;3],btime:[0;3],ctime:[0;3],mtime:[0;3]}}}
+/* statx: fills a linux statx buffer from the path or fd. Layout follows the
+   published Linux UAPI exactly (mode@28, spare@30, ino@32, size@40). */
+#[repr(C)] struct StatxTs{tv_sec:i64,tv_nsec:u32,__reserved:u32}
+#[repr(C)] struct Statx{stx_mask:u32,stx_blksize:u32,stx_attributes:u64,stx_nlink:u32,stx_uid:u32,stx_gid:u32,stx_mode:u16,__spare0:[u16;1],stx_ino:u64,stx_size:u64,stx_blocks:u64,stx_attributes_mask:u64,atime:StatxTs,btime:StatxTs,ctime:StatxTs,mtime:StatxTs,stx_rdev_major:u32,stx_rdev_minor:u32,stx_dev_major:u32,stx_dev_minor:u32,__spare2:[u64;14]}
+impl Statx{fn zeroed()->Self{Self{stx_mask:0,stx_blksize:0,stx_attributes:0,stx_nlink:0,stx_uid:0,stx_gid:0,stx_mode:0,__spare0:[0;1],stx_ino:0,stx_size:0,stx_blocks:0,stx_attributes_mask:0,atime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},btime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},ctime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},mtime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},stx_rdev_major:0,stx_rdev_minor:0,stx_dev_major:0,stx_dev_minor:0,__spare2:[0;14]}}}
 fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;
- if dirfd!=AT_FDCWD||flags&!0x1000_0100!=0{return errno::neg(errno::EINVAL)}
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_NO_AUTOMOUNT:u64=0x800;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW|AT_NO_AUTOMOUNT|0x6000)!=0{return errno::neg(errno::EINVAL)}
  let _=mask;
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
  let inode=if flags&AT_EMPTY_PATH!=0{
-  match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
+  let mut b=[0u8;128];
+  let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  if raw.is_empty(){
+   if dirfd==AT_FDCWD{
+    let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+    let n=if cwdlen==0{1}else{cwdlen};
+    let p=core::str::from_utf8(&cwd[..n.min(128)]).unwrap_or("/");
+    match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
+   }else{
+    match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
+   }
+  }else{
+   let (out,nr)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
+   let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+   match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
+  }
  }else{
-  let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+  let (out,nr)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
   let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
   match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
  };
@@ -10035,6 +10200,8 @@ fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
  st.stx_size=inode.size;
  st.stx_blksize=4096;
  st.stx_blocks=((inode.size+511)/512)as u64;
+ st.stx_uid=0;st.stx_gid=0;
+ st.stx_rdev_major=((inode.rdev>>8)&0xfff)as u32;st.stx_rdev_minor=((inode.rdev&0xff)|((inode.rdev>>12)&0xfffff00))as u32;
  st.stx_mask=0x1|0x2|0x4|0x8|0x10|0x20|0x40|0x80|0x100|0x200|0x400;
  copy_obj(buf,&st)
 }
@@ -10099,10 +10266,8 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
  }
 }
 fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
  /* readlinkat reports the link itself: the last component is not followed. */
- let (out,nr)=match resolve_path_ptr_nofollow(path){Ok(v)=>v,Err(e)=>return e};
+ let (out,nr)=match at_resolve(dirfd,path,false){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
@@ -10111,18 +10276,28 @@ fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  n as i64
 }
 fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
- if dirfd!=AT_FDCWD||flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
+ const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
  if mode!=0&&mode!=1&&mode!=2&&mode!=4&&mode!=7{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_execveat(dirfd:i64,path:u64,argv:u64,envp:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;
- if flags&!AT_EMPTY_PATH!=0||(flags&AT_EMPTY_PATH!=0&&dirfd==AT_FDCWD){return errno::neg(errno::EINVAL)}
- if flags&AT_EMPTY_PATH!=0{return errno::neg(errno::ENOSYS)}
- sys_execve(path,argv,envp)
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];
+ let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+  if dirfd==AT_FDCWD{return errno::neg(errno::ENOENT)}
+  let (fdp,fdn)=match fd_abs_path(dirfd as usize){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let fp=match core::str::from_utf8(&fdp[..fdn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+  return sys_execve_resolved(fp,argv,envp);
+ }
+ let (out,n)=match at_resolve(dirfd,path,true){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ sys_execve_resolved(p,argv,envp)
 }
 fn sys_sched_getaffinity(pid:u32,len:usize,mask:u64)->i64{
  if pid!=0&&pid!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
@@ -10579,9 +10754,7 @@ fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
  0
 }
 
-fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
- let mut b=[0u8;128];
- let p=copy_path(path_ptr,&mut b)?;
+fn resolve_str_follow(p:&str,follow:bool)->Result<([u8;128],usize),i64>{
  let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
  let mut input=[0u8;256];let mut ilen=0usize;
  if p.starts_with('/') && rootlen>1 {
@@ -10590,32 +10763,79 @@ fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
   if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
   let pl=p.len().min(120-ilen);
   input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
-  input[ilen]=0;
+  if follow{input[ilen]=0;}
  }
- let input_str=if ilen>0 && input[0]!=0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
+ let input_str=if ilen>0 && (follow && input[0]!=0 || !follow){core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
-  let n=crate::vfs::resolve_follow(cwd_slice,input_str,true,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve_follow(cwd_slice,input_str,follow,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
+}
+fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ resolve_str_follow(p,true)
 }
 fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let mut b=[0u8;128];
  let p=copy_path(path_ptr,&mut b)?;
- let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
- let mut input=[0u8;256];let mut ilen=0usize;
- if p.starts_with('/') && rootlen>1 {
-  let rl=rootlen.min(120);
-  input[..rl].copy_from_slice(&root[..rl]); ilen=rl;
-  if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
-  let pl=p.len().min(120-ilen);
-  input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
- }
- let input_str=if ilen>0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
- let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
- let mut out=[0u8;128];
-  let n=crate::vfs::resolve_follow(cwd_slice,input_str,false,&mut out).map_err(|e|errno::neg(e))?;
- Ok((out,n))
+ resolve_str_follow(p,false)
 }
+/* Absolute path snapshot of an open file description (recorded at open). */
+fn fd_abs_path(fd:usize)->Result<([u8;128],usize),i64>{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return Err(errno::neg(errno::EBADF))};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   let mut out=[0u8;128];
+   let l=n.name_len.min(127);
+   out[..l].copy_from_slice(&n.name[..l]);
+   if l==0||out[0]!=b'/'{return Err(errno::neg(errno::ENOTDIR))}
+   Ok((out,l))
+  }
+  Some(_)=>Err(errno::neg(errno::ENOTDIR)),
+  None=>Err(errno::neg(errno::EBADF)),
+ }
+}
+/* Absolute path of a directory fd for *at resolution. */
+fn dirfd_abs_path(fd:usize)->Result<([u8;128],usize),i64>{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return Err(errno::neg(errno::EBADF))};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   if n.mode&0o170000!=crate::vfs::S_IFDIR{return Err(errno::neg(errno::ENOTDIR))}
+   let mut out=[0u8;128];
+   let l=n.name_len.min(127);
+   out[..l].copy_from_slice(&n.name[..l]);
+   if l==0||out[0]!=b'/'{return Err(errno::neg(errno::ENOTDIR))}
+   Ok((out,l))
+  }
+  Some(_)=>Err(errno::neg(errno::ENOTDIR)),
+  None=>Err(errno::neg(errno::EBADF)),
+ }
+}
+/* Resolves an *at path: absolute paths ignore dirfd, AT_FDCWD uses the cwd,
+   otherwise the path is joined onto the directory fd (snapshot at open).
+   Empty paths are rejected here; AT_EMPTY_PATH callers handle them first. */
+fn at_resolve(dirfd:i64,path_ptr:u64,follow:bool)->Result<([u8;128],usize),i64>{
+ const AT_FDCWD:i64=-100;
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ if p.is_empty(){return Err(errno::neg(errno::ENOENT))}
+ if p.starts_with('/')||dirfd==AT_FDCWD{
+  return resolve_str_follow(p,follow);
+ }
+ if dirfd<0{return Err(errno::neg(errno::EBADF))}
+ let (d,dl)=dirfd_abs_path(dirfd as usize)?;
+ let dstr=core::str::from_utf8(&d[..dl]).map_err(|_|errno::neg(errno::EINVAL))?;
+ let mut joined=[0u8;256];
+ let (mut jl,dl2,pl)=(0usize,dstr.len(),p.len());
+ if dl2+1+pl>127{return Err(errno::neg(errno::ENAMETOOLONG))}
+ joined[..dl2].copy_from_slice(dstr.as_bytes());jl=dl2;
+ if jl==0||joined[jl-1]!=b'/'{joined[jl]=b'/';jl+=1;}
+ joined[jl..jl+pl].copy_from_slice(p.as_bytes());jl+=pl;
+ let jstr=core::str::from_utf8(&joined[..jl]).map_err(|_|errno::neg(errno::EINVAL))?;
+ resolve_str_follow(jstr,follow)
+}
+fn at_resolve_nofollow(dirfd:i64,path_ptr:u64)->Result<([u8;128],usize),i64>{at_resolve(dirfd,path_ptr,false)}
 fn sys_chdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
@@ -10641,9 +10861,9 @@ fn sys_mkdir(path_ptr:u64,mode:u32)->i64{
  match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
- sys_mkdir(path_ptr,mode)
+ let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_rmdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -10658,9 +10878,19 @@ fn sys_rename(old_ptr:u64,new_ptr:u64)->i64{
  match crate::vfs::rename(old,newp){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_renameat(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64)->i64{
- const AT_FDCWD:i64=-100;
- if olddir!=AT_FDCWD||newdir!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
- sys_rename(old_ptr,new_ptr)
+ sys_renameat_flags(olddir,old_ptr,newdir,new_ptr,0)
+}
+fn sys_renameat_flags(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64,flags:u64)->i64{
+ const RENAME_NOREPLACE:u64=1;
+ if flags&!RENAME_NOREPLACE!=0{return errno::neg(errno::EINVAL)}
+ let (o,on)=match at_resolve(olddir,old_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match at_resolve(newdir,new_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if flags&RENAME_NOREPLACE!=0{
+  match crate::vfs::lookup(newp){Ok(_)=>return errno::neg(errno::EEXIST),Err(_)=>{}}
+ }
+ match crate::vfs::rename(old,newp){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_chmod(path_ptr:u64,mode:u32)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -10675,9 +10905,17 @@ fn sys_fchmod(fd:usize,mode:u32)->i64{
  }
 }
 fn sys_fchmodat(dirfd:i64,path_ptr:u64,mode:u32,flags:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
- sys_chmod(path_ptr,mode)
+ const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){return fd_abs_path(dirfd as usize);}
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::chmod_path(path,mode){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_truncate(path_ptr:u64,len:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -10692,6 +10930,19 @@ fn sys_ftruncate(fd:usize,len:u64)->i64{
  }
 }
 fn sys_dup(fd:usize)->i64{fd_result(crate::fd::dup_from(fd,0))}
+fn sys_fchownat(dirfd:i64,path_ptr:u64,_uid:u32,_gid:u32,flags:u64)->i64{
+ const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){return fd_abs_path(dirfd as usize);}
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_gettimeofday(tv:u64,tz:u64)->i64{
  let ns=crate::time::monotonic_ns();
  #[repr(C)] struct Timeval{tv_sec:i64,tv_usec:i64}
@@ -10838,9 +11089,22 @@ fn sys_pselect6(nfds:i32,rfds:u64,wfds:u64,efds:u64,sigmask_ptr:u64,timeout:u64)
  select_impl(nfds,rfds,wfds,efds,to_ns,has_timeout)
 }
 fn sys_utimensat(dirfd:i64,path_ptr:u64,times:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
- let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ const AT_FDCWD:i64=-100;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+   if dirfd==AT_FDCWD{
+    let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+    let n=if cwdlen==0{1}else{cwdlen};
+    let mut o=[0u8;128];let l=n.min(128);o[..l].copy_from_slice(&cwd[..l]);return Ok((o,l));
+   }
+   return fd_abs_path(dirfd as usize);
+  }
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
  let _=times;
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::lookup(path){Ok(_)=>0,Err(e)=>errno::neg(e)}
@@ -11249,6 +11513,30 @@ fn sys_link(old_ptr:u64,new_ptr:u64)->i64{
  let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::link(old,newp){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_linkat(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_SYMLINK_FOLLOW:u64=0x400;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_FOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let (o,on)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(old_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+   if olddir==AT_FDCWD{return Err(errno::neg(errno::ENOENT))}
+   return fd_abs_path(olddir as usize);
+  }
+  at_resolve(olddir,old_ptr,flags&AT_SYMLINK_FOLLOW!=0)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match at_resolve(newdir,new_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::link(old,newp){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_symlinkat(target_ptr:u64,newdir:i64,path_ptr:u64)->i64{
+ let mut tb=[0u8;128];
+ let t=match copy_path(target_ptr,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (out,n)=match at_resolve(newdir,path_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::symlink(t,p){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_readlink(path_ptr:u64,buf:u64,bufsiz:u64)->i64{
  let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -18719,8 +19007,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 89655 bytes
-SHA-256: dca053b40b699658e03f0372163da8d4e3300ad273f83293da434f89b32e9c83
+SIZE: 99313 bytes
+SHA-256: 1058bef0c3fbf645bc626ee13a1f2b9fa76051cc69faef1c6092100b36ce696d
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -18757,6 +19045,19 @@ SHA-256: dca053b40b699658e03f0372163da8d4e3300ad273f83293da434f89b32e9c83
 #include <sys/file.h>
 #include <time.h>
 #include <stdint.h>
+
+/* Local statx layout (published UAPI shape) for toolchains whose
+   headers predate it; the kernel fills mask/blksize/mode/ino/size. */
+struct slop_statx_ts { int64_t tv_sec; uint32_t tv_nsec; uint32_t __reserved; };
+struct slop_statx {
+    uint32_t stx_mask, stx_blksize, stx_attributes;
+    uint32_t stx_nlink, stx_uid, stx_gid;
+    uint16_t stx_mode; uint16_t __spare0;
+    uint64_t stx_ino, stx_size, stx_blocks, stx_attributes_mask;
+    struct slop_statx_ts stx_atime, stx_btime, stx_ctime, stx_mtime;
+    uint32_t stx_rdev_major, stx_rdev_minor, stx_dev_major, stx_dev_minor;
+    uint64_t __spare2[14];
+};
 
 #ifndef SYS_io_uring_setup
 #define SYS_io_uring_setup 425
@@ -18878,6 +19179,22 @@ static int fail(const char *what) {
 }
 
 int main(int argc, char **argv) {
+    static char g_bindir[128];
+    {
+        /* Remember where the test binary lives: later sections chdir("/"),
+           so a relative helper directory would stop resolving. */
+        char startcwd[128] = {0};
+        if (getcwd(startcwd, sizeof startcwd) == NULL) startcwd[0] = 0;
+        const char *a0 = (argc > 0 && argv[0]) ? argv[0] : "";
+        const char *slash = strrchr(a0, '/');
+        if (slash && slash != a0 && (size_t)(slash - a0) < sizeof g_bindir - 8) {
+            size_t dl = (size_t)(slash - a0);
+            if (a0[0] == '/') snprintf(g_bindir, sizeof g_bindir, "%.*s", (int)dl, a0);
+            else if (startcwd[0]) snprintf(g_bindir, sizeof g_bindir, "%s/%.*s", startcwd, (int)dl, a0);
+        } else if (startcwd[0]) {
+            snprintf(g_bindir, sizeof g_bindir, "%s/build", startcwd);
+        }
+    }
     sigset_t rt_set;
     sigemptyset(&rt_set);
     sigaddset(&rt_set, SIGRTMIN);
@@ -20573,6 +20890,152 @@ int main(int argc, char **argv) {
         close(a); close(b);
         (void)unlink(pa); (void)unlink(pb);
         printf("DIFF_UNIXDG_OK\n");
+    }
+
+    /* dirfd-relative *at: openat/mkdirat/unlinkat/newfstatat/statx/
+       faccessat/fchmodat/fchownat/utimensat/execveat and, where the
+       filesystem allows, linkat/symlinkat/readlinkat/renameat. ext2
+       stays read-only for link/symlink/rename, so those run on the
+       root/tmpfs side, like real software hitting different mounts. */
+    {
+        char base[128], sub[128], f1[128], g1[128];
+        char base2[128], lnk[128], hlnk[128], h2[128];
+        const char *envbase = getenv("SLOP_MNU_DIFF");
+        if (envbase) snprintf(base, sizeof base, "/mnt/atdiag");
+        else snprintf(base, sizeof base, "/tmp/atdiag-%d", (int)getpid());
+        if (envbase) snprintf(base2, sizeof base2, "/atfs2");
+        else snprintf(base2, sizeof base2, "/tmp/atfs-%d", (int)getpid());
+        snprintf(sub, sizeof sub, "%s/sub", base);
+        snprintf(f1, sizeof f1, "%s/f.txt", base);
+        snprintf(g1, sizeof g1, "%s/g.txt", base);
+        snprintf(lnk, sizeof lnk, "%s/lnk", base2);
+        snprintf(hlnk, sizeof hlnk, "%s/hlnk", base2);
+        snprintf(h2, sizeof h2, "%s/hlnk2", base2);
+        (void)unlink(f1); (void)unlink(g1);
+        (void)rmdir(sub); (void)rmdir(base);
+        (void)unlink(lnk); (void)unlink(hlnk); (void)unlink(h2);
+        (void)rmdir(base2);
+        if (mkdir(base, 0755) != 0) return fail("at mkdir base");
+        if (mkdir(base2, 0755) != 0) return fail("at mkdir base2");
+        int dfd = open(base, O_RDONLY | O_DIRECTORY);
+        if (dfd < 0) return fail("at open dirfd");
+        int fw = openat(dfd, "f.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fw < 0) return fail("at openat create");
+        if (write(fw, "at-data!", 8) != 8) return fail("at write");
+        close(fw);
+        int fr = openat(dfd, "f.txt", O_RDONLY);
+        if (fr < 0) return fail("at openat read");
+        char rb[8] = {0};
+        if (read(fr, rb, sizeof rb) != 8 || memcmp(rb, "at-data!", 8) != 0) return fail("at content");
+        close(fr);
+        int fa = openat(dfd, f1, O_RDONLY);
+        if (fa < 0) return fail("at openat absolute");
+        close(fa);
+        if (openat(-5, "x", O_RDONLY) != -1 || errno != EBADF) return fail("at badfd");
+        int reg = openat(dfd, "f.txt", O_RDONLY);
+        if (reg < 0) return fail("at open reg");
+        if (openat(reg, "x", O_RDONLY) != -1 || errno != ENOTDIR) return fail("at regfd");
+        close(reg);
+        if (mkdirat(dfd, "sub", 0700) != 0) return fail("at mkdirat");
+        if (mkdirat(dfd, "sub", 0700) != -1 || errno != EEXIST) return fail("at mkdirat eexist");
+        int sfd = openat(dfd, "sub", O_RDONLY | O_DIRECTORY);
+        if (sfd < 0) return fail("at open subdir");
+        int fdot = openat(sfd, "../f.txt", O_RDONLY);
+        if (fdot < 0) return fail("at dotdot");
+        close(fdot);
+        close(sfd);
+        {
+            struct stat st;
+            if (fstatat(dfd, "f.txt", &st, 0) != 0 || st.st_size != 8) return fail("at fstatat");
+            struct slop_statx sx;
+            memset(&sx, 0, sizeof sx);
+            if (syscall(SYS_statx, dfd, "f.txt", 0, 0xFFFu, &sx) != 0) return fail("at statx");
+            if (sx.stx_size != 8) return fail("at statx size");
+            int ofd = openat(dfd, "f.txt", O_RDONLY);
+            if (ofd < 0) return fail("at open for empty");
+            memset(&sx, 0, sizeof sx);
+            if (syscall(SYS_statx, ofd, "", AT_EMPTY_PATH, 0xFFFu, &sx) != 0) return fail("at statx empty");
+            if (sx.stx_size != 8) return fail("at statx empty size");
+            close(ofd);
+            struct stat es;
+            if (fstatat(dfd, "f.txt", &es, AT_EMPTY_PATH) != 0) return fail("at fstatat nonempty empty-flag");
+            int efd = openat(dfd, "f.txt", O_RDONLY);
+            struct stat fs;
+            if (fstatat(efd, "", &fs, AT_EMPTY_PATH) != 0) return fail("at fstatat empty");
+            if (fs.st_size != 8) return fail("at fstatat empty size");
+            struct stat cs;
+            if (fstatat(AT_FDCWD, "", &cs, AT_EMPTY_PATH) != 0) return fail("at fstatat cwd");
+            close(efd);
+        }
+        if (faccessat(dfd, "f.txt", R_OK, 0) != 0) return fail("at faccessat");
+        if (faccessat(dfd, "nope", R_OK, 0) != -1 || errno != ENOENT) return fail("at faccessat missing");
+        if (fchmodat(dfd, "f.txt", 0600, 0) != 0) return fail("at fchmodat");
+        struct stat cm;
+        if (stat(f1, &cm) != 0 || (cm.st_mode & 0777) != 0600) return fail("at chmod mode");
+        if (fchownat(dfd, "f.txt", (uid_t)-1, (gid_t)-1, 0) != 0) return fail("at fchownat");
+        if (utimensat(dfd, "f.txt", NULL, 0) != 0) return fail("at utimensat");
+        if (utimensat(dfd, "f.txt", NULL, AT_SYMLINK_NOFOLLOW) != 0) return fail("at utimensat nofollow");
+        close(dfd);
+        int d2 = open(base2, O_RDONLY | O_DIRECTORY);
+        if (d2 < 0) return fail("at open dirfd2");
+        int w2 = openat(d2, "f.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (w2 < 0) return fail("at openat2 create");
+        if (write(w2, "at-data!", 8) != 8) return fail("at write2");
+        close(w2);
+        if (symlinkat("f.txt", d2, "lnk") != 0) return fail("at symlinkat");
+        char lb[16] = {0};
+        if (readlinkat(d2, "lnk", lb, sizeof lb) != 5 || memcmp(lb, "f.txt", 5) != 0) return fail("at readlinkat");
+        struct stat lst;
+        if (fstatat(d2, "lnk", &lst, AT_SYMLINK_NOFOLLOW) != 0) return fail("at lstat");
+        if (!S_ISLNK(lst.st_mode)) return fail("at lstat type");
+        struct stat rst;
+        if (fstatat(d2, "lnk", &rst, 0) != 0) return fail("at stat follow");
+        if (!S_ISREG(rst.st_mode)) return fail("at stat type");
+        if (utimensat(d2, "lnk", NULL, AT_SYMLINK_NOFOLLOW) != 0) return fail("at utimensat lnk nofollow");
+        if (linkat(d2, "f.txt", d2, "hlnk", 0) != 0) return fail("at linkat");
+        if (linkat(d2, "f.txt", d2, "hlnk", 0) != -1 || errno != EEXIST) return fail("at linkat eexist");
+        if (linkat(d2, "lnk", d2, "hlnk2", AT_SYMLINK_FOLLOW) != 0) return fail("at linkat follow");
+        if (unlinkat(d2, "hlnk2", 0) != 0) return fail("at unlink hlnk2");
+        if (renameat(d2, "f.txt", d2, "g.txt") != 0) return fail("at renameat");
+        struct stat gs;
+        char g2[128];
+        snprintf(g2, sizeof g2, "%s/g.txt", base2);
+        if (stat(g2, &gs) != 0) return fail("at rename visible");
+        long rn2 = syscall(SYS_renameat2, d2, "g.txt", d2, "hlnk", 1);
+        if (rn2 != -1 || errno != EEXIST) return fail("at renameat2 noreplace");
+        if (unlinkat(d2, "hlnk", 0) != 0) return fail("at unlink hlnk");
+        rn2 = syscall(SYS_renameat2, d2, "g.txt", d2, "h.txt", 0);
+        if (rn2 != 0) return fail("at renameat2 plain");
+        if (renameat(d2, "h.txt", d2, "g.txt") != 0) return fail("at rename back");
+        {
+            const char *bindir = envbase ? "/bin" : g_bindir;
+            int bfd = open(bindir, O_RDONLY | O_DIRECTORY);
+            if (bfd < 0) return fail("at open bindir");
+            pid_t c = fork();
+            if (c < 0) return fail("at execveat fork");
+            if (c == 0) {
+                char *args[] = { "nopie-helper", "fixed", 0 };
+                char *env[] = { "SLOP_MNU_DIFF=1", 0 };
+                long r = syscall(SYS_execveat, bfd, "nopie-helper", args, env, 0);
+                _exit(71);
+                (void)r;
+            }
+            int st;
+            if (waitpid(c, &st, 0) != c) return fail("at execveat wait");
+            if (!WIFEXITED(st) || WEXITSTATUS(st) != 17) return fail("at execveat status");
+            close(bfd);
+        }
+        if (unlinkat(d2, "g.txt", 0) != 0) return fail("at unlinkat g");
+        if (unlinkat(d2, "lnk", 0) != 0) return fail("at unlinkat lnk");
+        dfd = open(base, O_RDONLY | O_DIRECTORY);
+        if (dfd < 0) return fail("at reopen dirfd");
+        if (unlinkat(dfd, "f.txt", 0) != 0) return fail("at unlinkat");
+        if (unlinkat(dfd, "sub", AT_REMOVEDIR) != 0) return fail("at unlinkat rmdir");
+        close(dfd);
+        close(d2);
+        if (rmdir(base) != 0) return fail("at rmdir base");
+        if (rmdir(base2) != 0) return fail("at rmdir base2");
+        printf("DIFF_AT_OK\n");
     }
 
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,
@@ -22291,8 +22754,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 8170 bytes
-SHA-256: d5e1810653d6dfcd782470eb1ad65f84ad2b72542835c9c9f4d60fbe2aaf37e4
+SIZE: 8239 bytes
+SHA-256: 96ef98ab5c62886850c39b65750095350f3b1e84f07a34463d6b762a40d602a5
 ================================================================================
 #!/bin/sh
 set -eu
@@ -22354,10 +22817,10 @@ required={
  
  'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ns'],
  'kernel/futex.rs':['fn wait','pub fn wake','pub fn dispatch','block_until'],
-  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
+  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_AT_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
  'tests/hello-linux.S':['mov $9,%rax','mov $10,%rax','mov $11,%rax','mov $12,%rax','cmpq $1,(%rsp)','/bin/hello-c'],
-  'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill','sys_signalfd4','signalfd_readable','signalfd_set_mask','sys_rt_sigtimedwait','dgram_sendto','write_sockaddr_un','sys_times'],
+  'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill','sys_signalfd4','signalfd_readable','signalfd_set_mask','sys_rt_sigtimedwait','dgram_sendto','write_sockaddr_un','sys_times','at_resolve','sys_renameat_flags','sys_execve_resolved'],
  'kernel/linux_abi/nr.rs':['CLONE:u64=56','WAIT4:u64=61','DUP2:u64=33','PIPE2:u64=293','GETPEERNAME:u64=52'],
  'kernel/arch/x86_64/port.rs':['pub unsafe fn inb','pub unsafe fn outb','pub unsafe fn inl','pub unsafe fn outl'],
  'kernel/driver/pci.rs':['pub struct Bdf','Cam','read_bars','pub fn count'],
@@ -22410,8 +22873,8 @@ END FILE: tools/check-toolchain.sh
 
 ================================================================================
 FILE: tools/differential-test.sh
-SIZE: 5956 bytes
-SHA-256: cb1047229934bd6ba5be00eafa8ddf9527a1b1d184631e26837901743e0589f2
+SIZE: 5978 bytes
+SHA-256: 3f9ced3e6c1c405d4a12ff07c4107b037d159dba25de4232f4529ea37e2658cd
 ================================================================================
 #!/bin/sh
 set -eu
@@ -22439,7 +22902,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
   exit 1
 fi
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_EXT2_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_EXT2_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -22506,7 +22969,7 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1

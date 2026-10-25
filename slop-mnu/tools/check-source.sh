@@ -58,10 +58,10 @@ required={
  
  'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ns'],
  'kernel/futex.rs':['fn wait','pub fn wake','pub fn dispatch','block_until'],
-  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
+  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_AT_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
  'tests/hello-linux.S':['mov $9,%rax','mov $10,%rax','mov $11,%rax','mov $12,%rax','cmpq $1,(%rsp)','/bin/hello-c'],
-  'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill','sys_signalfd4','signalfd_readable','signalfd_set_mask','sys_rt_sigtimedwait','dgram_sendto','write_sockaddr_un','sys_times'],
+  'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill','sys_signalfd4','signalfd_readable','signalfd_set_mask','sys_rt_sigtimedwait','dgram_sendto','write_sockaddr_un','sys_times','at_resolve','sys_renameat_flags','sys_execve_resolved'],
  'kernel/linux_abi/nr.rs':['CLONE:u64=56','WAIT4:u64=61','DUP2:u64=33','PIPE2:u64=293','GETPEERNAME:u64=52'],
  'kernel/arch/x86_64/port.rs':['pub unsafe fn inb','pub unsafe fn outb','pub unsafe fn inl','pub unsafe fn outl'],
  'kernel/driver/pci.rs':['pub struct Bdf','Cam','read_bars','pub fn count'],

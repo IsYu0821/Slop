@@ -36,7 +36,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::GETITIMER=>sys_getitimer(a[0],a[1]), nr::SETITIMER=>sys_setitimer(a[0],a[1],a[2]),
     nr::STAT=>sys_stat(a[0],a[1]), nr::LSTAT=>sys_lstat(a[0],a[1]), nr::UNLINK=>sys_unlink(a[0]),
     nr::SYMLINK=>sys_symlink(a[0],a[1]), nr::LINK=>sys_link(a[0],a[1]),
-    nr::SYMLINKAT=>sys_symlink(a[0],a[2]), nr::LINKAT=>sys_link(a[0],a[2]),
+    nr::SYMLINKAT=>sys_symlinkat(a[0],a[1] as i64,a[2]), nr::LINKAT=>sys_linkat(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
     nr::OPENAT=>sys_openat(a[0] as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat(a[0] as i64,a[1],a[2],a[3]),
     nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
@@ -153,7 +153,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CHDIR=>sys_chdir(a[0]), nr::FCHDIR=>sys_fchdir(a[0] as usize),
     nr::MKDIR=>sys_mkdir(a[0],a[1] as u32), nr::MKDIRAT=>sys_mkdirat(a[0] as i64,a[1],a[2] as u32),
     nr::RMDIR=>sys_rmdir(a[0]),
-    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]),
+    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]), nr::RENAMEAT2=>sys_renameat_flags(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
     nr::CHMOD=>sys_chmod(a[0],a[1] as u32), nr::FCHMOD=>sys_fchmod(a[0] as usize,a[1] as u32), nr::FCHMODAT=>sys_fchmodat(a[0] as i64,a[1],a[2] as u32,a[3]),
     nr::TRUNCATE=>sys_truncate(a[0],a[1]), nr::FTRUNCATE=>sys_ftruncate(a[0] as usize,a[1]),
     nr::DUP=>sys_dup(a[0] as usize),
@@ -164,7 +164,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
     nr::UTIMENSAT=>sys_utimensat(a[0] as i64,a[1],a[2],a[3]),
-    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>0,
+    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>sys_fchownat(a[0] as i64,a[1],a[2] as u32,a[3] as u32,a[4]),
     nr::UTIME=>0,
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4],a[5]),
@@ -374,9 +374,9 @@ fn sys_rt_sigsuspend(newset:u64)->i64{
 }
 fn sys_rt_sigreturn()->i64{unsafe{crate::arch::x86_64::syscall::signal_restore_frame()}}
 fn sys_unlinkat(dirfd:i64,path:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_REMOVEDIR:u64=0x200;
- if dirfd!=AT_FDCWD||flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ const AT_REMOVEDIR:u64=0x200;
+ if flags&!AT_REMOVEDIR!=0{return errno::neg(errno::EINVAL)}
+ let (out,n)=match at_resolve(dirfd,path,false){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  if flags&AT_REMOVEDIR!=0{match crate::vfs::rmdir(p){Ok(())=>0,Err(e)=>errno::neg(e)}}else{match crate::vfs::unlink(p){Ok(())=>0,Err(e)=>errno::neg(e)}}
 }
@@ -472,12 +472,30 @@ fn sys_fcntl(fd:usize,cmd:u64,arg:u64)->i64{
 }
 fn copy_path<'a>(ptr:u64,out:&'a mut[u8])->Result<&'a str,i64>{for i in 0..out.len(){crate::usercopy::copy_from_user(&mut out[i..i+1],ptr as usize+i)?;if out[i]==0{return core::str::from_utf8(&out[..i]).map_err(|_|errno::EINVAL)}}Err(errno::ENAMETOOLONG)}
 fn sys_openat(dirfd:i64,path:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100; if dirfd!=AT_FDCWD||flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ const AT_FDCWD:i64=-100; if flags&!0o37777777!=0{return errno::neg(errno::EINVAL)}
+ let (out,n)=match at_resolve(dirfd,path,true){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  open_common(p,flags,0o644)
 }
-fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{const AT_FDCWD:i64=-100;if dirfd!=AT_FDCWD||flags&!0x100!=0{return errno::neg(errno::EINVAL)}let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
+fn sys_newfstatat(dirfd:i64,path:u64,ptr:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_NO_AUTOMOUNT:u64=0x800;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW|AT_NO_AUTOMOUNT)!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];
+ let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+  if dirfd==AT_FDCWD{
+   /* Linux stats the working directory itself in this case. */
+   let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+   let n=if cwdlen==0{1}else{cwdlen};
+   let p=core::str::from_utf8(&cwd[..n.min(128)]).unwrap_or("/");
+   let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
+   let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;return copy_obj(ptr,&st);
+  }
+  return sys_fstat(dirfd as u64,ptr);
+ }
+ let (out,n)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};let mut st=Stat::default();st.st_ino=node.ino;st.st_mode=node.mode;st.st_nlink=1;st.st_size=node.size as i64;st.st_rdev=node.rdev;st.st_blksize=4096;st.st_blocks=((node.size+511)/512)as i64;copy_obj(ptr,&st)}
 fn field(s:&str)->[u8;65]{let mut x=[0;65];let b=s.as_bytes();let n=core::cmp::min(64,b.len());x[..n].copy_from_slice(&b[..n]);x}
 fn sys_uname(ptr:u64)->i64{let ns=crate::task::with_current_process(|p|p.ns_uts).unwrap_or(1);let hn=crate::task::uts_hostname(ns);let nodename=core::str::from_utf8(&hn).unwrap_or("slop").trim_end_matches('\0');let u=UtsName{sysname:field("Linux"),nodename:field(nodename),release:field("6.6.0-mnu"),version:field("Slop/MNU 0.51.0"),machine:field("x86_64"),domainname:field("localdomain")};copy_obj(ptr,&u)}
 fn sys_arch_prctl(code:u64,addr:u64)->i64 {const SET_FS:u64=0x1002;const GET_FS:u64=0x1003;match code{SET_FS=>if crate::process::set_fs_base(addr){0}else{errno::neg(errno::EPERM)},GET_FS=>copy_obj(addr,&crate::task::fs_base()),_=>errno::neg(errno::EINVAL)}}
@@ -492,6 +510,9 @@ fn copy_exec_vec(base:u64,buf:&mut[[u8;EXEC_MAX_STR];EXEC_MAX_VEC],lens:&mut[usi
 fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let mut path_buf=[0u8;EXEC_MAX_STR];let pn=core::cmp::min(nr,path_buf.len()-1);path_buf[..pn].copy_from_slice(&out[..pn]);path_buf[pn]=0;
  let path=match core::str::from_utf8(&path_buf[..pn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ sys_execve_resolved(path,argv_ptr,envp_ptr)
+}
+fn sys_execve_resolved(path:&str,argv_ptr:u64,envp_ptr:u64)->i64{
 
  let image=match crate::vfs::image(path){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut ab=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut al=[0usize;EXEC_MAX_VEC];let ac=match copy_exec_vec(argv_ptr,&mut ab,&mut al){Ok(v)=>v,Err(e)=>return errno::neg(e)};
@@ -674,17 +695,35 @@ fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
  match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout){Ok(v)=>v,Err(e)=>errno::neg(e)}
 }
 
-/* statx: fills a linux statx buffer from the path or fd. */
-#[repr(C)] struct Statx{stx_mask:u32,stx_blksize:u32,stx_attributes:u64,stx_nlink:u32,stx_uid:u32,stx_gid:u32,stx_mode:u16,_pad0:[u8;6],stx_ino:u64,stx_size:u64,stx_blocks:u64,stx_attributes_mask:u64,atime:[i64;3],btime:[i64;3],ctime:[i64;3],mtime:[i64;3]}
-impl Statx{fn zeroed()->Self{Self{stx_mask:0,stx_blksize:0,stx_attributes:0,stx_nlink:0,stx_uid:0,stx_gid:0,stx_mode:0,_pad0:[0;6],stx_ino:0,stx_size:0,stx_blocks:0,stx_attributes_mask:0,atime:[0;3],btime:[0;3],ctime:[0;3],mtime:[0;3]}}}
+/* statx: fills a linux statx buffer from the path or fd. Layout follows the
+   published Linux UAPI exactly (mode@28, spare@30, ino@32, size@40). */
+#[repr(C)] struct StatxTs{tv_sec:i64,tv_nsec:u32,__reserved:u32}
+#[repr(C)] struct Statx{stx_mask:u32,stx_blksize:u32,stx_attributes:u64,stx_nlink:u32,stx_uid:u32,stx_gid:u32,stx_mode:u16,__spare0:[u16;1],stx_ino:u64,stx_size:u64,stx_blocks:u64,stx_attributes_mask:u64,atime:StatxTs,btime:StatxTs,ctime:StatxTs,mtime:StatxTs,stx_rdev_major:u32,stx_rdev_minor:u32,stx_dev_major:u32,stx_dev_minor:u32,__spare2:[u64;14]}
+impl Statx{fn zeroed()->Self{Self{stx_mask:0,stx_blksize:0,stx_attributes:0,stx_nlink:0,stx_uid:0,stx_gid:0,stx_mode:0,__spare0:[0;1],stx_ino:0,stx_size:0,stx_blocks:0,stx_attributes_mask:0,atime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},btime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},ctime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},mtime:StatxTs{tv_sec:0,tv_nsec:0,__reserved:0},stx_rdev_major:0,stx_rdev_minor:0,stx_dev_major:0,stx_dev_minor:0,__spare2:[0;14]}}}
 fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;
- if dirfd!=AT_FDCWD||flags&!0x1000_0100!=0{return errno::neg(errno::EINVAL)}
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_NO_AUTOMOUNT:u64=0x800;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW|AT_NO_AUTOMOUNT|0x6000)!=0{return errno::neg(errno::EINVAL)}
  let _=mask;
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
  let inode=if flags&AT_EMPTY_PATH!=0{
-  match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
+  let mut b=[0u8;128];
+  let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  if raw.is_empty(){
+   if dirfd==AT_FDCWD{
+    let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+    let n=if cwdlen==0{1}else{cwdlen};
+    let p=core::str::from_utf8(&cwd[..n.min(128)]).unwrap_or("/");
+    match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
+   }else{
+    match fd_id(dirfd as u64){Some(id)=>match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n,_=>return errno::neg(errno::EBADF)},None=>return errno::neg(errno::EBADF)}
+   }
+  }else{
+   let (out,nr)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
+   let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+   match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
+  }
  }else{
-  let (out,nr)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+  let (out,nr)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
   let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
   match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)}
  };
@@ -695,6 +734,8 @@ fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
  st.stx_size=inode.size;
  st.stx_blksize=4096;
  st.stx_blocks=((inode.size+511)/512)as u64;
+ st.stx_uid=0;st.stx_gid=0;
+ st.stx_rdev_major=((inode.rdev>>8)&0xfff)as u32;st.stx_rdev_minor=((inode.rdev&0xff)|((inode.rdev>>12)&0xfffff00))as u32;
  st.stx_mask=0x1|0x2|0x4|0x8|0x10|0x20|0x40|0x80|0x100|0x200|0x400;
  copy_obj(buf,&st)
 }
@@ -759,10 +800,8 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
  }
 }
 fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD{return errno::neg(errno::EINVAL)}
  /* readlinkat reports the link itself: the last component is not followed. */
- let (out,nr)=match resolve_path_ptr_nofollow(path){Ok(v)=>v,Err(e)=>return e};
+ let (out,nr)=match at_resolve(dirfd,path,false){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..nr]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let node=match crate::vfs::lookup(p){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  if node.mode & 0o170000 != 0o120000 {return errno::neg(errno::EINVAL)}
@@ -771,18 +810,28 @@ fn sys_readlinkat(dirfd:i64,path:u64,buf:u64,bufsiz:u64)->i64{
  n as i64
 }
 fn sys_faccessat(dirfd:i64,path:u64,mode:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
- if dirfd!=AT_FDCWD||flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
+ const AT_EACCESS:u64=0x200;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if flags&!(AT_EACCESS|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
  if mode!=0&&mode!=1&&mode!=2&&mode!=4&&mode!=7{return errno::neg(errno::EINVAL)}
- let (out,n)=match resolve_path_ptr(path){Ok(v)=>v,Err(e)=>return e};
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match at_resolve(dirfd,path,follow){Ok(v)=>v,Err(e)=>return e};
  let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_execveat(dirfd:i64,path:u64,argv:u64,envp:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;
- if flags&!AT_EMPTY_PATH!=0||(flags&AT_EMPTY_PATH!=0&&dirfd==AT_FDCWD){return errno::neg(errno::EINVAL)}
- if flags&AT_EMPTY_PATH!=0{return errno::neg(errno::ENOSYS)}
- sys_execve(path,argv,envp)
+ const AT_FDCWD:i64=-100;const AT_EMPTY_PATH:u64=0x1000;const AT_SYMLINK_NOFOLLOW:u64=0x100;
+ if flags&!(AT_EMPTY_PATH|AT_SYMLINK_NOFOLLOW)!=0{return errno::neg(errno::EINVAL)}
+ let mut b=[0u8;128];
+ let raw=match copy_path(path,&mut b){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+  if dirfd==AT_FDCWD{return errno::neg(errno::ENOENT)}
+  let (fdp,fdn)=match fd_abs_path(dirfd as usize){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  let fp=match core::str::from_utf8(&fdp[..fdn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+  return sys_execve_resolved(fp,argv,envp);
+ }
+ let (out,n)=match at_resolve(dirfd,path,true){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ sys_execve_resolved(p,argv,envp)
 }
 fn sys_sched_getaffinity(pid:u32,len:usize,mask:u64)->i64{
  if pid!=0&&pid!=crate::task::current_pid(){return errno::neg(errno::ESRCH)}
@@ -1239,9 +1288,7 @@ fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
  0
 }
 
-fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
- let mut b=[0u8;128];
- let p=copy_path(path_ptr,&mut b)?;
+fn resolve_str_follow(p:&str,follow:bool)->Result<([u8;128],usize),i64>{
  let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
  let mut input=[0u8;256];let mut ilen=0usize;
  if p.starts_with('/') && rootlen>1 {
@@ -1250,32 +1297,79 @@ fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
   if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
   let pl=p.len().min(120-ilen);
   input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
-  input[ilen]=0;
+  if follow{input[ilen]=0;}
  }
- let input_str=if ilen>0 && input[0]!=0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
+ let input_str=if ilen>0 && (follow && input[0]!=0 || !follow){core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
  let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
  let mut out=[0u8;128];
-  let n=crate::vfs::resolve_follow(cwd_slice,input_str,true,&mut out).map_err(|e|errno::neg(e))?;
+  let n=crate::vfs::resolve_follow(cwd_slice,input_str,follow,&mut out).map_err(|e|errno::neg(e))?;
  Ok((out,n))
+}
+fn resolve_path_ptr(path_ptr:u64)->Result<([u8;128],usize),i64>{
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ resolve_str_follow(p,true)
 }
 fn resolve_path_ptr_nofollow(path_ptr:u64)->Result<([u8;128],usize),i64>{
  let mut b=[0u8;128];
  let p=copy_path(path_ptr,&mut b)?;
- let (cwd,cwdlen,root,rootlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len,pr.root,pr.root_len)).unwrap_or(([0u8;128],1,[b'/' ;128],1));
- let mut input=[0u8;256];let mut ilen=0usize;
- if p.starts_with('/') && rootlen>1 {
-  let rl=rootlen.min(120);
-  input[..rl].copy_from_slice(&root[..rl]); ilen=rl;
-  if ilen>0 && input[ilen-1]!=b'/'{input[ilen]=b'/';ilen+=1;}
-  let pl=p.len().min(120-ilen);
-  input[ilen..ilen+pl].copy_from_slice(&p.as_bytes()[..pl]); ilen+=pl;
- }
- let input_str=if ilen>0 {core::str::from_utf8(&input[..ilen]).unwrap_or(p)} else {p};
- let cwd_slice=if cwdlen==0{&[b'/'][..]}else{&cwd[..cwdlen]};
- let mut out=[0u8;128];
-  let n=crate::vfs::resolve_follow(cwd_slice,input_str,false,&mut out).map_err(|e|errno::neg(e))?;
- Ok((out,n))
+ resolve_str_follow(p,false)
 }
+/* Absolute path snapshot of an open file description (recorded at open). */
+fn fd_abs_path(fd:usize)->Result<([u8;128],usize),i64>{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return Err(errno::neg(errno::EBADF))};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   let mut out=[0u8;128];
+   let l=n.name_len.min(127);
+   out[..l].copy_from_slice(&n.name[..l]);
+   if l==0||out[0]!=b'/'{return Err(errno::neg(errno::ENOTDIR))}
+   Ok((out,l))
+  }
+  Some(_)=>Err(errno::neg(errno::ENOTDIR)),
+  None=>Err(errno::neg(errno::EBADF)),
+ }
+}
+/* Absolute path of a directory fd for *at resolution. */
+fn dirfd_abs_path(fd:usize)->Result<([u8;128],usize),i64>{
+ let id=match fd_id(fd as u64){Some(id)=>id,None=>return Err(errno::neg(errno::EBADF))};
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   if n.mode&0o170000!=crate::vfs::S_IFDIR{return Err(errno::neg(errno::ENOTDIR))}
+   let mut out=[0u8;128];
+   let l=n.name_len.min(127);
+   out[..l].copy_from_slice(&n.name[..l]);
+   if l==0||out[0]!=b'/'{return Err(errno::neg(errno::ENOTDIR))}
+   Ok((out,l))
+  }
+  Some(_)=>Err(errno::neg(errno::ENOTDIR)),
+  None=>Err(errno::neg(errno::EBADF)),
+ }
+}
+/* Resolves an *at path: absolute paths ignore dirfd, AT_FDCWD uses the cwd,
+   otherwise the path is joined onto the directory fd (snapshot at open).
+   Empty paths are rejected here; AT_EMPTY_PATH callers handle them first. */
+fn at_resolve(dirfd:i64,path_ptr:u64,follow:bool)->Result<([u8;128],usize),i64>{
+ const AT_FDCWD:i64=-100;
+ let mut b=[0u8;128];
+ let p=copy_path(path_ptr,&mut b)?;
+ if p.is_empty(){return Err(errno::neg(errno::ENOENT))}
+ if p.starts_with('/')||dirfd==AT_FDCWD{
+  return resolve_str_follow(p,follow);
+ }
+ if dirfd<0{return Err(errno::neg(errno::EBADF))}
+ let (d,dl)=dirfd_abs_path(dirfd as usize)?;
+ let dstr=core::str::from_utf8(&d[..dl]).map_err(|_|errno::neg(errno::EINVAL))?;
+ let mut joined=[0u8;256];
+ let (mut jl,dl2,pl)=(0usize,dstr.len(),p.len());
+ if dl2+1+pl>127{return Err(errno::neg(errno::ENAMETOOLONG))}
+ joined[..dl2].copy_from_slice(dstr.as_bytes());jl=dl2;
+ if jl==0||joined[jl-1]!=b'/'{joined[jl]=b'/';jl+=1;}
+ joined[jl..jl+pl].copy_from_slice(p.as_bytes());jl+=pl;
+ let jstr=core::str::from_utf8(&joined[..jl]).map_err(|_|errno::neg(errno::EINVAL))?;
+ resolve_str_follow(jstr,follow)
+}
+fn at_resolve_nofollow(dirfd:i64,path_ptr:u64)->Result<([u8;128],usize),i64>{at_resolve(dirfd,path_ptr,false)}
 fn sys_chdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
@@ -1301,9 +1395,9 @@ fn sys_mkdir(path_ptr:u64,mode:u32)->i64{
  match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
- sys_mkdir(path_ptr,mode)
+ let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_rmdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -1318,9 +1412,19 @@ fn sys_rename(old_ptr:u64,new_ptr:u64)->i64{
  match crate::vfs::rename(old,newp){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_renameat(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64)->i64{
- const AT_FDCWD:i64=-100;
- if olddir!=AT_FDCWD||newdir!=AT_FDCWD{return errno::neg(errno::ENOSYS)}
- sys_rename(old_ptr,new_ptr)
+ sys_renameat_flags(olddir,old_ptr,newdir,new_ptr,0)
+}
+fn sys_renameat_flags(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64,flags:u64)->i64{
+ const RENAME_NOREPLACE:u64=1;
+ if flags&!RENAME_NOREPLACE!=0{return errno::neg(errno::EINVAL)}
+ let (o,on)=match at_resolve(olddir,old_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match at_resolve(newdir,new_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ if flags&RENAME_NOREPLACE!=0{
+  match crate::vfs::lookup(newp){Ok(_)=>return errno::neg(errno::EEXIST),Err(_)=>{}}
+ }
+ match crate::vfs::rename(old,newp){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_chmod(path_ptr:u64,mode:u32)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -1335,9 +1439,17 @@ fn sys_fchmod(fd:usize,mode:u32)->i64{
  }
 }
 fn sys_fchmodat(dirfd:i64,path_ptr:u64,mode:u32,flags:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
- sys_chmod(path_ptr,mode)
+ const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){return fd_abs_path(dirfd as usize);}
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::chmod_path(path,mode){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_truncate(path_ptr:u64,len:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -1352,6 +1464,19 @@ fn sys_ftruncate(fd:usize,len:u64)->i64{
  }
 }
 fn sys_dup(fd:usize)->i64{fd_result(crate::fd::dup_from(fd,0))}
+fn sys_fchownat(dirfd:i64,path_ptr:u64,_uid:u32,_gid:u32,flags:u64)->i64{
+ const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){return fd_abs_path(dirfd as usize);}
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::lookup(p){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_gettimeofday(tv:u64,tz:u64)->i64{
  let ns=crate::time::monotonic_ns();
  #[repr(C)] struct Timeval{tv_sec:i64,tv_usec:i64}
@@ -1498,9 +1623,22 @@ fn sys_pselect6(nfds:i32,rfds:u64,wfds:u64,efds:u64,sigmask_ptr:u64,timeout:u64)
  select_impl(nfds,rfds,wfds,efds,to_ns,has_timeout)
 }
 fn sys_utimensat(dirfd:i64,path_ptr:u64,times:u64,flags:u64)->i64{
- const AT_FDCWD:i64=-100;
- if dirfd!=AT_FDCWD||flags!=0{return errno::neg(errno::ENOSYS)}
- let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
+ const AT_FDCWD:i64=-100;const AT_SYMLINK_NOFOLLOW:u64=0x100;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_NOFOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let follow=flags&AT_SYMLINK_NOFOLLOW==0;
+ let (out,n)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(path_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+   if dirfd==AT_FDCWD{
+    let (cwd,cwdlen)=crate::task::with_current_process(|pr|(pr.cwd,pr.cwd_len)).unwrap_or(([b'/' ;128],1));
+    let n=if cwdlen==0{1}else{cwdlen};
+    let mut o=[0u8;128];let l=n.min(128);o[..l].copy_from_slice(&cwd[..l]);return Ok((o,l));
+   }
+   return fd_abs_path(dirfd as usize);
+  }
+  at_resolve(dirfd,path_ptr,follow)
+ })(){Ok(v)=>v,Err(e)=>return e};
  let _=times;
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::lookup(path){Ok(_)=>0,Err(e)=>errno::neg(e)}
@@ -1909,6 +2047,30 @@ fn sys_link(old_ptr:u64,new_ptr:u64)->i64{
  let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::link(old,newp){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_linkat(olddir:i64,old_ptr:u64,newdir:i64,new_ptr:u64,flags:u64)->i64{
+ const AT_FDCWD:i64=-100;const AT_SYMLINK_FOLLOW:u64=0x400;const AT_EMPTY_PATH:u64=0x1000;
+ if flags&!(AT_SYMLINK_FOLLOW|AT_EMPTY_PATH)!=0{return errno::neg(errno::EINVAL)}
+ let (o,on)=match (||->Result<([u8;128],usize),i64>{
+  let mut b=[0u8;128];
+  let raw=copy_path(old_ptr,&mut b)?;
+  if flags&AT_EMPTY_PATH!=0&&raw.is_empty(){
+   if olddir==AT_FDCWD{return Err(errno::neg(errno::ENOENT))}
+   return fd_abs_path(olddir as usize);
+  }
+  at_resolve(olddir,old_ptr,flags&AT_SYMLINK_FOLLOW!=0)
+ })(){Ok(v)=>v,Err(e)=>return e};
+ let (nw,nn)=match at_resolve(newdir,new_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let old=match core::str::from_utf8(&o[..on]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ let newp=match core::str::from_utf8(&nw[..nn]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::link(old,newp){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_symlinkat(target_ptr:u64,newdir:i64,path_ptr:u64)->i64{
+ let mut tb=[0u8;128];
+ let t=match copy_path(target_ptr,&mut tb){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (out,n)=match at_resolve(newdir,path_ptr,false){Ok(v)=>v,Err(e)=>return e};
+ let p=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::symlink(t,p){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_readlink(path_ptr:u64,buf:u64,bufsiz:u64)->i64{
  let (out,n)=match resolve_path_ptr_nofollow(path_ptr){Ok(v)=>v,Err(e)=>return e};

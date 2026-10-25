@@ -94,4 +94,11 @@ ABI correction facts (v0.78.0):
 - `NICE` is syscall 134 (`PAUSE` is 34); `TIMES` is syscall 100: public Linux man-pages and the published x86-64 syscall table. Implementer: opencode. Reviewer: pending. Tests: `check-source.sh` pins the numbers and the differential battery runs `times()` through the new dispatch.
 
 
+Dirfd-relative *at facts (v0.79.0):
+- Relative paths resolve against directory fds; a file fd as dirfd reports `ENOTDIR`, a bad fd `EBADF`, an absolute path ignores dirfd: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` in the differential battery.
+- `fstatat(AT_FDCWD, "", buf, AT_EMPTY_PATH)` stats the working directory itself; with a real fd it stats (or executes, for `execveat`) the open file: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (cwd stat, empty-path statx/fstatat, dirfd execveat).
+- `renameat2` with `RENAME_NOREPLACE=1` reports `EEXIST` over an existing target and other flag bits report `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` (noreplace then plain).
+- The `statx` buffer follows the published UAPI (`ino` at offset 32, 16-byte timestamps, uid/gid/device fields): public `sys/stat.h`/`linux/stat.h` header layout, verified against the native header. Implementer: opencode. Reviewer: pending. Tests: `DIFF_AT_OK` reads `stx_size` byte-identical on native Linux and in the guest.
+
+
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.

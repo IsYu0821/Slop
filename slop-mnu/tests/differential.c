@@ -34,6 +34,19 @@
 #include <time.h>
 #include <stdint.h>
 
+/* Local statx layout (published UAPI shape) for toolchains whose
+   headers predate it; the kernel fills mask/blksize/mode/ino/size. */
+struct slop_statx_ts { int64_t tv_sec; uint32_t tv_nsec; uint32_t __reserved; };
+struct slop_statx {
+    uint32_t stx_mask, stx_blksize, stx_attributes;
+    uint32_t stx_nlink, stx_uid, stx_gid;
+    uint16_t stx_mode; uint16_t __spare0;
+    uint64_t stx_ino, stx_size, stx_blocks, stx_attributes_mask;
+    struct slop_statx_ts stx_atime, stx_btime, stx_ctime, stx_mtime;
+    uint32_t stx_rdev_major, stx_rdev_minor, stx_dev_major, stx_dev_minor;
+    uint64_t __spare2[14];
+};
+
 #ifndef SYS_io_uring_setup
 #define SYS_io_uring_setup 425
 #define SYS_io_uring_enter 426
@@ -154,6 +167,22 @@ static int fail(const char *what) {
 }
 
 int main(int argc, char **argv) {
+    static char g_bindir[128];
+    {
+        /* Remember where the test binary lives: later sections chdir("/"),
+           so a relative helper directory would stop resolving. */
+        char startcwd[128] = {0};
+        if (getcwd(startcwd, sizeof startcwd) == NULL) startcwd[0] = 0;
+        const char *a0 = (argc > 0 && argv[0]) ? argv[0] : "";
+        const char *slash = strrchr(a0, '/');
+        if (slash && slash != a0 && (size_t)(slash - a0) < sizeof g_bindir - 8) {
+            size_t dl = (size_t)(slash - a0);
+            if (a0[0] == '/') snprintf(g_bindir, sizeof g_bindir, "%.*s", (int)dl, a0);
+            else if (startcwd[0]) snprintf(g_bindir, sizeof g_bindir, "%s/%.*s", startcwd, (int)dl, a0);
+        } else if (startcwd[0]) {
+            snprintf(g_bindir, sizeof g_bindir, "%s/build", startcwd);
+        }
+    }
     sigset_t rt_set;
     sigemptyset(&rt_set);
     sigaddset(&rt_set, SIGRTMIN);
@@ -1849,6 +1878,152 @@ int main(int argc, char **argv) {
         close(a); close(b);
         (void)unlink(pa); (void)unlink(pb);
         printf("DIFF_UNIXDG_OK\n");
+    }
+
+    /* dirfd-relative *at: openat/mkdirat/unlinkat/newfstatat/statx/
+       faccessat/fchmodat/fchownat/utimensat/execveat and, where the
+       filesystem allows, linkat/symlinkat/readlinkat/renameat. ext2
+       stays read-only for link/symlink/rename, so those run on the
+       root/tmpfs side, like real software hitting different mounts. */
+    {
+        char base[128], sub[128], f1[128], g1[128];
+        char base2[128], lnk[128], hlnk[128], h2[128];
+        const char *envbase = getenv("SLOP_MNU_DIFF");
+        if (envbase) snprintf(base, sizeof base, "/mnt/atdiag");
+        else snprintf(base, sizeof base, "/tmp/atdiag-%d", (int)getpid());
+        if (envbase) snprintf(base2, sizeof base2, "/atfs2");
+        else snprintf(base2, sizeof base2, "/tmp/atfs-%d", (int)getpid());
+        snprintf(sub, sizeof sub, "%s/sub", base);
+        snprintf(f1, sizeof f1, "%s/f.txt", base);
+        snprintf(g1, sizeof g1, "%s/g.txt", base);
+        snprintf(lnk, sizeof lnk, "%s/lnk", base2);
+        snprintf(hlnk, sizeof hlnk, "%s/hlnk", base2);
+        snprintf(h2, sizeof h2, "%s/hlnk2", base2);
+        (void)unlink(f1); (void)unlink(g1);
+        (void)rmdir(sub); (void)rmdir(base);
+        (void)unlink(lnk); (void)unlink(hlnk); (void)unlink(h2);
+        (void)rmdir(base2);
+        if (mkdir(base, 0755) != 0) return fail("at mkdir base");
+        if (mkdir(base2, 0755) != 0) return fail("at mkdir base2");
+        int dfd = open(base, O_RDONLY | O_DIRECTORY);
+        if (dfd < 0) return fail("at open dirfd");
+        int fw = openat(dfd, "f.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fw < 0) return fail("at openat create");
+        if (write(fw, "at-data!", 8) != 8) return fail("at write");
+        close(fw);
+        int fr = openat(dfd, "f.txt", O_RDONLY);
+        if (fr < 0) return fail("at openat read");
+        char rb[8] = {0};
+        if (read(fr, rb, sizeof rb) != 8 || memcmp(rb, "at-data!", 8) != 0) return fail("at content");
+        close(fr);
+        int fa = openat(dfd, f1, O_RDONLY);
+        if (fa < 0) return fail("at openat absolute");
+        close(fa);
+        if (openat(-5, "x", O_RDONLY) != -1 || errno != EBADF) return fail("at badfd");
+        int reg = openat(dfd, "f.txt", O_RDONLY);
+        if (reg < 0) return fail("at open reg");
+        if (openat(reg, "x", O_RDONLY) != -1 || errno != ENOTDIR) return fail("at regfd");
+        close(reg);
+        if (mkdirat(dfd, "sub", 0700) != 0) return fail("at mkdirat");
+        if (mkdirat(dfd, "sub", 0700) != -1 || errno != EEXIST) return fail("at mkdirat eexist");
+        int sfd = openat(dfd, "sub", O_RDONLY | O_DIRECTORY);
+        if (sfd < 0) return fail("at open subdir");
+        int fdot = openat(sfd, "../f.txt", O_RDONLY);
+        if (fdot < 0) return fail("at dotdot");
+        close(fdot);
+        close(sfd);
+        {
+            struct stat st;
+            if (fstatat(dfd, "f.txt", &st, 0) != 0 || st.st_size != 8) return fail("at fstatat");
+            struct slop_statx sx;
+            memset(&sx, 0, sizeof sx);
+            if (syscall(SYS_statx, dfd, "f.txt", 0, 0xFFFu, &sx) != 0) return fail("at statx");
+            if (sx.stx_size != 8) return fail("at statx size");
+            int ofd = openat(dfd, "f.txt", O_RDONLY);
+            if (ofd < 0) return fail("at open for empty");
+            memset(&sx, 0, sizeof sx);
+            if (syscall(SYS_statx, ofd, "", AT_EMPTY_PATH, 0xFFFu, &sx) != 0) return fail("at statx empty");
+            if (sx.stx_size != 8) return fail("at statx empty size");
+            close(ofd);
+            struct stat es;
+            if (fstatat(dfd, "f.txt", &es, AT_EMPTY_PATH) != 0) return fail("at fstatat nonempty empty-flag");
+            int efd = openat(dfd, "f.txt", O_RDONLY);
+            struct stat fs;
+            if (fstatat(efd, "", &fs, AT_EMPTY_PATH) != 0) return fail("at fstatat empty");
+            if (fs.st_size != 8) return fail("at fstatat empty size");
+            struct stat cs;
+            if (fstatat(AT_FDCWD, "", &cs, AT_EMPTY_PATH) != 0) return fail("at fstatat cwd");
+            close(efd);
+        }
+        if (faccessat(dfd, "f.txt", R_OK, 0) != 0) return fail("at faccessat");
+        if (faccessat(dfd, "nope", R_OK, 0) != -1 || errno != ENOENT) return fail("at faccessat missing");
+        if (fchmodat(dfd, "f.txt", 0600, 0) != 0) return fail("at fchmodat");
+        struct stat cm;
+        if (stat(f1, &cm) != 0 || (cm.st_mode & 0777) != 0600) return fail("at chmod mode");
+        if (fchownat(dfd, "f.txt", (uid_t)-1, (gid_t)-1, 0) != 0) return fail("at fchownat");
+        if (utimensat(dfd, "f.txt", NULL, 0) != 0) return fail("at utimensat");
+        if (utimensat(dfd, "f.txt", NULL, AT_SYMLINK_NOFOLLOW) != 0) return fail("at utimensat nofollow");
+        close(dfd);
+        int d2 = open(base2, O_RDONLY | O_DIRECTORY);
+        if (d2 < 0) return fail("at open dirfd2");
+        int w2 = openat(d2, "f.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (w2 < 0) return fail("at openat2 create");
+        if (write(w2, "at-data!", 8) != 8) return fail("at write2");
+        close(w2);
+        if (symlinkat("f.txt", d2, "lnk") != 0) return fail("at symlinkat");
+        char lb[16] = {0};
+        if (readlinkat(d2, "lnk", lb, sizeof lb) != 5 || memcmp(lb, "f.txt", 5) != 0) return fail("at readlinkat");
+        struct stat lst;
+        if (fstatat(d2, "lnk", &lst, AT_SYMLINK_NOFOLLOW) != 0) return fail("at lstat");
+        if (!S_ISLNK(lst.st_mode)) return fail("at lstat type");
+        struct stat rst;
+        if (fstatat(d2, "lnk", &rst, 0) != 0) return fail("at stat follow");
+        if (!S_ISREG(rst.st_mode)) return fail("at stat type");
+        if (utimensat(d2, "lnk", NULL, AT_SYMLINK_NOFOLLOW) != 0) return fail("at utimensat lnk nofollow");
+        if (linkat(d2, "f.txt", d2, "hlnk", 0) != 0) return fail("at linkat");
+        if (linkat(d2, "f.txt", d2, "hlnk", 0) != -1 || errno != EEXIST) return fail("at linkat eexist");
+        if (linkat(d2, "lnk", d2, "hlnk2", AT_SYMLINK_FOLLOW) != 0) return fail("at linkat follow");
+        if (unlinkat(d2, "hlnk2", 0) != 0) return fail("at unlink hlnk2");
+        if (renameat(d2, "f.txt", d2, "g.txt") != 0) return fail("at renameat");
+        struct stat gs;
+        char g2[128];
+        snprintf(g2, sizeof g2, "%s/g.txt", base2);
+        if (stat(g2, &gs) != 0) return fail("at rename visible");
+        long rn2 = syscall(SYS_renameat2, d2, "g.txt", d2, "hlnk", 1);
+        if (rn2 != -1 || errno != EEXIST) return fail("at renameat2 noreplace");
+        if (unlinkat(d2, "hlnk", 0) != 0) return fail("at unlink hlnk");
+        rn2 = syscall(SYS_renameat2, d2, "g.txt", d2, "h.txt", 0);
+        if (rn2 != 0) return fail("at renameat2 plain");
+        if (renameat(d2, "h.txt", d2, "g.txt") != 0) return fail("at rename back");
+        {
+            const char *bindir = envbase ? "/bin" : g_bindir;
+            int bfd = open(bindir, O_RDONLY | O_DIRECTORY);
+            if (bfd < 0) return fail("at open bindir");
+            pid_t c = fork();
+            if (c < 0) return fail("at execveat fork");
+            if (c == 0) {
+                char *args[] = { "nopie-helper", "fixed", 0 };
+                char *env[] = { "SLOP_MNU_DIFF=1", 0 };
+                long r = syscall(SYS_execveat, bfd, "nopie-helper", args, env, 0);
+                _exit(71);
+                (void)r;
+            }
+            int st;
+            if (waitpid(c, &st, 0) != c) return fail("at execveat wait");
+            if (!WIFEXITED(st) || WEXITSTATUS(st) != 17) return fail("at execveat status");
+            close(bfd);
+        }
+        if (unlinkat(d2, "g.txt", 0) != 0) return fail("at unlinkat g");
+        if (unlinkat(d2, "lnk", 0) != 0) return fail("at unlinkat lnk");
+        dfd = open(base, O_RDONLY | O_DIRECTORY);
+        if (dfd < 0) return fail("at reopen dirfd");
+        if (unlinkat(dfd, "f.txt", 0) != 0) return fail("at unlinkat");
+        if (unlinkat(dfd, "sub", AT_REMOVEDIR) != 0) return fail("at unlinkat rmdir");
+        close(dfd);
+        close(d2);
+        if (rmdir(base) != 0) return fail("at rmdir base");
+        if (rmdir(base2) != 0) return fail("at rmdir base2");
+        printf("DIFF_AT_OK\n");
     }
 
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,

@@ -21,6 +21,17 @@ The `ucontext_t` carries the 512-byte FXSAVE area with the SSE registers at offs
 `PUNCH_HOLE`) move file content with native offset, flag and error
 semantics. Files stay capped at 8 pages (32 KiB); beyond that `ENOSPC`.
 
+## Dirfd-relative lookup
+
+Every `*at` syscall (`openat`, `mkdirat`, `unlinkat`, `renameat`,
+`renameat2`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`,
+`faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat`,
+`execveat`) resolves relative paths against directory fds with native
+errors (`ENOTDIR`, `EBADF`) and flag handling (`AT_SYMLINK_NOFOLLOW`,
+`AT_REMOVEDIR`, `AT_EMPTY_PATH`, `RENAME_NOREPLACE`).
+`execveat(AT_EMPTY_PATH)` executes the open file. Dirfd paths are
+snapshots taken at open. `mknodat` stays `ENOSYS`.
+
 ## signalfd
 
 `signalfd`/`signalfd4` deliver masked signals as 128-byte `signalfd_siginfo` structs sharing the process pending bit with handlers and `sigwaitinfo`/`sigtimedwait`: consuming via one path consumes the shared pending state but never a child task state, and `wait4`/`waitid` never consume the pending bit. Child stop/continue/exit arrive as `SIGCHLD` with `CLD_STOPPED=5`/`CLD_CONTINUED=6`/`CLD_EXITED=1`/`CLD_KILLED=2`, the child pid/uid and the stop signal / `SIGCONT` / exit code / termsig. `SA_NOCLDSTOP` suppresses only stop/continue generation, never waiting. `poll`/`select`/`epoll` report signalfd readability exactly when a masked signal is pending. No core dumps: signal deaths report `CLD_KILLED`, never `CLD_DUMPED`.

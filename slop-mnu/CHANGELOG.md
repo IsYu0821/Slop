@@ -1,3 +1,9 @@
+## 0.79.0 - 2026-10-26
+- Dirfd-relative `*at`: `openat`, `mkdirat`, `unlinkat`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `newfstatat`, `faccessat`, `fchmodat`, `fchownat`, `statx`, `utimensat` and `execveat` now resolve relative paths against directory fds with native `AT_FDCWD`/`AT_SYMLINK_NOFOLLOW`/`AT_REMOVEDIR`/`AT_EMPTY_PATH` semantics (`ENOTDIR` for files, `EBADF` for bad fds, absolute paths ignore dirfd).
+- New `renameat2` dispatch (syscall 316) with `RENAME_NOREPLACE`; `AT_EMPTY_PATH` operates on (or executes) the fd itself, and stats the cwd under `AT_FDCWD`.
+- Fixed the in-kernel `statx` layout to the published UAPI (`ino` at offset 32, 16-byte timestamps); the new byte-identical battery caught the drift.
+- The differential battery covers it with `DIFF_AT_OK` on native Linux and in the guest, across ext2 and root mounts.
+
 ## 0.78.0 - 2026-10-26
 - `AF_UNIX` datagrams carry addresses: `bind` (`EADDRINUSE`/`EINVAL`), unconnected-`send` `ENOTCONN`, `sendto` to unknown paths `ENOENT`, `recvfrom` source reporting (empty for unbound senders), connected `send`/`recv` with `getpeername`, message-boundary preservation, abstract names (leading NUL) and `socketpair(SOCK_DGRAM)` as a connected pair.
 - Per-socket datagram inbox (8 x 4 KiB messages with sender paths) blocking on the existing wait queues with `EAGAIN` for nonblocking sockets; `listen`/`accept` on datagrams report `EOPNOTSUPP` as on Linux.
