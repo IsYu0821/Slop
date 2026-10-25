@@ -154,7 +154,7 @@ fn make_vfs_inode(path:&str,inum:u32,inode:&Inode,sb:&Super)->vfs::Inode{
  let size=inode.i_size_lo as u64;
  let mut name=[0u8;127+1];
  let b=path.as_bytes(); let nl=b.len().min(127); name[..nl].copy_from_slice(&b[..nl]);
- vfs::Inode{ino: (inum as u64)+0x100000, mode: if mode & 0o170000==0 {vfs::S_IFREG| (mode&0o777)} else {mode}, size, capacity:size, data:core::ptr::null_mut(), rdev:inum as u64, pages:[0;8], npages:0, name, name_len:nl}
+ vfs::Inode{ino: (inum as u64)+0x100000, mode: if mode & 0o170000==0 {vfs::S_IFREG| (mode&0o777)} else {mode}, size, capacity:size, indirect:0, dindirect:0, data:core::ptr::null_mut(), rdev:inum as u64, pages:[0;8], npages:0, name, name_len:nl}
 }
 pub fn read(inode_rdev:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  let sb=superblock()?;

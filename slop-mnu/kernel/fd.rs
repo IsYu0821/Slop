@@ -110,6 +110,16 @@ fn release_inner(id:u32,closed:bool){
  match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),OpenKind::Socket(_)=>crate::socket::close_by_id(id),_=>{}}
 }
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
+/* True when any open file description refers to the given inode number.
+   Unlinking such a file must not recycle its frames: the open
+   descriptions keep working on them, like Linux anonymous inodes. */
+pub fn any_open_ino(ino:u64)->bool{
+ let t=OPEN.lock();
+ for slot in t.iter().flatten(){
+  if let OpenKind::Inode(n)=slot.kind{if n.ino==ino{return true}}
+ }
+ false
+}
 /* Reprograms a signalfd mask (signalfd(fd, mask) with a valid fd). */
 pub fn signalfd_set_mask(id:u32,mask:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){if let OpenKind::SignalFd(m)=&mut f.kind{*m=mask;}}}
 /* Readiness for poll/select/epoll: a signalfd is readable when any masked

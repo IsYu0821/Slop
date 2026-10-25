@@ -2,9 +2,16 @@
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
 pub type Result<T>=core::result::Result<T,i64>;
 pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
-#[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub npages:u8,pub name:[u8;NAME_MAX+1],pub name_len:usize}
+/* File block layout: 8 direct pages, one single-indirect table (512
+   page addresses) and one double-indirect table (512 tables of 512).
+   Maximum file size is (8 + 512 + 512*512) pages, just over 1 GiB. */
+pub const DIRECT_PAGES:usize=8;
+const IND_ENTRIES:usize=512;
+pub const MAX_FILE_PAGES:usize=8+512+512*512;
+pub const MAX_FILE_SIZE:u64=(MAX_FILE_PAGES as u64)*4096;
+#[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub indirect:u64,pub dindirect:u64,pub npages:u32,pub name:[u8;NAME_MAX+1],pub name_len:usize}
 unsafe impl Send for Inode{} unsafe impl Sync for Inode{}
-const EMPTY:Inode=Inode{ino:0,mode:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name:[0;NAME_MAX+1],name_len:0};
+const EMPTY:Inode=Inode{ino:0,mode:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name:[0;NAME_MAX+1],name_len:0};
 struct Mount{nodes:[Inode;MAX_NODES],len:usize,mounted:bool}
 static ROOT:SpinLock<Mount>=SpinLock::new(Mount{nodes:[EMPTY;MAX_NODES],len:0,mounted:false});
 /* Byte range of the initramfs image inside the kernel image: files carried in
@@ -115,7 +122,202 @@ fn tmpfs_fs_id(ino:u64)->Option<usize>{if ino&0xf000_0000_0000_0000!=TMPFS_INO_T
 fn visible_inode(mut inode:Inode,path:&str)->Result<Inode>{if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}inode.name=[0;NAME_MAX+1];inode.name[..path.len()].copy_from_slice(path.as_bytes());inode.name_len=path.len();Ok(inode)}
 fn tmpfs_root(fs_id:usize,path:&str)->Result<Inode>{
  let mut name=[0u8;NAME_MAX+1];if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}name[..path.len()].copy_from_slice(path.as_bytes());
- Ok(Inode{ino:tmpfs_ino(fs_id,0),mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:path.len()})
+ Ok(Inode{ino:tmpfs_ino(fs_id,0),mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:path.len()})
+}
+fn ind_read(table_virt:u64,idx:usize)->u64{
+ if table_virt==0||idx>=IND_ENTRIES{return 0}
+ unsafe{core::ptr::read_volatile(((table_virt as *const u64).add(idx)) as *const u64)}
+}
+fn ind_write(table_virt:u64,idx:usize,val:u64){
+ if table_virt==0||idx>=IND_ENTRIES{return}
+ unsafe{core::ptr::write_volatile(((table_virt as *mut u64).add(idx)) as *mut u64,val)};
+}
+/* Data page for a file-block index, or None for a hole. Reads never
+   allocate; holes read back as zeros up to the file size. */
+fn page_frame_of(node:&Inode,pi:usize)->Option<u64>{
+ if pi<DIRECT_PAGES{
+  let f=node.pages[pi];
+  if f!=0{return Some(f)}
+  return None;
+ }
+ let mut pi2=pi-DIRECT_PAGES;
+ if pi2<IND_ENTRIES{
+  if node.indirect==0{return None}
+  let f=ind_read(node.indirect,pi2);
+  if f!=0{return Some(f)}
+  return None;
+ }
+ pi2-=IND_ENTRIES;
+ if pi2<IND_ENTRIES*IND_ENTRIES{
+  if node.dindirect==0{return None}
+  let t1=ind_read(node.dindirect,pi2/IND_ENTRIES);
+  if t1==0{return None}
+  let f=ind_read(t1,pi2%IND_ENTRIES);
+  if f!=0{return Some(f)}
+  return None;
+ }
+ None
+}
+fn alloc_data_page()->Result<u64>{
+ let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
+ unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
+ Ok(crate::arch::x86_64::phys::phys_to_virt(frame))
+}
+/* Data page for a file-block index, allocating the data frame and any
+   missing indirect tables on the way. Fails with ENOSPC when the frame
+   allocator is empty and EFBIG past the 1 GiB file maximum. */
+fn ensure_page_of(node:&mut Inode,pi:usize)->Result<u64>{
+ if pi>=MAX_FILE_PAGES{return Err(errno::EFBIG)}
+ if let Some(f)=page_frame_of(node,pi){return Ok(f)}
+ if pi<DIRECT_PAGES{
+  let v=alloc_data_page()?;
+  node.pages[pi]=v;node.npages+=1;node.capacity=node.npages as u64*4096;
+  return Ok(v);
+ }
+ let mut pi2=pi-DIRECT_PAGES;
+ if pi2<IND_ENTRIES{
+  if node.indirect==0{
+   let t=alloc_data_page()?;
+   node.indirect=t;
+  }
+  let v=alloc_data_page()?;
+  ind_write(node.indirect,pi2,v);
+  node.npages+=1;node.capacity=node.npages as u64*4096;
+  return Ok(v);
+ }
+ pi2-=IND_ENTRIES;
+ let i1=pi2/IND_ENTRIES;let i2=pi2%IND_ENTRIES;
+ if node.dindirect==0{
+  let t=alloc_data_page()?;
+  node.dindirect=t;
+ }
+ let mut t1=ind_read(node.dindirect,i1);
+ if t1==0{
+  t1=alloc_data_page()?;
+  ind_write(node.dindirect,i1,t1);
+ }
+ let v=alloc_data_page()?;
+ ind_write(t1,i2,v);
+ node.npages+=1;node.capacity=node.npages as u64*4096;
+ Ok(v)
+}
+/* True when a virtual address names a frame from the page allocator
+   (direct-mapped low memory), as opposed to kernel image or static
+   memory such as the initramfs span or PROC_BUF. */
+fn is_frame_virt(va:u64)->bool{
+ if va==0||va&4095!=0{return false}
+ let pa=crate::arch::x86_64::phys::virt_to_phys(va);
+ pa!=0&&pa&4095==0
+}
+/* Releases every data page and indirect table of an inode. Initramfs
+   entries and static buffers own no frames and are left alone; shared
+   pages drop one reference (hard links share them until the last
+   description goes away). */
+fn free_all_pages(node:&mut Inode){free_beyond(node,0)}
+/* Frees every data page at file-block index >= keep, dropping indirect
+   tables left empty. Allocation is always contiguous from block 0, so the
+   remaining set stays contiguous and npages drops to keep. */
+fn free_beyond(node:&mut Inode,keep:usize){
+ use crate::memory::release_frame;
+ use crate::arch::x86_64::phys::virt_to_phys;
+ if node.data!=core::ptr::null_mut()&&in_initramfs(node.data as u64){return}
+ if keep<DIRECT_PAGES{
+  for j in keep..DIRECT_PAGES{
+   let f=node.pages[j];
+   if f!=0{
+    if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+    node.pages[j]=0;
+   }
+  }
+ }
+ if node.indirect!=0{
+  let mut kept=false;
+  for j in 0..IND_ENTRIES{
+   if DIRECT_PAGES+j<keep{kept=true;continue}
+   let f=ind_read(node.indirect,j);
+   if f!=0{
+    if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+    ind_write(node.indirect,j,0);
+   }
+  }
+  if !kept{
+   if is_frame_virt(node.indirect){let _=release_frame(virt_to_phys(node.indirect));}
+   node.indirect=0;
+  }
+ }
+ if node.dindirect!=0{
+  let mut kept_any=false;
+  for i1 in 0..IND_ENTRIES{
+   let base=DIRECT_PAGES+IND_ENTRIES+i1*IND_ENTRIES;
+   if base>=keep{
+    /* Whole second-level table is beyond keep: drop it entirely. */
+    let t1=ind_read(node.dindirect,i1);
+    if t1!=0{
+     if is_frame_virt(t1){
+      for j in 0..IND_ENTRIES{
+       let f=ind_read(t1,j);
+       if f!=0&&is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+      }
+      let _=release_frame(virt_to_phys(t1));
+     }
+     ind_write(node.dindirect,i1,0);
+    }
+    continue;
+   }
+   let t1=ind_read(node.dindirect,i1);
+   if t1==0{continue}
+   kept_any=true;
+   for j in 0..IND_ENTRIES{
+    if base+j<keep{continue}
+    let f=ind_read(t1,j);
+    if f!=0{
+     if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+     ind_write(t1,j,0);
+    }
+   }
+   /* A table left with no kept entries could go, but keeping a sparse
+      second level is harmless; it is reclaimed on unlink. */
+  }
+  if !kept_any&&keep<=DIRECT_PAGES+IND_ENTRIES{
+   if is_frame_virt(node.dindirect){let _=release_frame(virt_to_phys(node.dindirect));}
+   node.dindirect=0;
+  }
+ }
+ if (node.npages as usize)>keep{node.npages=keep as u32}
+ node.capacity=node.npages as u64*4096;
+ /* Keep the single-page data alias consistent: frames above are either
+    still mapped or were just recycled. */
+ if node.npages==0{node.data=core::ptr::null_mut()}else{node.data=node.pages[0] as *mut u8}
+}
+/* Bumps every frame owned by an inode (data pages and indirect tables)
+   for a new hard link sharing them. */
+fn incref_all_pages(node:&Inode){
+ use crate::memory::refcount_inc;
+ use crate::arch::x86_64::phys::virt_to_phys;
+ for i in 0..DIRECT_PAGES{
+  let f=node.pages[i];
+  if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+ }
+ if node.indirect!=0&&is_frame_virt(node.indirect){
+  refcount_inc(virt_to_phys(node.indirect));
+  for i in 0..IND_ENTRIES{
+   let f=ind_read(node.indirect,i);
+   if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+  }
+ }
+ if node.dindirect!=0&&is_frame_virt(node.dindirect){
+  refcount_inc(virt_to_phys(node.dindirect));
+  for i in 0..IND_ENTRIES{
+   let t1=ind_read(node.dindirect,i);
+   if t1!=0&&is_frame_virt(t1){
+    refcount_inc(virt_to_phys(t1));
+    for j in 0..IND_ENTRIES{
+     let f=ind_read(t1,j);
+     if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+    }
+   }
+  }
+ }
 }
 fn tmpfs_lookup(fs_id:usize,relative:&str,visible:&str)->Result<Inode>{
  if relative=="/"{return tmpfs_root(fs_id,visible)}
@@ -136,7 +338,7 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
  if store.nodes[..store.len].iter().enumerate().any(|(i,n)|store.linked[i]&&n.ino!=0&&&n.name[..n.name_len]==relative.as_bytes()){return Err(errno::EEXIST)}
  if !tmpfs_parent_exists(store,relative){return Err(errno::ENOENT)}
  if store.len==MAX_NODES{return Err(errno::ENOSPC)}
- let mut pages=[0u64;8];let mut npages=0u8;let mut capacity=0u64;let mut pointer=core::ptr::null_mut();let mut size=0u64;
+ let mut pages=[0u64;8];let mut npages=0u32;let mut capacity=0u64;let mut pointer=core::ptr::null_mut();let mut size=0u64;
  if mode&0o170000==S_IFREG||mode&0o170000==S_IFLNK{
   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
   unsafe{Identity.table(frame).fill(0)}
@@ -144,7 +346,7 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
   pages[0]=phys_to_virt(frame);npages=1;capacity=4096;pointer=phys_to_virt(frame)as*mut u8;
  }
  let idx=store.len;let mut name=[0u8;NAME_MAX+1];name[..relative.len()].copy_from_slice(relative.as_bytes());
- let node=Inode{ino:tmpfs_ino(fs_id,idx+1),mode,size,capacity,data:pointer,rdev,pages,npages,name,name_len:relative.len()};
+ let node=Inode{ino:tmpfs_ino(fs_id,idx+1),mode,size,capacity,data:pointer,rdev,pages,indirect:0,dindirect:0,npages,name,name_len:relative.len()};
  store.nodes[idx]=node;store.linked[idx]=true;store.len+=1;
  drop(registry);crate::inotify::notify(visible,crate::inotify::IN_CREATE|if mode&0o170000==S_IFDIR{crate::inotify::IN_ISDIR}else{0});
  visible_inode(node,visible)
@@ -167,7 +369,12 @@ fn tmpfs_readdir(fs_id:usize,relative:&str,mut cb:impl FnMut(u64,u32,&str))->Res
 fn tmpfs_unlink(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;
  let i=store.nodes[..store.len].iter().enumerate().position(|(i,n)|store.linked[i]&&n.ino!=0&&&n.name[..n.name_len]==relative.as_bytes()).ok_or(errno::ENOENT)?;
- if store.nodes[i].mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}store.linked[i]=false;drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE);Ok(())
+ if store.nodes[i].mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}
+ let ino=store.nodes[i].ino;
+ store.linked[i]=false;
+ /* Recycle backing frames unless an open description still uses them. */
+ if !crate::fd::any_open_ino(ino){let mut n=store.nodes[i];free_all_pages(&mut n);store.nodes[i].capacity=n.capacity;store.nodes[i].npages=n.npages;store.nodes[i].pages=n.pages;store.nodes[i].indirect=n.indirect;store.nodes[i].dindirect=n.dindirect;}
+ drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE);Ok(())
 }
 fn tmpfs_rmdir(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  if relative=="/"{return Err(errno::EBUSY)}
@@ -178,16 +385,28 @@ fn tmpfs_rmdir(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  if child{return Err(errno::ENOTEMPTY)}store.linked[i]=false;drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE|crate::inotify::IN_ISDIR);Ok(())
 }
 fn tmpfs_write_inode(node:&mut Inode,off:u64,src:&[u8])->Result<usize>{
- let end=off.checked_add(src.len()as u64).ok_or(errno::EINVAL)?;let needed=((end as usize+4095)/4096).max(1);
- while(node.npages as usize)<needed&&(node.npages as usize)<8{let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;unsafe{Identity.table(frame).fill(0)}node.pages[node.npages as usize]=phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;}
- if end>node.capacity{return Err(errno::ENOSPC)}
- let mut done=0usize;while done<src.len(){let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=node.npages as usize{return Err(errno::ENOSPC)}let frame=node.pages[pi];let n=core::cmp::min(src.len()-done,4096-po);unsafe{core::slice::from_raw_parts_mut((frame as*mut u8).add(po),n).copy_from_slice(&src[done..done+n])};done+=n;}
- if end>node.size{node.size=end}Ok(src.len())
+ let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+ if end>MAX_FILE_SIZE{return Err(errno::EFBIG)}
+ let needed=((end as usize+4095)/4096).max(1);
+ while (node.npages as usize)<needed{
+  let pi=node.npages as usize;
+  ensure_page_of(node,pi)?;
+ }
+ let mut done=0usize;
+ while done<src.len(){
+  let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;
+  let frame=match page_frame_of(node,pi){Some(f)=>f,None=>return Err(errno::ENOSPC)};
+  let n=core::cmp::min(src.len()-done,4096-po);
+  unsafe{core::slice::from_raw_parts_mut((frame as*mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
+  done+=n;
+ }
+ if end>node.size{node.size=end}
+ Ok(src.len())
 }
 fn u16le(b:&[u8],o:usize)->Result<u16>{let x=b.get(o..o+2).ok_or(errno::EINVAL)?;Ok(u16::from_le_bytes([x[0],x[1]]))}
 fn u32le(b:&[u8],o:usize)->Result<u32>{let x=b.get(o..o+4).ok_or(errno::EINVAL)?;Ok(u32::from_le_bytes([x[0],x[1],x[2],x[3]]))}
 fn align8(v:usize)->Result<usize>{v.checked_add(7).map(|x|x&!7).ok_or(errno::EINVAL)}
-pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],npages:1,name,name_len:nl};p=align8(p+size)?;}*INITRAMFS_SPAN.lock()=(image.as_ptr()as u64,image.as_ptr()as u64+image.len()as u64);m.len=count;m.mounted=true;Ok(count)}
+pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len:nl};p=align8(p+size)?;}*INITRAMFS_SPAN.lock()=(image.as_ptr()as u64,image.as_ptr()as u64+image.len()as u64);m.len=count;m.mounted=true;Ok(count)}
 pub fn read(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
   read_off(inode,off,dst)
 }
@@ -202,7 +421,17 @@ fn read_inode_data(inode:&Inode,off:u64,dst:&mut[u8])->Result<usize>{
   return Ok(n)
  }
  let mut done=0usize;
- while done<dst.len()&&off as usize+done<inode.size as usize{let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=inode.npages as usize{return Ok(done)}let n=core::cmp::min(dst.len()-done,core::cmp::min(4096-po,inode.size as usize-poff));if n==0{break}let src=unsafe{core::slice::from_raw_parts((inode.pages[pi]as*const u8).add(po),n)};dst[done..done+n].copy_from_slice(src);done+=n;}
+ while done<dst.len()&&off as usize+done<inode.size as usize{
+  let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;
+  let n=core::cmp::min(dst.len()-done,core::cmp::min(4096-po,inode.size as usize-poff));
+  if n==0{break}
+  match page_frame_of(inode,pi){
+   Some(frame)=>{let src=unsafe{core::slice::from_raw_parts((frame as*const u8).add(po),n)};dst[done..done+n].copy_from_slice(src);},
+   /* Holes inside the file size read as zeros, like Linux. */
+   None=>{dst[done..done+n].fill(0);},
+  }
+  done+=n;
+ }
  Ok(done)
 }
 /* Positional reads resolve the node by ino so a grown size is visible. */
@@ -226,7 +455,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
   let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
   let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
   unsafe{Identity.table(frame).fill(0)}
-  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len};
+  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len};
   let idx=m.len; m.nodes[idx]=node;
   m.len+=1;
   crate::inotify::notify(path,crate::inotify::IN_CREATE);
@@ -238,6 +467,8 @@ pub fn unlink(path:&str)->Result<()>{
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+ let ino=m.nodes[idx].ino;
+ if !crate::fd::any_open_ino(ino){let mut n=m.nodes[idx];free_all_pages(&mut n);}
  for i in idx..m.len-1{m.nodes[i]=m.nodes[i+1];}
  m.len-=1;
  crate::inotify::notify(path,crate::inotify::IN_DELETE);
@@ -254,7 +485,7 @@ pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
  let ino=(m.len+2)as u64;
  let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode:S_IFDIR|mode&0o777,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len};
+ let node=Inode{ino,mode:S_IFDIR|mode&0o777,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len};
  let idx=m.len; m.nodes[idx]=node;
  m.len+=1;
  crate::inotify::notify(path,crate::inotify::IN_CREATE|crate::inotify::IN_ISDIR);
@@ -406,14 +637,15 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
   let mut m=ROOT.lock();
- let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
- if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
- if size>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
- m.nodes[idx].size=size;
- Ok(())
+  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
+  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+  if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+  let ino=m.nodes[idx].ino;let old=m.nodes[idx].size;
+  if size<old&&!crate::fd::any_open_ino(ino){let keep=((size as usize+4095)/4096) as usize;let mut n=m.nodes[idx];free_beyond(&mut n,keep);m.nodes[idx]=n;}
+  m.nodes[idx].size=size;
+  Ok(())
 }
 /* ext2 on-disk inodes surface as 0x100000+inum, disjoint from the tmpfs
    tag range and the small ROOT ids. */
@@ -423,46 +655,45 @@ fn is_ext2_inode(n:&Inode)->bool{
 }
 pub fn truncate_ino(ino:u64,size:u64)->Result<()>{
   if is_ext2_ino(ino){return crate::ext2::truncate((ino-0x100000) as u32,size)}
-  if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())}
+  if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(ino){free_beyond(node,keep)}node.size=size;return Ok(())}
   let mut m=ROOT.lock();
- let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
- if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
- if size>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
- m.nodes[idx].size=size;
- Ok(())
+  let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
+  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+  if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+  let old=m.nodes[idx].size;
+  if size<old&&!crate::fd::any_open_ino(ino){let keep=((size as usize+4095)/4096) as usize;let mut n=m.nodes[idx];free_beyond(&mut n,keep);m.nodes[idx]=n;}
+  m.nodes[idx].size=size;
+  Ok(())
 }
-/* Grows backing capacity for fallocate without changing the size: allocates
-   zeroed pages up to the 8-page per-file limit, like the write path does.
+/* Grows backing capacity for fallocate without changing the size, using
+   the same indirect-block allocator as the write path (up to ~1 GiB).
    Initramfs image entries cannot grow beyond their mapped span. */
 pub fn reserve_ino(ino:u64,end:u64)->Result<()>{
- use crate::arch::x86_64::phys::Identity;
- use crate::arch::x86_64::paging::PhysAccess;
  if let Some(fs_id)=tmpfs_fs_id(ino){
   let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;
   if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}
   if node.mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
+  if end as usize>MAX_FILE_SIZE as usize{return Err(errno::EFBIG)}
   let needed=((end as usize+4095)/4096).max(1);
-  while (node.npages as usize)<needed&&(node.npages as usize)<8{
-   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
-   unsafe{Identity.table(frame).fill(0)}
-   node.pages[node.npages as usize]=crate::arch::x86_64::phys::phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;
+  while (node.npages as usize)<needed{
+   let pi=node.npages as usize;
+   ensure_page_of(node,pi)?;
   }
-  if end>node.capacity{return Err(errno::ENOSPC)}
   return Ok(())
  }
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
  if m.nodes[idx].mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+ if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+ if end as usize>MAX_FILE_SIZE as usize{return Err(errno::EFBIG)}
  let needed=((end as usize+4095)/4096).max(1);
- while (m.nodes[idx].npages as usize)<needed&&(m.nodes[idx].npages as usize)<8{
-  let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
-  unsafe{Identity.table(frame).fill(0)}
-  let i=m.nodes[idx].npages as usize;m.nodes[idx].pages[i]=crate::arch::x86_64::phys::phys_to_virt(frame);m.nodes[idx].npages+=1;m.nodes[idx].capacity=m.nodes[idx].npages as u64*4096;
+ while (m.nodes[idx].npages as usize)<needed{
+  let pi=m.nodes[idx].npages as usize;
+  let mut node=m.nodes[idx];
+  ensure_page_of(&mut node,pi)?;
+  m.nodes[idx]=node;
  }
- if end>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
  Ok(())
 }
 
@@ -489,7 +720,7 @@ fn subject_pid(subject:ProcSubject)->u32{match subject{ProcSubject::SelfProc=>cr
 fn proc_file_name(name:&str)->bool{matches!(name,"cmdline"|"environ"|"status"|"stat"|"statm"|"maps")}
 fn proc_sys_name(name:&str)->bool{matches!(name,"cpuinfo"|"meminfo"|"uptime"|"version"|"loadavg"|"mounts")}
 fn num_str<'a>(v:u32,buf:&'a mut[u8;12])->&'a str{let mut i=buf.len();let mut x=v;loop{i-=1;buf[i]=b'0'+(x%10)as u8;x/=10;if x==0{break}}core::str::from_utf8(&buf[i..]).unwrap_or("0")}
-fn proc_dir_inode(path:&str,ino:u64)->Inode{let mut name=[0u8;NAME_MAX+1];let b=path.as_bytes();let n=core::cmp::min(b.len(),NAME_MAX);name[..n].copy_from_slice(&b[..n]);Inode{ino,mode:S_IFDIR|0o555,name,name_len:n,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0}}
+fn proc_dir_inode(path:&str,ino:u64)->Inode{let mut name=[0u8;NAME_MAX+1];let b=path.as_bytes();let n=core::cmp::min(b.len(),NAME_MAX);name[..n].copy_from_slice(&b[..n]);Inode{ino,mode:S_IFDIR|0o555,name,name_len:n,indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0}}
 fn put_bytes(out:&mut[u8],off:&mut usize,s:&[u8]){let n=core::cmp::min(s.len(),out.len().saturating_sub(*off));out[*off..*off+n].copy_from_slice(&s[..n]);*off+=n;}
 fn comm_of(p:&crate::process::Process,out:&mut[u8;64])->usize{let path=&p.exe_path[..p.exe_len];let base=path.iter().rposition(|&b|b==b'/').map(|i|&path[i+1..]).unwrap_or(path);let n=core::cmp::min(base.len(),15);out[..n].copy_from_slice(&base[..n]);n}
 fn fd_link_target(fd:usize)->Option<([u8;128],usize)>{
@@ -647,7 +878,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,tb.len()).copy_from_slice(tb)}
  let ino=(m.len+2)as u64 + 0x1000;
  let mut name=[0u8;NAME_MAX+1]; let nl=path.len(); name[..nl].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len:nl};
+ let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -666,7 +897,7 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
- let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=(m.len+2)as u64+0x2000; node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.npages=oldnode.npages;
+ let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=(m.len+2)as u64+0x2000; node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.indirect=oldnode.indirect; node.dindirect=oldnode.dindirect; node.npages=oldnode.npages; incref_all_pages(&node);
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -817,7 +1048,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
    Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return visible_inode(crate::ext2::lookup(rel)?,path)},
    None=>{}
   }
-  if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:1})}
+  if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:1})}
  if path=="/proc"||path.starts_with("/proc/"){
   return proc_lookup(path)
  }
@@ -825,7 +1056,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
   return sys_lookup(path)
  }
  if path=="/mnt"{
-  let mut name=[0u8;NAME_MAX+1]; name[..4].copy_from_slice(b"/mnt"); return Ok(Inode{ino:0xb000,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:4})
+  let mut name=[0u8;NAME_MAX+1]; name[..4].copy_from_slice(b"/mnt"); return Ok(Inode{ino:0xb000,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:4})
  }
   let m=ROOT.lock();
  if !m.mounted{return Err(errno::ENOENT)}
@@ -868,27 +1099,23 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  /* Files carried in the initramfs image live in the kernel image itself and
     stay read-only, exactly like a real initramfs root. */
  if node.data!=core::ptr::null_mut()&&in_initramfs(node.data as u64){return Err(errno::EROFS)}
- if node.npages==0 { node.pages[0]=node.data as u64; node.npages=1; node.capacity=node.capacity.max(4096); }
- let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
- let needed=((end as usize+4095)/4096).max(1);
- while (node.npages as usize) < needed && (node.npages as usize) < 8 {
-  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
-  unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
-  node.pages[node.npages as usize]=phys_to_virt(frame);
-  node.npages+=1;
-  node.capacity=(node.npages as u64)*4096;
- }
- if end>node.capacity{return Err(errno::ENOSPC)}
- let mut done=0usize;
- while done<src.len(){
-  let poff=off as usize+done;
-  let pi=poff/4096; let po=poff%4096;
-  if pi>=node.npages as usize{return Err(errno::ENOSPC)}
-  let frame=node.pages[pi];
-  let n=core::cmp::min(src.len()-done,4096-po);
-  unsafe{core::slice::from_raw_parts_mut((frame as *mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
-  done+=n;
- }
+  if node.npages==0&&!node.data.is_null() { node.pages[0]=node.data as u64; node.npages=1; node.capacity=node.capacity.max(4096); }
+  let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+  if end>MAX_FILE_SIZE{return Err(errno::EFBIG)}
+  let needed=((end as usize+4095)/4096).max(1);
+  while (node.npages as usize) < needed {
+   let pi=node.npages as usize;
+   ensure_page_of(node,pi)?;
+  }
+  let mut done=0usize;
+  while done<src.len(){
+   let poff=off as usize+done;
+   let pi=poff/4096; let po=poff%4096;
+   let frame=match page_frame_of(node,pi){Some(f)=>f,None=>return Err(errno::ENOSPC)};
+   let n=core::cmp::min(src.len()-done,4096-po);
+   unsafe{core::slice::from_raw_parts_mut((frame as *mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
+   done+=n;
+  }
   if end>node.size{node.size=end;}
   let mut path=[0u8;128];let path_len=node.name_len;path[..path_len].copy_from_slice(&node.name[..path_len]);drop(m);
   if !src.is_empty(){if let Ok(path)=core::str::from_utf8(&path[..path_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}
@@ -906,7 +1133,7 @@ pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
  if nl>NAME_MAX{return Err(errno::ENAMETOOLONG)}
  let ino=(m.len+2)as u64+0x3000;
  let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode,size:0,capacity:0,data:core::ptr::null_mut(),rdev,pages:[0;8],npages:0,name,name_len:nl};
+ let node=Inode{ino,mode,size:0,capacity:0,data:core::ptr::null_mut(),rdev,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -932,17 +1159,17 @@ fn sys_fill(path:&str)->usize{
 fn sys_lookup(path:&str)->Result<Inode>{
  if path=="/sys"||path=="/sys/class"||path=="/sys/class/net"||path=="/sys/block"||path=="/sys/devices"||path=="/sys/kernel"||path=="/sys/fs"{
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
-  return Ok(Inode{ino:0xa000+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino:0xa000+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
  }
  if path=="/sys/class/net/eth0"||path=="/sys/block/vda"{
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
-  return Ok(Inode{ino:0xa200+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino:0xa200+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
  }
  if is_sys_file(path){
   let size=sys_fill(path);
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
   let ino=0xa100+path.len() as u64;
-  return Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:b.len(),size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:b.len(),indirect:0,dindirect:0,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
  }
  Err(errno::ENOENT)
 }
@@ -951,7 +1178,7 @@ fn proc_file_inode(path:&str,subject:ProcSubject,file:&str)->Result<Inode>{
  let size=proc_fill(subject,file);
  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); let n=core::cmp::min(b.len(),NAME_MAX); name[..n].copy_from_slice(&b[..n]);
  let ino=0x90000 + ((path.len() as u64)&0xfff);
- Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:n,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
+ Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:n,indirect:0,dindirect:0,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
 }
 
 fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
@@ -961,5 +1188,5 @@ fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
  unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,target.len()).copy_from_slice(target)}
  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
  let ino=0x93000 + path.len() as u64;
- Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),size:target.len() as u64,capacity:target.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1})
+ Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),indirect:0,dindirect:0,size:target.len() as u64,capacity:target.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1})
 }

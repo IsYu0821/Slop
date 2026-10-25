@@ -1,13 +1,13 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.80.0
+Version: 0.81.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-bebdff0ac767041d5f6a1034c9a90b13a7d66dc11ed31ed495a8d710c1114927     46345  CHANGELOG.md
+efa391b38e16a2f7f3f425799289420f5cc319ff0732eb6762c6dc24aa833e56     47070  CHANGELOG.md
 39f8622962077448f2c46863cbd426a642618d01d747284cac17e2552cd4704a       160  Cargo.lock
-2edf06306d5dd8486606635efbc52e313f15692a0951ed218018eb4d608c4cc6       231  Cargo.toml
+88f00b740f800f68a29a7fa2bc9c61745acd39ff016f1346ab5a4779e366c1ca       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch/x86_64/context.S
@@ -17,9 +17,9 @@ a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch
 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8      5224  arch/x86_64/syscall.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
-37f46e81d0ac5036e28c2e1e58a7b566f32be592a6558aa6b6e9c3d712e0938b     22883  docs/compat-ledger.md
+d7fde2ec7dca339215324dbf68dba481ea6fd15669069e36ea3727a39429aa42     23381  docs/compat-ledger.md
 97057bcc13875bbf53fb744a0b55addb8160a2642e1a51546935766d3f10d418       699  docs/driver-compat.md
-1248dbc64f1e013088af07f135ebacfa21e871a459eb1fd92119b04084a48bd2      6009  docs/linux-compatibility.md
+0cacb46fdb63b354e9a117823900bf643cc6d7d7feebaec4280a187d10a896ac      6188  docs/linux-compatibility.md
 adf305597381fd64308507aa10f380cf0eb4dcceb55ad3fc9d685e74f539e50c      1019  docs/milestone10.md
 17588f19f4370b709a150a2c6532cef9382d61ff2576cf2762ad84bff3be4487      1173  docs/milestone11.md
 43882c07a24b12630f5985f2166b686acbe2c976372654083a6b470e8b1e2500      1170  docs/milestone12.md
@@ -94,9 +94,10 @@ cdbe1818ec56942fdd79af3d122c8b44ff27c00e6f3facd258ef7c9255cab196      4024  docs
 ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs/milestone79.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 b59c7983c6e2190d8a1d2d95706859d8f22fbdb4de3e7b20f29f919d50a21ca2      4240  docs/milestone80.md
+52258368b8949864cd4585c17b13293ea2d660ba111552ec10761b61d0a4bfe7      3181  docs/milestone81.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-c3d3c4d7d8fbb12b8227fdefb77e40e8f3932f7dca82c9f8299aebec27395e73      5643  docs/priority-status.md
+ad9a335792e0b9ed937e05a97c4db3139d4cf02b605b4f17f6f7da193517a3ec      5819  docs/priority-status.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
@@ -128,8 +129,8 @@ f1d6863f8dd9382088474eb747b0c2f00a391f242563b4fb0c54bf074515ebc0     11756  kern
 cfb042a535fc7e5c42c5e80117071b25f8b7b1136adcb6dc792a5c9f7cf2e450      1395  kernel/errno.rs
 34384129aeb59712cf08ff8cce15570dcdceeb1ac6ea26da0222f722194016a5      2150  kernel/exec.rs
 a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kernel/exec_runtime.rs
-f383d700650a853870732d2e99c2d26ff3e3ef2bd84654d4d5569cc9a95354bf     45201  kernel/ext2.rs
-95d0c81708bc27888ddbe5d7c09dc9a10852302065e4ff30661624fa1af9e440     24580  kernel/fd.rs
+7b593f8abcdedee01f5617c5a914ae4ba42973d2029743888463fc6dabe7ae84     45226  kernel/ext2.rs
+783bb09b7e621d688cff2a1cfd6e4fa0b1ac9f989ca148dc3aa62e9df97178ed     24953  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
@@ -152,7 +153,7 @@ e597b60c1488f947cde1fc5a75a0fa9fd91337525c679aaec6c07efcdd651bee     39811  kern
 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
-bd796c796a40ff96d158385dd7e0cea5ac996f697fe11eb6c15a7178006e1deb     66586  kernel/vfs.rs
+054fcef6348025adf2ecbf676a8352be078e2e3b9d533c3a7ebb0ccf262c1245     74144  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
 be8a5f3290b6dc4700424b8e42ade0d690d530979aca36436d09350aac051c5c       100  libc/errno.c
@@ -185,7 +186,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-8417c38bace0b10a3e3b46232eaec567a8e7a62c7512c0b2760d474e03b60718    102715  tests/differential.c
+07ade36227366b831945ec12f2d05c09907353a8dd4930f76f5fbf5292a5f991    106467  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -206,9 +207,9 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-199c70b7dcfc5a599149fb04ab2febbb26cfee62a80053eee3678adf87234dd0      8314  tools/check-source.sh
+c14faac4761dc780372712aee68a0e9e09b8abfd368c97e266d0434c2bb239d0      8411  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
-3f9ced3e6c1c405d4a12ff07c4107b037d159dba25de4232f4529ea37e2658cd      5978  tools/differential-test.sh
+c7b1b8bf76bc62649ac75596d58b5e6893a7d11d0ab40685e90eba1a82de24b9      6010  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
 4b846a7388218638fc158b76b346280c1a7684cbe23e6c07bfb044476828e3ab       824  tools/link.sh
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
@@ -217,13 +218,19 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 211
+TOTAL FILES: 212
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 46345 bytes
-SHA-256: bebdff0ac767041d5f6a1034c9a90b13a7d66dc11ed31ed495a8d710c1114927
+SIZE: 47070 bytes
+SHA-256: efa391b38e16a2f7f3f425799289420f5cc319ff0732eb6762c6dc24aa833e56
 ================================================================================
+## 0.81.0 - 2026-10-26
+- Removed the 32 KiB file size cap: page-backed files (tmpfs, initramfs root) now use direct + single-indirect + double-indirect block addressing up to ~1 GiB, with holes reading back as zeros and `ENOSPC`/`EFBIG` only on true exhaustion or past the maximum.
+- Frame lifetime: unlink and truncate-shrink recycle data and indirect blocks (skipped while open descriptions still reference the file); new hard links share frames through page refcounts.
+- `ftruncate` grow no longer fails against stale capacity; writes allocate on demand.
+- The differential battery covers it with `DIFF_BIGFILE_OK` (3 MiB three-level round trip, hole zero-fill, shrink, rewrite, unlink) on native Linux and in the guest.
+
 ## 0.80.0 - 2026-10-26
 - ext2 rename/link/symlink: `rename` with replace/empty-dir/`ENOTEMPTY`/`EISDIR`/`ENOTDIR`/subtree semantics and `..`/link-count fixups, `link` with `EPERM` on directories and `EEXIST` on clashes, symlinks stored inline (fast, ≤60 bytes) or in data blocks with a matching reader.
 - Symlink traversal now works on disk: path resolution follows ext2 links, and `readlink`/`lstat`/`stat`-through/`open`-through all agree with Linux.
@@ -743,11 +750,11 @@ END FILE: Cargo.lock
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 2edf06306d5dd8486606635efbc52e313f15692a0951ed218018eb4d608c4cc6
+SHA-256: 88f00b740f800f68a29a7fa2bc9c61745acd39ff016f1346ab5a4779e366c1ca
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.80.0"
+version = "0.81.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -1514,8 +1521,8 @@ END FILE: docs/architecture.md
 
 ================================================================================
 FILE: docs/compat-ledger.md
-SIZE: 22883 bytes
-SHA-256: 37f46e81d0ac5036e28c2e1e58a7b566f32be592a6558aa6b6e9c3d712e0938b
+SIZE: 23381 bytes
+SHA-256: d7fde2ec7dca339215324dbf68dba481ea6fd15669069e36ea3727a39429aa42
 ================================================================================
 # Compatibility provenance ledger
 
@@ -1620,10 +1627,14 @@ Dirfd-relative *at facts (v0.79.0):- Relative paths resolve against directory fd
 
 
 On-disk link/rename/symlink facts (v0.80.0):
-- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, and linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
-- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, and renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
+- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
+- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
 - `symlink` stores the target verbatim (fast inline up to 60 bytes, block-backed beyond), `readlink` returns it byte for byte, `lstat` reports the link and `stat` follows it: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` including a 100-byte slow-symlink round trip.
 - `stat` reports the on-disk link count (`st_nlink`/`stx_nlink`): public `sys/stat.h` field semantics. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (nlink 2 shared, nlink 1 after unlink).
+
+
+Big-file facts (v0.81.0):
+- Writes past 32 KiB succeed and read back byte-identical; `ftruncate` up extends without allocating, down keeps the set size; holes read as zeros; shrinking then rewriting works; `fstat`/`statx` report the true size; `ENOSPC` only on a genuinely exhausted frame allocator and `EFBIG` past ~1 GiB: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_BIGFILE_OK` (3 MiB three-level round trip, hole zero-fill, shrink, rewrite, unlink).
 
 
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.
@@ -1650,8 +1661,8 @@ END FILE: docs/driver-compat.md
 
 ================================================================================
 FILE: docs/linux-compatibility.md
-SIZE: 6009 bytes
-SHA-256: 1248dbc64f1e013088af07f135ebacfa21e871a459eb1fd92119b04084a48bd2
+SIZE: 6188 bytes
+SHA-256: 0cacb46fdb63b354e9a117823900bf643cc6d7d7feebaec4280a187d10a896ac
 ================================================================================
 # Linux compatibility target
 
@@ -1674,7 +1685,10 @@ The `ucontext_t` carries the 512-byte FXSAVE area with the SSE registers at offs
 `copy_file_range` (files only), `splice` (one side a pipe), `tee`
 (pipe to pipe, non-consuming) and `fallocate` (extend, `KEEP_SIZE`,
 `PUNCH_HOLE`) move file content with native offset, flag and error
-semantics. Files stay capped at 8 pages (32 KiB); beyond that `ENOSPC`.
+semantics. Page-backed files (tmpfs and the initramfs root) address
+8 direct pages plus single- and double-indirect tables, up to ~1 GiB;
+holes read as zeros and `ENOSPC`/`EFBIG` only fire on a genuinely
+exhausted frame allocator or past the maximum.
 
 ## Dirfd-relative lookup
 
@@ -5630,6 +5644,90 @@ Probes fixed the contract before any kernel code changed:
 END FILE: docs/milestone80.md
 
 ================================================================================
+FILE: docs/milestone81.md
+SIZE: 3181 bytes
+SHA-256: 52258368b8949864cd4585c17b13293ea2d660ba111552ec10761b61d0a4bfe7
+================================================================================
+# Milestone 81: files bigger than 32 KiB
+
+## Goal
+
+Every page-based file (tmpfs and the initramfs root) stopped at 8
+pages: anything past 32 KiB failed with `ENOSPC`, which rules out
+practically every real program (compilers, archives, package
+payloads). This milestone replaces the fixed 8-page array with
+direct + single-indirect + double-indirect block addressing, up to
+262152 pages (~1 GiB), with holes reading back as zeros like Linux.
+
+## Native behavior observed
+
+Probes fixed the contract before any kernel code changed:
+
+- writes past the old cap succeed and read back byte-identical;
+  `ftruncate` up extends without allocating, down keeps the size;
+  holes read as zeros; shrinking then rewriting works;
+- `fstat`/`statx` report the true size; `ENOSPC` appears only when
+  the frame allocator is actually exhausted; absurd sizes report
+  `EFBIG`.
+
+## Implementation
+
+- `kernel/vfs.rs`: `Inode` gains `indirect`/`dindirect` table
+  addresses and a `u32` page count. `page_frame_of` resolves a file
+  block with no allocation (holes stay `None`), `ensure_page_of`
+  allocates the data frame plus any missing tables on the write
+  path, zero-filling everything. Reads zero-fill holes within the
+  file size; `write`/`ftruncate`-up/`fallocate` no longer stop at 8
+  pages (`EFBIG` past ~1 GiB).
+- Lifetime: `free_beyond` recycles data pages and empties tables on
+  truncate-shrink and at unlink (skipped while open descriptions
+  still reference the inode, which keeps working on the retained
+  frames like Linux anonymous inodes). A new hard link bumps every
+  frame through the page refcounts instead of duplicating them.
+- Initramfs entries, static buffers and proc/sys nodes own no frames
+  and are never freed; the single-page `data` fast path is kept and
+  kept consistent with the page tables.
+- `kernel/fd.rs`: `any_open_ino` backs the do-not-free-while-open
+  rule.
+
+## Tests added
+
+- `DIFF_BIGFILE_OK`: a 3 MiB round trip exercising all three levels
+  (direct, single- and double-indirect), full content verification,
+  `stat` size, truncate to 100, a sparse rewrite at 2 MiB with hole
+  zero-fill and tail verification, then unlink and `rmdir`.
+
+## Verification
+
+- `cargo +nightly build -Zbuild-std=core --release` clean.
+- `./tools/acceptance-test.sh` PASS.
+- `./tools/differential-test.sh` PASS (guest and native logs contain
+  `DIFF_BIGFILE_OK`; host `e2fsck` clean, free counts exact, guest
+  bytes verified on the platter).
+- `./tools/busybox-test.sh` PASS (115 checks match Linux).
+- `./tools/heap-test.sh` PASS.
+- `./tools/check-source.sh` pass.
+
+## Known limits
+
+- Truncate-shrink frees now; truncate-grow leaves holes (no
+  preallocation), like Linux.
+- Open-but-unlinked files pin their frames until close (no
+  use-after-free, but no reclamation either yet).
+- Symlinks, ext2 and proc/sys paths are unchanged by this work.
+
+## Next candidates
+
+- ext4 read-only mount (superblock/inode/dir parsing behind feature
+  checks), then staged read-write and journaling.
+- `SCM_RIGHTS` fd passing over `AF_UNIX`.
+- `hostfwd` + host-side connector so the host can reach guest servers.
+- SMP bring-up: AP startup, per-CPU state, scheduler, IPI, TLB
+  shootdown.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone81.md
+
+================================================================================
 FILE: docs/milestone9.md
 SIZE: 1111 bytes
 SHA-256: 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b
@@ -5662,8 +5760,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 5643 bytes
-SHA-256: c3d3c4d7d8fbb12b8227fdefb77e40e8f3932f7dca82c9f8299aebec27395e73
+SIZE: 5819 bytes
+SHA-256: ad9a335792e0b9ed937e05a97c4db3139d4cf02b605b4f17f6f7da193517a3ec
 ================================================================================
 # One-Linux-program priority status
 
@@ -5750,6 +5848,9 @@ SHA-256: c3d3c4d7d8fbb12b8227fdefb77e40e8f3932f7dca82c9f8299aebec27395e73
   `AT_EMPTY_PATH` fd execution, UAPI-true `statx` layout
 - ext2 link/rename/symlink: shared inodes with `nlink`, empty-dir
   replacement renames, fast and block-backed symlinks with traversal
+- page-backed files past 32 KiB: direct + single/double-indirect
+  addressing to ~1 GiB, hole zero-fill, frame recycling on unlink
+  and truncate-shrink, hard-link refcounting
 
 ## Open defects
 
@@ -7791,8 +7892,8 @@ END FILE: kernel/exec_runtime.rs
 
 ================================================================================
 FILE: kernel/ext2.rs
-SIZE: 45201 bytes
-SHA-256: f383d700650a853870732d2e99c2d26ff3e3ef2bd84654d4d5569cc9a95354bf
+SIZE: 45226 bytes
+SHA-256: 7b593f8abcdedee01f5617c5a914ae4ba42973d2029743888463fc6dabe7ae84
 ================================================================================
 //! Minimal read-only ext2 filesystem on the first virtio-blk device.
 use crate::{errno, vfs};
@@ -7950,7 +8051,7 @@ fn make_vfs_inode(path:&str,inum:u32,inode:&Inode,sb:&Super)->vfs::Inode{
  let size=inode.i_size_lo as u64;
  let mut name=[0u8;127+1];
  let b=path.as_bytes(); let nl=b.len().min(127); name[..nl].copy_from_slice(&b[..nl]);
- vfs::Inode{ino: (inum as u64)+0x100000, mode: if mode & 0o170000==0 {vfs::S_IFREG| (mode&0o777)} else {mode}, size, capacity:size, data:core::ptr::null_mut(), rdev:inum as u64, pages:[0;8], npages:0, name, name_len:nl}
+ vfs::Inode{ino: (inum as u64)+0x100000, mode: if mode & 0o170000==0 {vfs::S_IFREG| (mode&0o777)} else {mode}, size, capacity:size, indirect:0, dindirect:0, data:core::ptr::null_mut(), rdev:inum as u64, pages:[0;8], npages:0, name, name_len:nl}
 }
 pub fn read(inode_rdev:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  let sb=superblock()?;
@@ -8982,8 +9083,8 @@ END FILE: kernel/ext2.rs
 
 ================================================================================
 FILE: kernel/fd.rs
-SIZE: 24580 bytes
-SHA-256: 95d0c81708bc27888ddbe5d7c09dc9a10852302065e4ff30661624fa1af9e440
+SIZE: 24953 bytes
+SHA-256: 783bb09b7e621d688cff2a1cfd6e4fa0b1ac9f989ca148dc3aa62e9df97178ed
 ================================================================================
 //! Open-file descriptions and per-process descriptor tables.
 //! dup and fork share descriptions, mirroring the Unix file-description model.
@@ -9097,6 +9198,16 @@ fn release_inner(id:u32,closed:bool){
  match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),OpenKind::Socket(_)=>crate::socket::close_by_id(id),_=>{}}
 }
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
+/* True when any open file description refers to the given inode number.
+   Unlinking such a file must not recycle its frames: the open
+   descriptions keep working on them, like Linux anonymous inodes. */
+pub fn any_open_ino(ino:u64)->bool{
+ let t=OPEN.lock();
+ for slot in t.iter().flatten(){
+  if let OpenKind::Inode(n)=slot.kind{if n.ino==ino{return true}}
+ }
+ false
+}
 /* Reprograms a signalfd mask (signalfd(fd, mask) with a valid fd). */
 pub fn signalfd_set_mask(id:u32,mask:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){if let OpenKind::SignalFd(m)=&mut f.kind{*m=mask;}}}
 /* Readiness for poll/select/epoll: a signalfd is readable when any masked
@@ -16622,16 +16733,23 @@ END FILE: kernel/vdso.rs
 
 ================================================================================
 FILE: kernel/vfs.rs
-SIZE: 66586 bytes
-SHA-256: bd796c796a40ff96d158385dd7e0cea5ac996f697fe11eb6c15a7178006e1deb
+SIZE: 74144 bytes
+SHA-256: 054fcef6348025adf2ecbf676a8352be078e2e3b9d533c3a7ebb0ccf262c1245
 ================================================================================
 //! Allocation-free initramfs VFS with read/write support.
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
 pub type Result<T>=core::result::Result<T,i64>;
 pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
-#[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub npages:u8,pub name:[u8;NAME_MAX+1],pub name_len:usize}
+/* File block layout: 8 direct pages, one single-indirect table (512
+   page addresses) and one double-indirect table (512 tables of 512).
+   Maximum file size is (8 + 512 + 512*512) pages, just over 1 GiB. */
+pub const DIRECT_PAGES:usize=8;
+const IND_ENTRIES:usize=512;
+pub const MAX_FILE_PAGES:usize=8+512+512*512;
+pub const MAX_FILE_SIZE:u64=(MAX_FILE_PAGES as u64)*4096;
+#[derive(Clone,Copy)]pub struct Inode{pub ino:u64,pub mode:u32,pub size:u64,pub capacity:u64,pub data:*mut u8,pub rdev:u64,pub pages:[u64;8],pub indirect:u64,pub dindirect:u64,pub npages:u32,pub name:[u8;NAME_MAX+1],pub name_len:usize}
 unsafe impl Send for Inode{} unsafe impl Sync for Inode{}
-const EMPTY:Inode=Inode{ino:0,mode:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name:[0;NAME_MAX+1],name_len:0};
+const EMPTY:Inode=Inode{ino:0,mode:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name:[0;NAME_MAX+1],name_len:0};
 struct Mount{nodes:[Inode;MAX_NODES],len:usize,mounted:bool}
 static ROOT:SpinLock<Mount>=SpinLock::new(Mount{nodes:[EMPTY;MAX_NODES],len:0,mounted:false});
 /* Byte range of the initramfs image inside the kernel image: files carried in
@@ -16742,7 +16860,202 @@ fn tmpfs_fs_id(ino:u64)->Option<usize>{if ino&0xf000_0000_0000_0000!=TMPFS_INO_T
 fn visible_inode(mut inode:Inode,path:&str)->Result<Inode>{if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}inode.name=[0;NAME_MAX+1];inode.name[..path.len()].copy_from_slice(path.as_bytes());inode.name_len=path.len();Ok(inode)}
 fn tmpfs_root(fs_id:usize,path:&str)->Result<Inode>{
  let mut name=[0u8;NAME_MAX+1];if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}name[..path.len()].copy_from_slice(path.as_bytes());
- Ok(Inode{ino:tmpfs_ino(fs_id,0),mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:path.len()})
+ Ok(Inode{ino:tmpfs_ino(fs_id,0),mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:path.len()})
+}
+fn ind_read(table_virt:u64,idx:usize)->u64{
+ if table_virt==0||idx>=IND_ENTRIES{return 0}
+ unsafe{core::ptr::read_volatile(((table_virt as *const u64).add(idx)) as *const u64)}
+}
+fn ind_write(table_virt:u64,idx:usize,val:u64){
+ if table_virt==0||idx>=IND_ENTRIES{return}
+ unsafe{core::ptr::write_volatile(((table_virt as *mut u64).add(idx)) as *mut u64,val)};
+}
+/* Data page for a file-block index, or None for a hole. Reads never
+   allocate; holes read back as zeros up to the file size. */
+fn page_frame_of(node:&Inode,pi:usize)->Option<u64>{
+ if pi<DIRECT_PAGES{
+  let f=node.pages[pi];
+  if f!=0{return Some(f)}
+  return None;
+ }
+ let mut pi2=pi-DIRECT_PAGES;
+ if pi2<IND_ENTRIES{
+  if node.indirect==0{return None}
+  let f=ind_read(node.indirect,pi2);
+  if f!=0{return Some(f)}
+  return None;
+ }
+ pi2-=IND_ENTRIES;
+ if pi2<IND_ENTRIES*IND_ENTRIES{
+  if node.dindirect==0{return None}
+  let t1=ind_read(node.dindirect,pi2/IND_ENTRIES);
+  if t1==0{return None}
+  let f=ind_read(t1,pi2%IND_ENTRIES);
+  if f!=0{return Some(f)}
+  return None;
+ }
+ None
+}
+fn alloc_data_page()->Result<u64>{
+ let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
+ unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
+ Ok(crate::arch::x86_64::phys::phys_to_virt(frame))
+}
+/* Data page for a file-block index, allocating the data frame and any
+   missing indirect tables on the way. Fails with ENOSPC when the frame
+   allocator is empty and EFBIG past the 1 GiB file maximum. */
+fn ensure_page_of(node:&mut Inode,pi:usize)->Result<u64>{
+ if pi>=MAX_FILE_PAGES{return Err(errno::EFBIG)}
+ if let Some(f)=page_frame_of(node,pi){return Ok(f)}
+ if pi<DIRECT_PAGES{
+  let v=alloc_data_page()?;
+  node.pages[pi]=v;node.npages+=1;node.capacity=node.npages as u64*4096;
+  return Ok(v);
+ }
+ let mut pi2=pi-DIRECT_PAGES;
+ if pi2<IND_ENTRIES{
+  if node.indirect==0{
+   let t=alloc_data_page()?;
+   node.indirect=t;
+  }
+  let v=alloc_data_page()?;
+  ind_write(node.indirect,pi2,v);
+  node.npages+=1;node.capacity=node.npages as u64*4096;
+  return Ok(v);
+ }
+ pi2-=IND_ENTRIES;
+ let i1=pi2/IND_ENTRIES;let i2=pi2%IND_ENTRIES;
+ if node.dindirect==0{
+  let t=alloc_data_page()?;
+  node.dindirect=t;
+ }
+ let mut t1=ind_read(node.dindirect,i1);
+ if t1==0{
+  t1=alloc_data_page()?;
+  ind_write(node.dindirect,i1,t1);
+ }
+ let v=alloc_data_page()?;
+ ind_write(t1,i2,v);
+ node.npages+=1;node.capacity=node.npages as u64*4096;
+ Ok(v)
+}
+/* True when a virtual address names a frame from the page allocator
+   (direct-mapped low memory), as opposed to kernel image or static
+   memory such as the initramfs span or PROC_BUF. */
+fn is_frame_virt(va:u64)->bool{
+ if va==0||va&4095!=0{return false}
+ let pa=crate::arch::x86_64::phys::virt_to_phys(va);
+ pa!=0&&pa&4095==0
+}
+/* Releases every data page and indirect table of an inode. Initramfs
+   entries and static buffers own no frames and are left alone; shared
+   pages drop one reference (hard links share them until the last
+   description goes away). */
+fn free_all_pages(node:&mut Inode){free_beyond(node,0)}
+/* Frees every data page at file-block index >= keep, dropping indirect
+   tables left empty. Allocation is always contiguous from block 0, so the
+   remaining set stays contiguous and npages drops to keep. */
+fn free_beyond(node:&mut Inode,keep:usize){
+ use crate::memory::release_frame;
+ use crate::arch::x86_64::phys::virt_to_phys;
+ if node.data!=core::ptr::null_mut()&&in_initramfs(node.data as u64){return}
+ if keep<DIRECT_PAGES{
+  for j in keep..DIRECT_PAGES{
+   let f=node.pages[j];
+   if f!=0{
+    if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+    node.pages[j]=0;
+   }
+  }
+ }
+ if node.indirect!=0{
+  let mut kept=false;
+  for j in 0..IND_ENTRIES{
+   if DIRECT_PAGES+j<keep{kept=true;continue}
+   let f=ind_read(node.indirect,j);
+   if f!=0{
+    if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+    ind_write(node.indirect,j,0);
+   }
+  }
+  if !kept{
+   if is_frame_virt(node.indirect){let _=release_frame(virt_to_phys(node.indirect));}
+   node.indirect=0;
+  }
+ }
+ if node.dindirect!=0{
+  let mut kept_any=false;
+  for i1 in 0..IND_ENTRIES{
+   let base=DIRECT_PAGES+IND_ENTRIES+i1*IND_ENTRIES;
+   if base>=keep{
+    /* Whole second-level table is beyond keep: drop it entirely. */
+    let t1=ind_read(node.dindirect,i1);
+    if t1!=0{
+     if is_frame_virt(t1){
+      for j in 0..IND_ENTRIES{
+       let f=ind_read(t1,j);
+       if f!=0&&is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+      }
+      let _=release_frame(virt_to_phys(t1));
+     }
+     ind_write(node.dindirect,i1,0);
+    }
+    continue;
+   }
+   let t1=ind_read(node.dindirect,i1);
+   if t1==0{continue}
+   kept_any=true;
+   for j in 0..IND_ENTRIES{
+    if base+j<keep{continue}
+    let f=ind_read(t1,j);
+    if f!=0{
+     if is_frame_virt(f){let _=release_frame(virt_to_phys(f));}
+     ind_write(t1,j,0);
+    }
+   }
+   /* A table left with no kept entries could go, but keeping a sparse
+      second level is harmless; it is reclaimed on unlink. */
+  }
+  if !kept_any&&keep<=DIRECT_PAGES+IND_ENTRIES{
+   if is_frame_virt(node.dindirect){let _=release_frame(virt_to_phys(node.dindirect));}
+   node.dindirect=0;
+  }
+ }
+ if (node.npages as usize)>keep{node.npages=keep as u32}
+ node.capacity=node.npages as u64*4096;
+ /* Keep the single-page data alias consistent: frames above are either
+    still mapped or were just recycled. */
+ if node.npages==0{node.data=core::ptr::null_mut()}else{node.data=node.pages[0] as *mut u8}
+}
+/* Bumps every frame owned by an inode (data pages and indirect tables)
+   for a new hard link sharing them. */
+fn incref_all_pages(node:&Inode){
+ use crate::memory::refcount_inc;
+ use crate::arch::x86_64::phys::virt_to_phys;
+ for i in 0..DIRECT_PAGES{
+  let f=node.pages[i];
+  if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+ }
+ if node.indirect!=0&&is_frame_virt(node.indirect){
+  refcount_inc(virt_to_phys(node.indirect));
+  for i in 0..IND_ENTRIES{
+   let f=ind_read(node.indirect,i);
+   if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+  }
+ }
+ if node.dindirect!=0&&is_frame_virt(node.dindirect){
+  refcount_inc(virt_to_phys(node.dindirect));
+  for i in 0..IND_ENTRIES{
+   let t1=ind_read(node.dindirect,i);
+   if t1!=0&&is_frame_virt(t1){
+    refcount_inc(virt_to_phys(t1));
+    for j in 0..IND_ENTRIES{
+     let f=ind_read(t1,j);
+     if f!=0&&is_frame_virt(f){refcount_inc(virt_to_phys(f));}
+    }
+   }
+  }
+ }
 }
 fn tmpfs_lookup(fs_id:usize,relative:&str,visible:&str)->Result<Inode>{
  if relative=="/"{return tmpfs_root(fs_id,visible)}
@@ -16763,7 +17076,7 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
  if store.nodes[..store.len].iter().enumerate().any(|(i,n)|store.linked[i]&&n.ino!=0&&&n.name[..n.name_len]==relative.as_bytes()){return Err(errno::EEXIST)}
  if !tmpfs_parent_exists(store,relative){return Err(errno::ENOENT)}
  if store.len==MAX_NODES{return Err(errno::ENOSPC)}
- let mut pages=[0u64;8];let mut npages=0u8;let mut capacity=0u64;let mut pointer=core::ptr::null_mut();let mut size=0u64;
+ let mut pages=[0u64;8];let mut npages=0u32;let mut capacity=0u64;let mut pointer=core::ptr::null_mut();let mut size=0u64;
  if mode&0o170000==S_IFREG||mode&0o170000==S_IFLNK{
   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
   unsafe{Identity.table(frame).fill(0)}
@@ -16771,7 +17084,7 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
   pages[0]=phys_to_virt(frame);npages=1;capacity=4096;pointer=phys_to_virt(frame)as*mut u8;
  }
  let idx=store.len;let mut name=[0u8;NAME_MAX+1];name[..relative.len()].copy_from_slice(relative.as_bytes());
- let node=Inode{ino:tmpfs_ino(fs_id,idx+1),mode,size,capacity,data:pointer,rdev,pages,npages,name,name_len:relative.len()};
+ let node=Inode{ino:tmpfs_ino(fs_id,idx+1),mode,size,capacity,data:pointer,rdev,pages,indirect:0,dindirect:0,npages,name,name_len:relative.len()};
  store.nodes[idx]=node;store.linked[idx]=true;store.len+=1;
  drop(registry);crate::inotify::notify(visible,crate::inotify::IN_CREATE|if mode&0o170000==S_IFDIR{crate::inotify::IN_ISDIR}else{0});
  visible_inode(node,visible)
@@ -16794,7 +17107,12 @@ fn tmpfs_readdir(fs_id:usize,relative:&str,mut cb:impl FnMut(u64,u32,&str))->Res
 fn tmpfs_unlink(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;
  let i=store.nodes[..store.len].iter().enumerate().position(|(i,n)|store.linked[i]&&n.ino!=0&&&n.name[..n.name_len]==relative.as_bytes()).ok_or(errno::ENOENT)?;
- if store.nodes[i].mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}store.linked[i]=false;drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE);Ok(())
+ if store.nodes[i].mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}
+ let ino=store.nodes[i].ino;
+ store.linked[i]=false;
+ /* Recycle backing frames unless an open description still uses them. */
+ if !crate::fd::any_open_ino(ino){let mut n=store.nodes[i];free_all_pages(&mut n);store.nodes[i].capacity=n.capacity;store.nodes[i].npages=n.npages;store.nodes[i].pages=n.pages;store.nodes[i].indirect=n.indirect;store.nodes[i].dindirect=n.dindirect;}
+ drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE);Ok(())
 }
 fn tmpfs_rmdir(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  if relative=="/"{return Err(errno::EBUSY)}
@@ -16805,16 +17123,28 @@ fn tmpfs_rmdir(fs_id:usize,relative:&str,visible:&str)->Result<()>{
  if child{return Err(errno::ENOTEMPTY)}store.linked[i]=false;drop(registry);crate::inotify::notify(visible,crate::inotify::IN_DELETE|crate::inotify::IN_ISDIR);Ok(())
 }
 fn tmpfs_write_inode(node:&mut Inode,off:u64,src:&[u8])->Result<usize>{
- let end=off.checked_add(src.len()as u64).ok_or(errno::EINVAL)?;let needed=((end as usize+4095)/4096).max(1);
- while(node.npages as usize)<needed&&(node.npages as usize)<8{let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;unsafe{Identity.table(frame).fill(0)}node.pages[node.npages as usize]=phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;}
- if end>node.capacity{return Err(errno::ENOSPC)}
- let mut done=0usize;while done<src.len(){let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=node.npages as usize{return Err(errno::ENOSPC)}let frame=node.pages[pi];let n=core::cmp::min(src.len()-done,4096-po);unsafe{core::slice::from_raw_parts_mut((frame as*mut u8).add(po),n).copy_from_slice(&src[done..done+n])};done+=n;}
- if end>node.size{node.size=end}Ok(src.len())
+ let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+ if end>MAX_FILE_SIZE{return Err(errno::EFBIG)}
+ let needed=((end as usize+4095)/4096).max(1);
+ while (node.npages as usize)<needed{
+  let pi=node.npages as usize;
+  ensure_page_of(node,pi)?;
+ }
+ let mut done=0usize;
+ while done<src.len(){
+  let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;
+  let frame=match page_frame_of(node,pi){Some(f)=>f,None=>return Err(errno::ENOSPC)};
+  let n=core::cmp::min(src.len()-done,4096-po);
+  unsafe{core::slice::from_raw_parts_mut((frame as*mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
+  done+=n;
+ }
+ if end>node.size{node.size=end}
+ Ok(src.len())
 }
 fn u16le(b:&[u8],o:usize)->Result<u16>{let x=b.get(o..o+2).ok_or(errno::EINVAL)?;Ok(u16::from_le_bytes([x[0],x[1]]))}
 fn u32le(b:&[u8],o:usize)->Result<u32>{let x=b.get(o..o+4).ok_or(errno::EINVAL)?;Ok(u32::from_le_bytes([x[0],x[1],x[2],x[3]]))}
 fn align8(v:usize)->Result<usize>{v.checked_add(7).map(|x|x&!7).ok_or(errno::EINVAL)}
-pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],npages:1,name,name_len:nl};p=align8(p+size)?;}*INITRAMFS_SPAN.lock()=(image.as_ptr()as u64,image.as_ptr()as u64+image.len()as u64);m.len=count;m.mounted=true;Ok(count)}
+pub fn mount_initramfs(image:&'static [u8])->Result<usize>{if image.get(..8)!=Some(b"NSAR0001"){return Err(errno::EINVAL)}let count=u32le(image,8)? as usize;if count>MAX_NODES{return Err(errno::ENOMEM)}let mut m=ROOT.lock();m.len=0;let mut p=12usize;for i in 0..count{let nl=u16le(image,p)? as usize;let raw=u16le(image,p+2)? as u32;let size=u32le(image,p+4)? as usize;p+=8;let mode=if raw&0o170000!=0{raw}else{S_IFREG|raw&0o777};if nl==0||nl>NAME_MAX{return Err(errno::EINVAL)}let n=image.get(p..p+nl).ok_or(errno::EINVAL)?;if n[0]!=b'/'||n.contains(&0){return Err(errno::EINVAL)}let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(n);p=align8(p+nl)?;let data=image.get(p..p+size).ok_or(errno::EINVAL)?;m.nodes[i]=Inode{ino:(i+2)as u64,mode,size:size as u64,capacity:size as u64,data:data.as_ptr()as*mut u8,rdev:0,pages:[data.as_ptr()as u64,0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len:nl};p=align8(p+size)?;}*INITRAMFS_SPAN.lock()=(image.as_ptr()as u64,image.as_ptr()as u64+image.len()as u64);m.len=count;m.mounted=true;Ok(count)}
 pub fn read(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
   read_off(inode,off,dst)
 }
@@ -16829,7 +17159,17 @@ fn read_inode_data(inode:&Inode,off:u64,dst:&mut[u8])->Result<usize>{
   return Ok(n)
  }
  let mut done=0usize;
- while done<dst.len()&&off as usize+done<inode.size as usize{let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;if pi>=inode.npages as usize{return Ok(done)}let n=core::cmp::min(dst.len()-done,core::cmp::min(4096-po,inode.size as usize-poff));if n==0{break}let src=unsafe{core::slice::from_raw_parts((inode.pages[pi]as*const u8).add(po),n)};dst[done..done+n].copy_from_slice(src);done+=n;}
+ while done<dst.len()&&off as usize+done<inode.size as usize{
+  let poff=off as usize+done;let pi=poff/4096;let po=poff%4096;
+  let n=core::cmp::min(dst.len()-done,core::cmp::min(4096-po,inode.size as usize-poff));
+  if n==0{break}
+  match page_frame_of(inode,pi){
+   Some(frame)=>{let src=unsafe{core::slice::from_raw_parts((frame as*const u8).add(po),n)};dst[done..done+n].copy_from_slice(src);},
+   /* Holes inside the file size read as zeros, like Linux. */
+   None=>{dst[done..done+n].fill(0);},
+  }
+  done+=n;
+ }
  Ok(done)
 }
 /* Positional reads resolve the node by ino so a grown size is visible. */
@@ -16853,7 +17193,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
   let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
   let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
   unsafe{Identity.table(frame).fill(0)}
-  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len};
+  let node=Inode{ino,mode:S_IFREG|mode&0o777,size:0,capacity:4096,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len};
   let idx=m.len; m.nodes[idx]=node;
   m.len+=1;
   crate::inotify::notify(path,crate::inotify::IN_CREATE);
@@ -16865,6 +17205,8 @@ pub fn unlink(path:&str)->Result<()>{
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+ let ino=m.nodes[idx].ino;
+ if !crate::fd::any_open_ino(ino){let mut n=m.nodes[idx];free_all_pages(&mut n);}
  for i in idx..m.len-1{m.nodes[i]=m.nodes[i+1];}
  m.len-=1;
  crate::inotify::notify(path,crate::inotify::IN_DELETE);
@@ -16881,7 +17223,7 @@ pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
  let ino=(m.len+2)as u64;
  let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode:S_IFDIR|mode&0o777,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len};
+ let node=Inode{ino,mode:S_IFDIR|mode&0o777,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len};
  let idx=m.len; m.nodes[idx]=node;
  m.len+=1;
  crate::inotify::notify(path,crate::inotify::IN_CREATE|crate::inotify::IN_ISDIR);
@@ -17033,14 +17375,15 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
   let mut m=ROOT.lock();
- let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
- if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
- if size>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
- m.nodes[idx].size=size;
- Ok(())
+  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
+  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+  if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+  let ino=m.nodes[idx].ino;let old=m.nodes[idx].size;
+  if size<old&&!crate::fd::any_open_ino(ino){let keep=((size as usize+4095)/4096) as usize;let mut n=m.nodes[idx];free_beyond(&mut n,keep);m.nodes[idx]=n;}
+  m.nodes[idx].size=size;
+  Ok(())
 }
 /* ext2 on-disk inodes surface as 0x100000+inum, disjoint from the tmpfs
    tag range and the small ROOT ids. */
@@ -17050,46 +17393,45 @@ fn is_ext2_inode(n:&Inode)->bool{
 }
 pub fn truncate_ino(ino:u64,size:u64)->Result<()>{
   if is_ext2_ino(ino){return crate::ext2::truncate((ino-0x100000) as u32,size)}
-  if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())}
+  if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(ino){free_beyond(node,keep)}node.size=size;return Ok(())}
   let mut m=ROOT.lock();
- let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
- if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
- if size>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
- m.nodes[idx].size=size;
- Ok(())
+  let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
+  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+  if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+  let old=m.nodes[idx].size;
+  if size<old&&!crate::fd::any_open_ino(ino){let keep=((size as usize+4095)/4096) as usize;let mut n=m.nodes[idx];free_beyond(&mut n,keep);m.nodes[idx]=n;}
+  m.nodes[idx].size=size;
+  Ok(())
 }
-/* Grows backing capacity for fallocate without changing the size: allocates
-   zeroed pages up to the 8-page per-file limit, like the write path does.
+/* Grows backing capacity for fallocate without changing the size, using
+   the same indirect-block allocator as the write path (up to ~1 GiB).
    Initramfs image entries cannot grow beyond their mapped span. */
 pub fn reserve_ino(ino:u64,end:u64)->Result<()>{
- use crate::arch::x86_64::phys::Identity;
- use crate::arch::x86_64::paging::PhysAccess;
  if let Some(fs_id)=tmpfs_fs_id(ino){
   let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;
   if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}
   if node.mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
+  if end as usize>MAX_FILE_SIZE as usize{return Err(errno::EFBIG)}
   let needed=((end as usize+4095)/4096).max(1);
-  while (node.npages as usize)<needed&&(node.npages as usize)<8{
-   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
-   unsafe{Identity.table(frame).fill(0)}
-   node.pages[node.npages as usize]=crate::arch::x86_64::phys::phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;
+  while (node.npages as usize)<needed{
+   let pi=node.npages as usize;
+   ensure_page_of(node,pi)?;
   }
-  if end>node.capacity{return Err(errno::ENOSPC)}
   return Ok(())
  }
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
  if m.nodes[idx].mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
- if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+ if m.nodes[idx].npages==0&&!m.nodes[idx].data.is_null() { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+ if end as usize>MAX_FILE_SIZE as usize{return Err(errno::EFBIG)}
  let needed=((end as usize+4095)/4096).max(1);
- while (m.nodes[idx].npages as usize)<needed&&(m.nodes[idx].npages as usize)<8{
-  let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
-  unsafe{Identity.table(frame).fill(0)}
-  let i=m.nodes[idx].npages as usize;m.nodes[idx].pages[i]=crate::arch::x86_64::phys::phys_to_virt(frame);m.nodes[idx].npages+=1;m.nodes[idx].capacity=m.nodes[idx].npages as u64*4096;
+ while (m.nodes[idx].npages as usize)<needed{
+  let pi=m.nodes[idx].npages as usize;
+  let mut node=m.nodes[idx];
+  ensure_page_of(&mut node,pi)?;
+  m.nodes[idx]=node;
  }
- if end>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
  Ok(())
 }
 
@@ -17116,7 +17458,7 @@ fn subject_pid(subject:ProcSubject)->u32{match subject{ProcSubject::SelfProc=>cr
 fn proc_file_name(name:&str)->bool{matches!(name,"cmdline"|"environ"|"status"|"stat"|"statm"|"maps")}
 fn proc_sys_name(name:&str)->bool{matches!(name,"cpuinfo"|"meminfo"|"uptime"|"version"|"loadavg"|"mounts")}
 fn num_str<'a>(v:u32,buf:&'a mut[u8;12])->&'a str{let mut i=buf.len();let mut x=v;loop{i-=1;buf[i]=b'0'+(x%10)as u8;x/=10;if x==0{break}}core::str::from_utf8(&buf[i..]).unwrap_or("0")}
-fn proc_dir_inode(path:&str,ino:u64)->Inode{let mut name=[0u8;NAME_MAX+1];let b=path.as_bytes();let n=core::cmp::min(b.len(),NAME_MAX);name[..n].copy_from_slice(&b[..n]);Inode{ino,mode:S_IFDIR|0o555,name,name_len:n,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0}}
+fn proc_dir_inode(path:&str,ino:u64)->Inode{let mut name=[0u8;NAME_MAX+1];let b=path.as_bytes();let n=core::cmp::min(b.len(),NAME_MAX);name[..n].copy_from_slice(&b[..n]);Inode{ino,mode:S_IFDIR|0o555,name,name_len:n,indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0}}
 fn put_bytes(out:&mut[u8],off:&mut usize,s:&[u8]){let n=core::cmp::min(s.len(),out.len().saturating_sub(*off));out[*off..*off+n].copy_from_slice(&s[..n]);*off+=n;}
 fn comm_of(p:&crate::process::Process,out:&mut[u8;64])->usize{let path=&p.exe_path[..p.exe_len];let base=path.iter().rposition(|&b|b==b'/').map(|i|&path[i+1..]).unwrap_or(path);let n=core::cmp::min(base.len(),15);out[..n].copy_from_slice(&base[..n]);n}
 fn fd_link_target(fd:usize)->Option<([u8;128],usize)>{
@@ -17274,7 +17616,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,tb.len()).copy_from_slice(tb)}
  let ino=(m.len+2)as u64 + 0x1000;
  let mut name=[0u8;NAME_MAX+1]; let nl=path.len(); name[..nl].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1,name,name_len:nl};
+ let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -17293,7 +17635,7 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
- let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=(m.len+2)as u64+0x2000; node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.npages=oldnode.npages;
+ let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=(m.len+2)as u64+0x2000; node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.indirect=oldnode.indirect; node.dindirect=oldnode.dindirect; node.npages=oldnode.npages; incref_all_pages(&node);
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -17444,7 +17786,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
    Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return visible_inode(crate::ext2::lookup(rel)?,path)},
    None=>{}
   }
-  if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:1})}
+  if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:1})}
  if path=="/proc"||path.starts_with("/proc/"){
   return proc_lookup(path)
  }
@@ -17452,7 +17794,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
   return sys_lookup(path)
  }
  if path=="/mnt"{
-  let mut name=[0u8;NAME_MAX+1]; name[..4].copy_from_slice(b"/mnt"); return Ok(Inode{ino:0xb000,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0,name,name_len:4})
+  let mut name=[0u8;NAME_MAX+1]; name[..4].copy_from_slice(b"/mnt"); return Ok(Inode{ino:0xb000,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:4})
  }
   let m=ROOT.lock();
  if !m.mounted{return Err(errno::ENOENT)}
@@ -17495,27 +17837,23 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  /* Files carried in the initramfs image live in the kernel image itself and
     stay read-only, exactly like a real initramfs root. */
  if node.data!=core::ptr::null_mut()&&in_initramfs(node.data as u64){return Err(errno::EROFS)}
- if node.npages==0 { node.pages[0]=node.data as u64; node.npages=1; node.capacity=node.capacity.max(4096); }
- let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
- let needed=((end as usize+4095)/4096).max(1);
- while (node.npages as usize) < needed && (node.npages as usize) < 8 {
-  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
-  unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
-  node.pages[node.npages as usize]=phys_to_virt(frame);
-  node.npages+=1;
-  node.capacity=(node.npages as u64)*4096;
- }
- if end>node.capacity{return Err(errno::ENOSPC)}
- let mut done=0usize;
- while done<src.len(){
-  let poff=off as usize+done;
-  let pi=poff/4096; let po=poff%4096;
-  if pi>=node.npages as usize{return Err(errno::ENOSPC)}
-  let frame=node.pages[pi];
-  let n=core::cmp::min(src.len()-done,4096-po);
-  unsafe{core::slice::from_raw_parts_mut((frame as *mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
-  done+=n;
- }
+  if node.npages==0&&!node.data.is_null() { node.pages[0]=node.data as u64; node.npages=1; node.capacity=node.capacity.max(4096); }
+  let end=off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+  if end>MAX_FILE_SIZE{return Err(errno::EFBIG)}
+  let needed=((end as usize+4095)/4096).max(1);
+  while (node.npages as usize) < needed {
+   let pi=node.npages as usize;
+   ensure_page_of(node,pi)?;
+  }
+  let mut done=0usize;
+  while done<src.len(){
+   let poff=off as usize+done;
+   let pi=poff/4096; let po=poff%4096;
+   let frame=match page_frame_of(node,pi){Some(f)=>f,None=>return Err(errno::ENOSPC)};
+   let n=core::cmp::min(src.len()-done,4096-po);
+   unsafe{core::slice::from_raw_parts_mut((frame as *mut u8).add(po),n).copy_from_slice(&src[done..done+n])};
+   done+=n;
+  }
   if end>node.size{node.size=end;}
   let mut path=[0u8;128];let path_len=node.name_len;path[..path_len].copy_from_slice(&node.name[..path_len]);drop(m);
   if !src.is_empty(){if let Ok(path)=core::str::from_utf8(&path[..path_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}
@@ -17533,7 +17871,7 @@ pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
  if nl>NAME_MAX{return Err(errno::ENAMETOOLONG)}
  let ino=(m.len+2)as u64+0x3000;
  let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(path.as_bytes());
- let node=Inode{ino,mode,size:0,capacity:0,data:core::ptr::null_mut(),rdev,pages:[0;8],npages:0,name,name_len:nl};
+ let node=Inode{ino,mode,size:0,capacity:0,data:core::ptr::null_mut(),rdev,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -17559,17 +17897,17 @@ fn sys_fill(path:&str)->usize{
 fn sys_lookup(path:&str)->Result<Inode>{
  if path=="/sys"||path=="/sys/class"||path=="/sys/class/net"||path=="/sys/block"||path=="/sys/devices"||path=="/sys/kernel"||path=="/sys/fs"{
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
-  return Ok(Inode{ino:0xa000+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino:0xa000+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
  }
  if path=="/sys/class/net/eth0"||path=="/sys/block/vda"{
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
-  return Ok(Inode{ino:0xa200+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino:0xa200+path.len() as u64,mode:S_IFDIR|0o555,name,name_len:b.len(),indirect:0,dindirect:0,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],npages:0})
  }
  if is_sys_file(path){
   let size=sys_fill(path);
   let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
   let ino=0xa100+path.len() as u64;
-  return Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:b.len(),size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
+  return Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:b.len(),indirect:0,dindirect:0,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
  }
  Err(errno::ENOENT)
 }
@@ -17578,7 +17916,7 @@ fn proc_file_inode(path:&str,subject:ProcSubject,file:&str)->Result<Inode>{
  let size=proc_fill(subject,file);
  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); let n=core::cmp::min(b.len(),NAME_MAX); name[..n].copy_from_slice(&b[..n]);
  let ino=0x90000 + ((path.len() as u64)&0xfff);
- Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:n,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
+ Ok(Inode{ino,mode:S_IFREG|0o444,name,name_len:n,indirect:0,dindirect:0,size:size as u64,capacity:4096,data:unsafe{(&raw mut PROC_BUF).cast::<u8>()},rdev:0,pages:[0;8],npages:0})
 }
 
 fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
@@ -17588,7 +17926,7 @@ fn proc_symlink(path:&str,target:&[u8])->Result<Inode>{
  unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,target.len()).copy_from_slice(target)}
  let mut name=[0u8;NAME_MAX+1]; let b=path.as_bytes(); name[..b.len()].copy_from_slice(b);
  let ino=0x93000 + path.len() as u64;
- Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),size:target.len() as u64,capacity:target.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1})
+ Ok(Inode{ino,mode:S_IFLNK|0o777,name,name_len:b.len(),indirect:0,dindirect:0,size:target.len() as u64,capacity:target.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],npages:1})
 }
 --------------------------------------------------------------------------------
 END FILE: kernel/vfs.rs
@@ -19386,8 +19724,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 102715 bytes
-SHA-256: 8417c38bace0b10a3e3b46232eaec567a8e7a62c7512c0b2760d474e03b60718
+SIZE: 106467 bytes
+SHA-256: 07ade36227366b831945ec12f2d05c09907353a8dd4930f76f5fbf5292a5f991
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -21417,6 +21755,83 @@ int main(int argc, char **argv) {
         printf("DIFF_AT_OK\n");
     }
 
+    /* Big files: a 3 MiB round trip through multi-level block addressing
+       (direct, single-indirect and double-indirect pages), with hole
+       zero-fill, shrink, rewrite and removal. ext2 already handles big
+       files; this covers the page-based filesystems. */
+    {
+        char bbase[128], big[128];
+        const char *envb = getenv("SLOP_MNU_DIFF");
+        if (envb) snprintf(bbase, sizeof bbase, "/bigfs");
+        else snprintf(bbase, sizeof bbase, "/tmp/bigfs-%d", (int)getpid());
+        snprintf(big, sizeof big, "%s/big.bin", bbase);
+        (void)unlink(big);
+        (void)rmdir(bbase);
+        if (mkdir(bbase, 0755) != 0) return fail("big mkdir");
+        const size_t total = 3 * 1024 * 1024;
+        int fw = open(big, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fw < 0) return fail("big create");
+        {
+            unsigned char chunk[8192];
+            size_t off = 0;
+            while (off < total) {
+                size_t n = sizeof chunk;
+                if (n > total - off) n = total - off;
+                for (size_t i = 0; i < n; i++) chunk[i] = (unsigned char)(((off + i) * 131 + 7) & 0xff);
+                if (write(fw, chunk, n) != (ssize_t)n) return fail("big write");
+                off += n;
+            }
+        }
+        close(fw);
+        struct stat bst;
+        if (stat(big, &bst) != 0 || bst.st_size != (off_t)total) return fail("big size");
+        int fr = open(big, O_RDONLY);
+        if (fr < 0) return fail("big reopen");
+        {
+            unsigned char chunk[8192];
+            size_t off = 0;
+            while (off < total) {
+                size_t n = sizeof chunk;
+                if (n > total - off) n = total - off;
+                ssize_t got = 0;
+                while ((size_t)got < n) {
+                    ssize_t r = read(fr, chunk + got, n - got);
+                    if (r <= 0) return fail("big read");
+                    got += r;
+                }
+                for (size_t i = 0; i < n; i++)
+                    if (chunk[i] != (unsigned char)(((off + i) * 131 + 7) & 0xff)) return fail("big content");
+                off += n;
+            }
+        }
+        close(fr);
+        if (truncate(big, 100) != 0) return fail("big shrink");
+        if (stat(big, &bst) != 0 || bst.st_size != 100) return fail("big shrink size");
+        /* Sparse rewrite far past the end: the gap reads back as zeros. */
+        {
+            int sw = open(big, O_WRONLY);
+            if (sw < 0) return fail("big sparse open");
+            if (lseek(sw, 2 * 1024 * 1024, SEEK_SET) != 2 * 1024 * 1024) return fail("big sparse seek");
+            if (write(sw, "TAIL", 4) != 4) return fail("big sparse write");
+            close(sw);
+            if (stat(big, &bst) != 0 || bst.st_size != 2 * 1024 * 1024 + 4) return fail("big sparse size");
+            int sr = open(big, O_RDONLY);
+            if (sr < 0) return fail("big sparse reopen");
+            unsigned char zb[16] = {0};
+            if (lseek(sr, 1024 * 1024, SEEK_SET) != 1024 * 1024) return fail("big sparse seek2");
+            if (read(sr, zb, sizeof zb) != (ssize_t)sizeof zb) return fail("big sparse read");
+            for (int i = 0; i < 16; i++) if (zb[i] != 0) return fail("big hole zero");
+            char tail[4] = {0};
+            if (lseek(sr, 2 * 1024 * 1024, SEEK_SET) != 2 * 1024 * 1024) return fail("big sparse seek3");
+            if (read(sr, tail, sizeof tail) != 4 || memcmp(tail, "TAIL", 4) != 0) return fail("big tail");
+            close(sr);
+        }
+        if (unlink(big) != 0) return fail("big unlink");
+        if (stat(big, &bst) == 0 || errno != ENOENT) return fail("big gone");
+        if (rmdir(bbase) != 0) return fail("big rmdir");
+        printf("DIFF_BIGFILE_OK\n");
+    }
+
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,
        in the guest the ext2 mount. Exercises create/write/read/truncate,
        multi-block mappings, sparse holes, directories and removal. */
@@ -23188,8 +23603,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 8314 bytes
-SHA-256: 199c70b7dcfc5a599149fb04ab2febbb26cfee62a80053eee3678adf87234dd0
+SIZE: 8411 bytes
+SHA-256: c14faac4761dc780372712aee68a0e9e09b8abfd368c97e266d0434c2bb239d0
 ================================================================================
 #!/bin/sh
 set -eu
@@ -23245,13 +23660,13 @@ required={
  'tests/hello-posix.c':['pipe(fds)','fork()','dup2(','waitpid(','posix: fork, pipe, dup2 and wait4 passed'],
  'tools/build-libc-test.sh':['libc/start.S','hello-c.c','hello-posix.c','ld.lld','hello-c.elf','hello-posix.elf'],
  'kernel/wait_queue.rs':['struct WaitQueue','pub fn register','wake_one','wake_all'],
- 'kernel/vfs.rs':['mount_initramfs','pub fn lookup','pub fn image'],
+ 'kernel/vfs.rs':['mount_initramfs','pub fn lookup','pub fn image','MAX_FILE_PAGES','ensure_page_of','free_beyond','page_frame_of'],
  'kernel/vm.rs':['pub fn replace','pub fn insert','pub fn allocate','pub fn remove'],
- 'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2','signalfd_read','signalfd_readable','signalfd_set_mask'],
+ 'kernel/fd.rs':['pub fn open','pub fn read','pub fn seek','pub fn close','install_pair','clone_incref','OpenKind','dup2','signalfd_read','signalfd_readable','signalfd_set_mask','any_open_ino'],
  
  'kernel/process.rs':['share_slot','release_frame','map_page','unmap_page','protect_page','BRK_BASE','clone_address_space','teardown_exit','replace_image','utime_ns'],
  'kernel/futex.rs':['fn wait','pub fn wake','pub fn dispatch','block_until'],
-  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_AT_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
+  'tests/differential.c':['DIFF_PTHREAD_OK','DIFF_COND_OK','DIFF_KILL_OK','DIFF_TLS_OK','DIFF_STOP_OK','DIFF_FP_OK','DIFF_SIGNALFD_STOP_OK','DIFF_SIGNALFD_NOCLDSTOP_OK','DIFF_CFR_OK','DIFF_SPLICE_OK','DIFF_TEE_OK','DIFF_FALLOC_OK','DIFF_TCPSRV_OK','DIFF_UDPLOOP_OK','DIFF_UNIXDG_OK','DIFF_AT_OK','DIFF_BIGFILE_OK','DIFF_EXT2_OK','DIFF_NOPIE_OK'],
  'tests/minimal-linux.S':['mov $59,%rax','/bin/hello','argv','envp'],
  'tests/hello-linux.S':['mov $9,%rax','mov $10,%rax','mov $11,%rax','mov $12,%rax','cmpq $1,(%rsp)','/bin/hello-c'],
   'kernel/linux_abi/mod.rs':['sys_rt_sigsuspend','sys_execve','copy_exec_vec','load_static_args','commit_exec_return','sys_clone','sys_wait4','sys_pipe','sys_fcntl','sys_getpeername','sockaddr_in_of','sys_getrusage','rusage_buf','sys_tgkill','sys_signalfd4','signalfd_readable','signalfd_set_mask','sys_rt_sigtimedwait','dgram_sendto','write_sockaddr_un','sys_times','at_resolve','sys_renameat_flags','sys_execve_resolved'],
@@ -23307,8 +23722,8 @@ END FILE: tools/check-toolchain.sh
 
 ================================================================================
 FILE: tools/differential-test.sh
-SIZE: 5978 bytes
-SHA-256: 3f9ced3e6c1c405d4a12ff07c4107b037d159dba25de4232f4529ea37e2658cd
+SIZE: 6010 bytes
+SHA-256: c7b1b8bf76bc62649ac75596d58b5e6893a7d11d0ab40685e90eba1a82de24b9
 ================================================================================
 #!/bin/sh
 set -eu
@@ -23336,7 +23751,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
   exit 1
 fi
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_EXT2_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -23403,7 +23818,7 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1

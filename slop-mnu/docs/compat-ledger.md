@@ -101,10 +101,14 @@ Dirfd-relative *at facts (v0.79.0):- Relative paths resolve against directory fd
 
 
 On-disk link/rename/symlink facts (v0.80.0):
-- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, and linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
-- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, and renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
+- `link` of a directory reports `EPERM`, linking onto an existing name `EEXIST`, linking through a symlink links the target: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (shared inode, nlink 2, content match).
+- `rename` onto an existing empty directory replaces it, onto a non-empty directory reports `ENOTEMPTY`, file-onto-directory `EISDIR`, directory-onto-file `ENOTDIR`, moving a directory into its own subtree `EINVAL`, renaming onto itself succeeds: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (file and empty-dir rename round trips).
 - `symlink` stores the target verbatim (fast inline up to 60 bytes, block-backed beyond), `readlink` returns it byte for byte, `lstat` reports the link and `stat` follows it: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` including a 100-byte slow-symlink round trip.
 - `stat` reports the on-disk link count (`st_nlink`/`stx_nlink`): public `sys/stat.h` field semantics. Implementer: opencode. Reviewer: pending. Tests: `DIFF_EXT2_OK` (nlink 2 shared, nlink 1 after unlink).
+
+
+Big-file facts (v0.81.0):
+- Writes past 32 KiB succeed and read back byte-identical; `ftruncate` up extends without allocating, down keeps the set size; holes read as zeros; shrinking then rewriting works; `fstat`/`statx` report the true size; `ENOSPC` only on a genuinely exhausted frame allocator and `EFBIG` past ~1 GiB: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_BIGFILE_OK` (3 MiB three-level round trip, hole zero-fill, shrink, rewrite, unlink).
 
 
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.

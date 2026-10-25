@@ -2026,6 +2026,83 @@ int main(int argc, char **argv) {
         printf("DIFF_AT_OK\n");
     }
 
+    /* Big files: a 3 MiB round trip through multi-level block addressing
+       (direct, single-indirect and double-indirect pages), with hole
+       zero-fill, shrink, rewrite and removal. ext2 already handles big
+       files; this covers the page-based filesystems. */
+    {
+        char bbase[128], big[128];
+        const char *envb = getenv("SLOP_MNU_DIFF");
+        if (envb) snprintf(bbase, sizeof bbase, "/bigfs");
+        else snprintf(bbase, sizeof bbase, "/tmp/bigfs-%d", (int)getpid());
+        snprintf(big, sizeof big, "%s/big.bin", bbase);
+        (void)unlink(big);
+        (void)rmdir(bbase);
+        if (mkdir(bbase, 0755) != 0) return fail("big mkdir");
+        const size_t total = 3 * 1024 * 1024;
+        int fw = open(big, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fw < 0) return fail("big create");
+        {
+            unsigned char chunk[8192];
+            size_t off = 0;
+            while (off < total) {
+                size_t n = sizeof chunk;
+                if (n > total - off) n = total - off;
+                for (size_t i = 0; i < n; i++) chunk[i] = (unsigned char)(((off + i) * 131 + 7) & 0xff);
+                if (write(fw, chunk, n) != (ssize_t)n) return fail("big write");
+                off += n;
+            }
+        }
+        close(fw);
+        struct stat bst;
+        if (stat(big, &bst) != 0 || bst.st_size != (off_t)total) return fail("big size");
+        int fr = open(big, O_RDONLY);
+        if (fr < 0) return fail("big reopen");
+        {
+            unsigned char chunk[8192];
+            size_t off = 0;
+            while (off < total) {
+                size_t n = sizeof chunk;
+                if (n > total - off) n = total - off;
+                ssize_t got = 0;
+                while ((size_t)got < n) {
+                    ssize_t r = read(fr, chunk + got, n - got);
+                    if (r <= 0) return fail("big read");
+                    got += r;
+                }
+                for (size_t i = 0; i < n; i++)
+                    if (chunk[i] != (unsigned char)(((off + i) * 131 + 7) & 0xff)) return fail("big content");
+                off += n;
+            }
+        }
+        close(fr);
+        if (truncate(big, 100) != 0) return fail("big shrink");
+        if (stat(big, &bst) != 0 || bst.st_size != 100) return fail("big shrink size");
+        /* Sparse rewrite far past the end: the gap reads back as zeros. */
+        {
+            int sw = open(big, O_WRONLY);
+            if (sw < 0) return fail("big sparse open");
+            if (lseek(sw, 2 * 1024 * 1024, SEEK_SET) != 2 * 1024 * 1024) return fail("big sparse seek");
+            if (write(sw, "TAIL", 4) != 4) return fail("big sparse write");
+            close(sw);
+            if (stat(big, &bst) != 0 || bst.st_size != 2 * 1024 * 1024 + 4) return fail("big sparse size");
+            int sr = open(big, O_RDONLY);
+            if (sr < 0) return fail("big sparse reopen");
+            unsigned char zb[16] = {0};
+            if (lseek(sr, 1024 * 1024, SEEK_SET) != 1024 * 1024) return fail("big sparse seek2");
+            if (read(sr, zb, sizeof zb) != (ssize_t)sizeof zb) return fail("big sparse read");
+            for (int i = 0; i < 16; i++) if (zb[i] != 0) return fail("big hole zero");
+            char tail[4] = {0};
+            if (lseek(sr, 2 * 1024 * 1024, SEEK_SET) != 2 * 1024 * 1024) return fail("big sparse seek3");
+            if (read(sr, tail, sizeof tail) != 4 || memcmp(tail, "TAIL", 4) != 0) return fail("big tail");
+            close(sr);
+        }
+        if (unlink(big) != 0) return fail("big unlink");
+        if (stat(big, &bst) == 0 || errno != ENOENT) return fail("big gone");
+        if (rmdir(bbase) != 0) return fail("big rmdir");
+        printf("DIFF_BIGFILE_OK\n");
+    }
+
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,
        in the guest the ext2 mount. Exercises create/write/read/truncate,
        multi-block mappings, sparse holes, directories and removal. */

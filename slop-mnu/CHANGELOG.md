@@ -1,3 +1,9 @@
+## 0.81.0 - 2026-10-26
+- Removed the 32 KiB file size cap: page-backed files (tmpfs, initramfs root) now use direct + single-indirect + double-indirect block addressing up to ~1 GiB, with holes reading back as zeros and `ENOSPC`/`EFBIG` only on true exhaustion or past the maximum.
+- Frame lifetime: unlink and truncate-shrink recycle data and indirect blocks (skipped while open descriptions still reference the file); new hard links share frames through page refcounts.
+- `ftruncate` grow no longer fails against stale capacity; writes allocate on demand.
+- The differential battery covers it with `DIFF_BIGFILE_OK` (3 MiB three-level round trip, hole zero-fill, shrink, rewrite, unlink) on native Linux and in the guest.
+
 ## 0.80.0 - 2026-10-26
 - ext2 rename/link/symlink: `rename` with replace/empty-dir/`ENOTEMPTY`/`EISDIR`/`ENOTDIR`/subtree semantics and `..`/link-count fixups, `link` with `EPERM` on directories and `EEXIST` on clashes, symlinks stored inline (fast, ≤60 bytes) or in data blocks with a matching reader.
 - Symlink traversal now works on disk: path resolution follows ext2 links, and `readlink`/`lstat`/`stat`-through/`open`-through all agree with Linux.

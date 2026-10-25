@@ -19,7 +19,10 @@ The `ucontext_t` carries the 512-byte FXSAVE area with the SSE registers at offs
 `copy_file_range` (files only), `splice` (one side a pipe), `tee`
 (pipe to pipe, non-consuming) and `fallocate` (extend, `KEEP_SIZE`,
 `PUNCH_HOLE`) move file content with native offset, flag and error
-semantics. Files stay capped at 8 pages (32 KiB); beyond that `ENOSPC`.
+semantics. Page-backed files (tmpfs and the initramfs root) address
+8 direct pages plus single- and double-indirect tables, up to ~1 GiB;
+holes read as zeros and `ENOSPC`/`EFBIG` only fire on a genuinely
+exhausted frame allocator or past the maximum.
 
 ## Dirfd-relative lookup
 

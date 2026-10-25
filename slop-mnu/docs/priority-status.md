@@ -83,6 +83,9 @@
   `AT_EMPTY_PATH` fd execution, UAPI-true `statx` layout
 - ext2 link/rename/symlink: shared inodes with `nlink`, empty-dir
   replacement renames, fast and block-backed symlinks with traversal
+- page-backed files past 32 KiB: direct + single/double-indirect
+  addressing to ~1 GiB, hole zero-fill, frame recycling on unlink
+  and truncate-shrink, hard-link refcounting
 
 ## Open defects
 
