@@ -7,7 +7,7 @@
 //! facts are recorded in `docs/compat-ledger.md`.
 use crate::arch::x86_64::syscall::{self,UserFrame};
 use crate::task;
-pub const SIGHUP:i32=1;pub const SIGINT:i32=2;pub const SIGQUIT:i32=3;pub const SIGILL:i32=4;pub const SIGTRAP:i32=5;pub const SIGABRT:i32=6;pub const SIGBUS:i32=7;pub const SIGFPE:i32=8;pub const SIGKILL:i32=9;pub const SIGUSR1:i32=10;pub const SIGSEGV:i32=11;pub const SIGUSR2:i32=12;pub const SIGPIPE:i32=13;pub const SIGALRM:i32=14;pub const SIGTERM:i32=15;pub const SIGCHLD:i32=17;pub const SIGCONT:i32=18;pub const SIGSTOP:i32=19;pub const SIGTSTP:i32=20;pub const SIGTTIN:i32=21;pub const SIGTTOU:i32=22;pub const SIGURG:i32=23;pub const SIGVTALRM:i32=26;pub const SIGPROF:i32=27;pub const SIGWINCH:i32=28;
+pub const SIGHUP:i32=1;pub const SIGINT:i32=2;pub const SIGQUIT:i32=3;pub const SIGILL:i32=4;pub const SIGTRAP:i32=5;pub const SIGABRT:i32=6;pub const SIGBUS:i32=7;pub const SIGFPE:i32=8;pub const SIGKILL:i32=9;pub const SIGUSR1:i32=10;pub const SIGSEGV:i32=11;pub const SIGUSR2:i32=12;pub const SIGPIPE:i32=13;pub const SIGALRM:i32=14;pub const SIGTERM:i32=15;pub const SIGSTKFLT:i32=16;pub const SIGCHLD:i32=17;pub const SIGCONT:i32=18;pub const SIGSTOP:i32=19;pub const SIGTSTP:i32=20;pub const SIGTTIN:i32=21;pub const SIGTTOU:i32=22;pub const SIGURG:i32=23;pub const SIGXCPU:i32=24;pub const SIGXFSZ:i32=25;pub const SIGVTALRM:i32=26;pub const SIGPROF:i32=27;pub const SIGWINCH:i32=28;pub const SIGIO:i32=29;pub const SIGPWR:i32=30;pub const SIGSYS:i32=31;
 pub const SIG_DFL:u64=0;pub const SIG_IGN:u64=1;
 pub const SA_NOCLDSTOP:u64=1;pub const SA_NOCLDWAIT:u64=2;pub const SA_SIGINFO:u64=4;pub const SA_ONSTACK:u64=0x08000000;pub const SA_RESTORER:u64=0x04000000;pub const SA_RESTART:u64=0x10000000;pub const SA_NODEFER:u64=0x40000000;pub const SA_RESETHAND:u64=0x80000000;
 pub const BLOCK:u64=0;pub const UNBLOCK:u64=1;pub const SETMASK:u64=2;
@@ -83,13 +83,17 @@ pub fn mask_op(how:u64,set:u64)->Result<u64,i64>{
 }
 /* Next pending, unblocked signal; unblockable signals ignore the mask. */
 pub fn pending()->Option<i64>{
- task::with_current_process(|p|{let blocked=p.sigmask|bit(SIGKILL)|bit(SIGSTOP);let m=p.pending&!blocked;if m==0{None}else{Some(m.trailing_zeros()as i64+1)}}).flatten()
+ task::with_current_process(|p|{let blocked=p.sigmask&!unblockable_mask();let m=p.pending&!blocked;if m==0{None}else{Some(m.trailing_zeros()as i64+1)}}).flatten()
 }
 /* True when a signal is queued and deliverable, so a blocking syscall can
    report EINTR instead of sleeping through the delivery. */
 pub fn has_pending()->bool{pending().is_some()}
 pub fn pop(sig:i64){task::with_current_process(|p|{
  p.pending&=!bit(sig as i32);
+ /* Consuming the coalesced SIGCHLD drops the stored child status too, so a
+    later event starts from a clean slot. Child task states are untouched:
+    wait4/waitid still reap the stopped or zombie child afterwards. */
+ if sig as i32==SIGCHLD{p.sch_code=0;p.sch_pid=0;p.sch_uid=0;p.sch_status=0;}
  if is_rt(sig as i32){
   /* A real-time signal keeps the instances that were not delivered yet. */
   let i=rt_index(sig as i32);
@@ -111,8 +115,19 @@ pub fn handlers_dfl()->[Action;65]{[DFL;65]}
 /* True when the default disposition of sig kills the process. */
 pub fn default_terminates(sig:i32)->bool{
  matches!(sig,
-  SIGHUP|SIGINT|SIGQUIT|SIGILL|SIGABRT|SIGBUS|SIGFPE|SIGKILL|SIGSEGV|
-  SIGPIPE|SIGALRM|SIGTERM|SIGUSR1|SIGUSR2|SIGVTALRM|SIGPROF)
+  SIGHUP|SIGINT|SIGQUIT|SIGILL|SIGTRAP|SIGABRT|SIGBUS|SIGFPE|SIGKILL|SIGUSR1|SIGSEGV|
+  SIGUSR2|SIGPIPE|SIGALRM|SIGTERM|SIGSTKFLT|SIGXCPU|SIGXFSZ|SIGVTALRM|SIGPROF|SIGIO|SIGPWR|SIGSYS)
+ ||(sig>=SIGRTMIN&&sig<=SIGRTMAX)
+}
+/* True when the default disposition stops the task for job control. */
+pub fn default_stops(sig:i32)->bool{
+ matches!(sig,SIGSTOP|SIGTSTP|SIGTTIN|SIGTTOU)
+}
+/* True when the default disposition resumes a stopped task. */
+pub fn default_continues(sig:i32)->bool{sig==SIGCONT}
+/* True when the default disposition ignores the signal. */
+pub fn default_ignores(sig:i32)->bool{
+ matches!(sig,SIGCHLD|SIGURG|SIGWINCH)
 }
 
 /* The published REG_* index list of the x86-64 machine context. */
@@ -149,6 +164,9 @@ pub struct SigInfo{pub si_signo:i32,pub si_errno:i32,pub si_code:i32,pub si_pad:
 pub const SI_USER:i32=0;
 /* The signal was sent by sigqueue and carries a value. */
 pub const SI_QUEUE:i32=-2;
+/* Child-status codes for SIGCHLD/waitid, matching the Linux CLD_* list. */
+pub const CLD_EXITED:i32=1;pub const CLD_KILLED:i32=2;pub const CLD_DUMPED:i32=3;
+pub const CLD_TRAPPED:i32=4;pub const CLD_STOPPED:i32=5;pub const CLD_CONTINUED:i32=6;
 
 /* The user context prepared for a handler entry. */
 pub struct Delivery{pub rip:u64,pub rsp:u64,pub rflags:u64,pub sig:i32,pub siginfo:u64,pub ucontext:u64}
@@ -170,6 +188,15 @@ pub fn prepare_delivery(frame:*mut u64)->Option<Delivery>{
   if action.handler==SIG_IGN{pop(sig);continue}
   if action.handler==SIG_DFL{
    if default_terminates(sig as i32){crate::task::exit_signal(sig as i32);}
+   if default_stops(sig as i32){
+    /* A blocked stop stays pending; the unblockable SIGSTOP and an
+       unblocked SIGTSTP/SIGTTIN/SIGTTOU park the task here. */
+    pop(sig);
+    crate::task::stop_current(sig as i32);
+    continue;
+   }
+   /* SIGCONT with the default disposition only resumes; a stopped task is
+      resumed by the sender path, so a running task just consumes it. */
    pop(sig);continue;
   }
   match build_frame(sig as i32,action,frame){
@@ -243,6 +270,19 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  }
  let uc_addr=x+8;
  let info_addr=uc_addr+core::mem::size_of::<UContext>() as u64;
+ /* The floating-point state travels in the 512-byte FXSAVE area at the end
+    of the ucontext. The kernel keeps only the sixteen SSE registers; they
+    sit at offset 160 like Linux, with MXCSR set to its reset value. */
+ {
+  task::save_current_fpu();
+  let mut area=[0u8;256];
+  task::copy_current_fpu(&mut area);
+  uc.fpstate[160..160+256].copy_from_slice(&area);
+  /* FXSAVE bytes 24..28 hold MXCSR and its mask. */
+  uc.fpstate[24]=0x80;uc.fpstate[25]=0x1f;uc.fpstate[28]=0xbf;uc.fpstate[29]=0xff;
+  let off=core::mem::offset_of!(UContext,fpstate) as u64;
+  uc.uc_mcontext.fpregs=uc_addr+off;
+ }
  crate::usercopy::copy_to_user(x as usize,&action.restorer.to_ne_bytes())?;
  crate::usercopy::copy_to_user(uc_addr as usize,unsafe{core::slice::from_raw_parts((&uc as*const UContext).cast::<u8>(),core::mem::size_of::<UContext>())})?;
  crate::usercopy::copy_to_user(info_addr as usize,unsafe{core::slice::from_raw_parts((&info as*const SigInfo).cast::<u8>(),core::mem::size_of::<SigInfo>())})?;
@@ -299,6 +339,14 @@ pub fn restore_frame()->Result<(),i64>{
   r10:g[REG_R10],r9:g[REG_R9],r8:g[REG_R8],rdx:g[REG_RDX],rsi:g[REG_RSI],rdi:g[REG_RDI],
   rax:rax,rip:rip,rflags:rflags,rsp:rsp};
  task::with_current_process(|p|{p.sigmask=uc.uc_sigmask;p.altstack_flags&=!(SS_ONSTACK as u32);});
+ /* A handler may have changed the SSE registers: the FXSAVE area carries
+    them back into the running task so the syscall-exit restore and the next
+    context switch both observe the handler-approved values. */
+ {
+  let mut area=[0u8;256];
+  area.copy_from_slice(&uc.fpstate[160..160+256]);
+  task::write_current_fpu(&area);
+ }
  if !syscall::set_return_context(unsafe{syscall::SYSCALL_FRAME as *mut u64},&frame){return Err(crate::errno::EFAULT)}
  /* The return path takes the user-mode result from this cell, so the
     restored value has to be published here. */

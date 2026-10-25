@@ -87,3 +87,31 @@ fpu_save_regs:
 #ifdef __ELF__
 .size fpu_save_regs,.-fpu_save_regs
 #endif
+
+.text
+.global fpu_restore_regs
+#ifdef __ELF__
+.type fpu_restore_regs,@function
+#endif
+/* rdi = area; copies the saved SSE register file back into the CPU. */
+fpu_restore_regs:
+    movups 0(%rdi),%xmm0
+    movups 16(%rdi),%xmm1
+    movups 32(%rdi),%xmm2
+    movups 48(%rdi),%xmm3
+    movups 64(%rdi),%xmm4
+    movups 80(%rdi),%xmm5
+    movups 96(%rdi),%xmm6
+    movups 112(%rdi),%xmm7
+    movups 128(%rdi),%xmm8
+    movups 144(%rdi),%xmm9
+    movups 160(%rdi),%xmm10
+    movups 176(%rdi),%xmm11
+    movups 192(%rdi),%xmm12
+    movups 208(%rdi),%xmm13
+    movups 224(%rdi),%xmm14
+    movups 240(%rdi),%xmm15
+    ret
+#ifdef __ELF__
+.size fpu_restore_regs,.-fpu_restore_regs
+#endif

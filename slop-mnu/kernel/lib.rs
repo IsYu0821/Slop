@@ -124,7 +124,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     let _=crate::vfs::mkdir("/run",0o777);
     let _=crate::vfs::mkdir("/var",0o755);
     let _=crate::vfs::mkdir("/var/tmp",0o777);
-    let _=crate::vfs::mkdir("/mnt",0o755);
+    let r=crate::vfs::mkdir("/mnt",0o755);
     if !vfs::mount_self_test(){println!("vfs mount/namespace self-test failed");arch::halt()}
     println!("vfs: tmpfs mount and namespace self-test passed");
     let image=match vfs::image("/init"){Ok(v)=>v,Err(e)=>{println!("VFS /init lookup failed errno={}",e);arch::halt()}};

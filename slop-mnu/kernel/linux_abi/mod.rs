@@ -137,16 +137,14 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::READLINK=>sys_readlink(a[0],a[1],a[2]),
     nr::CLOSE_RANGE=>sys_close_range(a[0] as usize,a[1] as usize,a[2]),
     nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>0, nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
-    nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>errno::neg(errno::ENOSYS),
-    nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>errno::neg(errno::ENOSYS), nr::TEE=>errno::neg(errno::ENOSYS),
-    nr::COPY_FILE_RANGE=>errno::neg(errno::ENOSYS), nr::FUTIMESAT=>0, nr::UTIMES=>0,
+    nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>sys_fallocate(a[0] as usize,a[1],a[2],a[3]),
+    nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>sys_splice(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::TEE=>sys_tee(a[0] as usize,a[1] as usize,a[2] as usize,a[3]),
+    nr::COPY_FILE_RANGE=>sys_copy_file_range(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::FUTIMESAT=>0, nr::UTIMES=>0,
     nr::GETXATTR=>errno::neg(errno::ENODATA), nr::LGETXATTR=>errno::neg(errno::ENODATA), nr::FGETXATTR=>errno::neg(errno::ENODATA),
     nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
     nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
     nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
-    nr::INOTIFY_ADD_WATCH=>errno::neg(errno::ENOSYS), nr::INOTIFY_RM_WATCH=>errno::neg(errno::ENOSYS),
-    nr::SIGNALFD4=>errno::neg(errno::ENOSYS), nr::TIMERFD_SETTIME=>errno::neg(errno::ENOSYS), nr::TIMERFD_GETTIME=>errno::neg(errno::ENOSYS),
-    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MEMFD_CREATE=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
     nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
     nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
     nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
@@ -161,7 +159,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::DUP=>sys_dup(a[0] as usize),
     nr::GETTIMEOFDAY=>sys_gettimeofday(a[0],a[1]),
     nr::GETRLIMIT=>sys_getrlimit(a[0],a[1]), nr::SETRLIMIT=>sys_setrlimit(a[0],a[1]),
-    nr::GETRUSAGE=>sys_getrusage(a[0],a[1]),
+    nr::GETRUSAGE=>sys_getrusage(a[0],a[1]), nr::TIMES=>sys_times(a[0]),
     nr::CLOCK_GETRES=>sys_clock_getres(a[0],a[1]), nr::CLOCK_NANOSLEEP=>sys_clock_nanosleep(a[0],a[1],a[2],a[3]), nr::CLOCK_SETTIME=>sys_clock_settime(a[0],a[1]),
     nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
@@ -250,12 +248,21 @@ fn sys_clone(a:[u64;6])->i64{
  }
 }
 fn sys_wait4(pid:i64,status_ptr:u64,options:u64,rusage:u64)->i64{
- const WNOHANG:u64=1;const WUNTRACED:u64=2;
- if options&!(WNOHANG|WUNTRACED)!=0{return errno::neg(errno::EINVAL)}
- loop{match crate::task::reap_child(pid,options&WNOHANG!=0){
+ const WNOHANG:u64=1;const WUNTRACED:u64=2;const WCONTINUED:u64=8;
+ if options&!(WNOHANG|WUNTRACED|WCONTINUED)!=0{return errno::neg(errno::EINVAL)}
+ let untraced=options&WUNTRACED!=0;let cont=options&WCONTINUED!=0;
+ loop{match crate::task::reap_child_opts(pid,options&WNOHANG!=0,untraced,cont){
   Ok(crate::task::WaitOutcome::Reaped(cpid,status,utime,stime))=>{
    if status_ptr!=0{let s=status as i32;let r=copy_obj(status_ptr,&s);if r<0{return r}}
    if rusage!=0{let b=rusage_buf(utime,stime,0);if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&b){return errno::neg(e)}}
+   return cpid as i64;
+  }
+  Ok(crate::task::WaitOutcome::Stopped(cpid,status))=>{
+   if status_ptr!=0{let s=status;let r=copy_obj(status_ptr,&s);if r<0{return r}}
+   return cpid as i64;
+  }
+  Ok(crate::task::WaitOutcome::Continued(cpid))=>{
+   if status_ptr!=0{let s=0xffffi32;let r=copy_obj(status_ptr,&s);if r<0{return r}}
    return cpid as i64;
   }
   Ok(crate::task::WaitOutcome::NoHang)=>return 0,
@@ -692,15 +699,20 @@ fn sys_statx(dirfd:i64,path:u64,flags:u64,mask:u64,buf:u64)->i64{
  copy_obj(buf,&st)
 }
 fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
- const P_PID:i32=0;const P_PGID:i32=1;const P_ALL:i32=2;const WEXITED:i64=4;const WNOHANG:i64=1;const WNOWAIT:i64=0x01000000;
+ const P_PID:i32=0;const P_PGID:i32=1;const P_ALL:i32=2;const WEXITED:i64=4;const WNOHANG:i64=1;const WNOWAIT:i64=0x01000000;const WSTOPPED:i64=2;const WCONTINUED:i64=8;
  let opts=options as i64;
- if opts&!(WEXITED|WNOHANG|WNOWAIT|2|0x80)!=0{return errno::neg(errno::EINVAL)}
+ if opts&!(WEXITED|WNOHANG|WNOWAIT|WSTOPPED|WCONTINUED)!=0{return errno::neg(errno::EINVAL)}
  let selector=match idtype{P_PID=>id as i64,P_PGID=>-(id as i64),P_ALL=>-1,_=>return errno::neg(errno::EINVAL)};
- let nohang=opts&WNOHANG!=0;
+ let nohang=opts&WNOHANG!=0;let untraced=opts&WSTOPPED!=0;let cont=opts&WCONTINUED!=0;
  loop{
-  match crate::task::reap_child(selector,nohang){
+  match crate::task::reap_child_opts(selector,nohang,untraced,cont){
    Ok(crate::task::WaitOutcome::Reaped(pid,status,_,_))=>{
-    let si_code:u32=1;let si_status:u32=status as u32&0xff;let si_signo:u32=if status&0x7f!=0{status as u32&0x7f}else{17};
+    /* Exited children report CLD_EXITED with the exit code; signal deaths
+       report CLD_KILLED with the terminating signal (no core dumps). */
+    let signaled=status&0x7f!=0;
+    let si_code:u32=if signaled{crate::signal::CLD_KILLED as u32}else{crate::signal::CLD_EXITED as u32};
+    let si_status:u32=if signaled{status as u32&0x7f}else{(status>>8) as u32&0xff};
+    let si_signo:u32=if signaled{status as u32&0x7f}else{17};
     let mut b=[0u8;128];
     b[0..4].copy_from_slice(&si_signo.to_ne_bytes());
     b[4..8].copy_from_slice(&(0i32).to_ne_bytes());
@@ -711,6 +723,33 @@ fn sys_waitid(idtype:i32,id:u64,info:u64,options:i32,rusage:u64)->i64{
     b[24..28].copy_from_slice(&si_status.to_ne_bytes());
     if let Err(e)=crate::usercopy::copy_to_user(info as usize,&b){return errno::neg(e)}
     if rusage!=0{let zeros=[0u8;144];if let Err(e)=crate::usercopy::copy_to_user(rusage as usize,&zeros){return errno::neg(e)}}
+    return 0;
+   }
+   Ok(crate::task::WaitOutcome::Stopped(pid,status))=>{
+    /* CLD_STOPPED=5, status carries the stop signal. */
+    let stop_sig=((status>>8)&0xff) as u32;
+    let mut b=[0u8;128];
+    b[0..4].copy_from_slice(&17u32.to_ne_bytes());
+    b[4..8].copy_from_slice(&(0i32).to_ne_bytes());
+    b[8..12].copy_from_slice(&5u32.to_ne_bytes());
+    b[12..16].copy_from_slice(&0u32.to_ne_bytes());
+    b[16..20].copy_from_slice(&pid.to_ne_bytes());
+    b[20..24].copy_from_slice(&0u32.to_ne_bytes());
+    b[24..28].copy_from_slice(&stop_sig.to_ne_bytes());
+    if info!=0{if let Err(e)=crate::usercopy::copy_to_user(info as usize,&b){return errno::neg(e)}}
+    return 0;
+   }
+   Ok(crate::task::WaitOutcome::Continued(pid))=>{
+    /* CLD_CONTINUED=6. */
+    let mut b=[0u8;128];
+    b[0..4].copy_from_slice(&17u32.to_ne_bytes());
+    b[4..8].copy_from_slice(&(0i32).to_ne_bytes());
+    b[8..12].copy_from_slice(&6u32.to_ne_bytes());
+    b[12..16].copy_from_slice(&0u32.to_ne_bytes());
+    b[16..20].copy_from_slice(&pid.to_ne_bytes());
+    b[20..24].copy_from_slice(&0u32.to_ne_bytes());
+    b[24..28].copy_from_slice(&18u32.to_ne_bytes());
+    if info!=0{if let Err(e)=crate::usercopy::copy_to_user(info as usize,&b){return errno::neg(e)}}
     return 0;
    }
    Ok(crate::task::WaitOutcome::NoHang)=>return 0,
@@ -754,47 +793,61 @@ fn sys_sched_getaffinity(pid:u32,len:usize,mask:u64)->i64{
 }
 fn sys_poll(fds:u64,nfds:i32,timeout:i32)->i64{
  if nfds<0{return errno::neg(errno::EINVAL)}
- let mut ready=0i64;
- for i in 0..nfds.min(16){
-  let mut b=[0u8;8];
-  if let Err(e)=crate::usercopy::copy_from_user(&mut b,(fds as usize)+(i as usize*8)){return errno::neg(e)}
-  let fd=i32::from_ne_bytes(b[0..4].try_into().unwrap());
-  if fd<0{continue}
-  match fd_id(fd as u64){
-   Some(id)=>{
-    /* A descriptor is readable when it has data or is at EOF. */
-    let readable=match crate::fd::kind(id){
-     Some(crate::fd::OpenKind::Console)=>true,
-     Some(crate::fd::OpenKind::PipeRead(_))=>true,
-     Some(crate::fd::OpenKind::Inode(_))=>true,
-     Some(crate::fd::OpenKind::Socket(_))=>true,
-     Some(crate::fd::OpenKind::EventFd(c,_))=>c!=0,
-     _=>false,
-    };
-    let writable=match crate::fd::kind(id){
-     Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))=>true,
-     Some(crate::fd::OpenKind::Socket(_))=>true,
-     Some(crate::fd::OpenKind::EventFd(_, _))=>true,
-     _=>false,
-    };
-    if readable||writable{
-     let mut rev=0u16;
-     if readable{rev|=0x1}
-     if writable{rev|=0x4}
-     let addr=(fds as usize)+(i as usize*8)+6;
-     if let Err(e)=crate::usercopy::copy_to_user(addr,&rev.to_ne_bytes()){return errno::neg(e)}
-     ready+=1;
+ if timeout< -1{return errno::neg(errno::EINVAL)}
+ /* Linux poll waits until a descriptor is ready, the timeout expires, or a
+    handled signal arrives. The old code slept once without rechecking, so an
+    event arriving during the wait (e.g. a SIGCHLD for signalfd) was lost. */
+ let mut to_ns:u64=if timeout>0{(timeout as u64).saturating_mul(1_000_000)}else{0};
+ let infinite=timeout<0;
+ loop{
+  let mut ready=0i64;
+  for i in 0..nfds.min(16){
+   let mut b=[0u8;8];
+   if let Err(e)=crate::usercopy::copy_from_user(&mut b,(fds as usize)+(i as usize*8)){return errno::neg(e)}
+   let fd=i32::from_ne_bytes(b[0..4].try_into().unwrap());
+   if fd<0{continue}
+   match fd_id(fd as u64){
+    Some(id)=>{
+     /* A descriptor is readable when it has data or is at EOF. */
+      let readable=match crate::fd::kind(id){
+       Some(crate::fd::OpenKind::Console)=>true,
+       Some(crate::fd::OpenKind::PipeRead(_))=>true,
+       Some(crate::fd::OpenKind::Inode(_))=>true,
+       Some(crate::fd::OpenKind::Socket(_))=>true,
+       Some(crate::fd::OpenKind::EventFd(c,_))=>c!=0,
+       Some(crate::fd::OpenKind::SignalFd(mask))=>crate::fd::signalfd_readable(mask),
+       _=>false,
+      };
+     let writable=match crate::fd::kind(id){
+      Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))=>true,
+      Some(crate::fd::OpenKind::Socket(_))=>true,
+      Some(crate::fd::OpenKind::EventFd(_, _))=>true,
+      _=>false,
+     };
+     if readable||writable{
+      let mut rev=0u16;
+      if readable{rev|=0x1}
+      if writable{rev|=0x4}
+      let addr=(fds as usize)+(i as usize*8)+6;
+      if let Err(e)=crate::usercopy::copy_to_user(addr,&rev.to_ne_bytes()){return errno::neg(e)}
+      ready+=1;
+     }
     }
+    None=>{return errno::neg(errno::EBADF)}
    }
-   None=>{return errno::neg(errno::EBADF)}
   }
+  if ready>0{return ready}
+  /* A handled signal interrupts the wait, like wait4 and friends. */
+  if crate::task::has_deliverable_signal(){return errno::neg(errno::EINTR)}
+  if infinite{
+   crate::task::block_current();
+   continue
+  }
+  if to_ns==0{return 0}
+  let step=core::cmp::min(to_ns,1_000_000u64);
+  crate::task::sleep_until(crate::time::ticks_after_ns(step));
+  to_ns=to_ns.saturating_sub(step);
  }
- if ready==0&&timeout>0{
-  /* No descriptor is ready: sleep briefly and report none, matching a poll
-     that timed out rather than blocking forever. */
-  crate::task::sleep_until(crate::time::ticks_after_ns(timeout as u64*1_000_000));
- }
- ready
 }
 fn sys_ppoll(fds:u64,nfds:i32,timeout:u64,sigmask:u64)->i64{
  let t=if timeout==0{-1i32}else{
@@ -854,7 +907,9 @@ fn sys_clone3(args:u64)->i64{
  }
 }
 
-/* Reads a sockaddr_un path into a fixed buffer, requiring the AF_UNIX family. */
+/* Reads a sockaddr_un path into a fixed buffer, requiring the AF_UNIX family.
+   Filesystem paths are NUL-terminated; abstract names start with a NUL byte
+   and may contain interiors NULs, so they use the full length. */
 fn sockaddr_path(addr:u64,len:u64)->Result<([u8;108],usize),i64>{
   if len<2{return Err(errno::EINVAL)}
  let mut hdr=[0u8;2];
@@ -864,9 +919,28 @@ fn sockaddr_path(addr:u64,len:u64)->Result<([u8;108],usize),i64>{
  let mut b=[0u8;108];
  if path_len==0{return Ok((b,0))}
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b[..path_len],addr as usize+2)}{return Err(e)}
+ if b[0]==0{
+  /* Abstract: the name is the raw bytes after the leading NUL, whose length
+     is path_len-1; keep the leading NUL so filesystem and abstract names
+     never collide. Trailing NULs are part of the wire length on Linux, but
+     the kernel compares the full sun_path, so keep path_len as given. */
+  return Ok((b,path_len));
+ }
  let end=b[..path_len].iter().position(|&c|c==0).unwrap_or(path_len);
  if core::str::from_utf8(&b[..end]).is_err(){return Err(errno::EINVAL)}
  Ok((b,end))
+}
+fn write_sockaddr_un(addr:u64,addrlen:u64,path:&[u8])->Result<(),i64>{
+ if addr==0{return Ok(())}
+ let want={let mut b=[0u8;4];if crate::usercopy::copy_from_user(&mut b,addrlen as usize).is_ok(){u32::from_ne_bytes(b)as usize}else{0}};
+ let report_len=2+path.len().min(108);
+ let report=core::cmp::min(want.max(2),report_len);
+ let mut sa=[0u8;110];
+ sa[0..2].copy_from_slice(&1u16.to_ne_bytes());
+ if report>2{sa[2..report].copy_from_slice(&path[..report-2]);}
+ if report>0{if let Err(e)=crate::usercopy::copy_to_user(addr as usize,&sa[..report]){return Err(e)}}
+ if addrlen!=0{let l=report as u32;crate::usercopy::copy_to_user(addrlen as usize,&l.to_ne_bytes())?;}
+ Ok(())
 }
 fn sockaddr_in_of(addr:u64,len:u64)->Result<(u32,u16),i64>{
  if len<8{return Err(errno::EINVAL)}
@@ -919,7 +993,7 @@ fn sys_socket(domain:i32,ty:i32,_proto:i32)->i64{
 }
 fn sys_socketpair(domain:i32,ty:i32,_proto:i32,sv:u64)->i64{
  if domain!=1||(ty as u32!=crate::socket::SOCK_STREAM&&ty as u32!=crate::socket::SOCK_DGRAM){return errno::neg(errno::EAFNOSUPPORT)}
- let (a,b)=match crate::socket::socketpair(){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let (a,b)=match crate::socket::socketpair_kind(ty as u32){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let da=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(a)){Ok(d)=>d,Err(e)=>{crate::socket::close(a);crate::socket::close(b);return errno::neg(e)}};
  let db=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(b)){Ok(d)=>d,Err(e)=>{crate::fd::release(da);crate::socket::close(a);crate::socket::close(b);return errno::neg(e)}};
  let installed=match crate::task::with_current_process(|p|p.fds.install_pair(da,db)){Some(Ok(pair))=>pair,Some(Err(e))=>{crate::fd::release(da);crate::fd::release(db);crate::socket::close(a);crate::socket::close(b);return errno::neg(e)},None=>{crate::fd::release(da);crate::fd::release(db);crate::socket::close(a);crate::socket::close(b);return errno::neg(errno::ESRCH)}};
@@ -945,21 +1019,41 @@ fn sys_bind(fd:usize,addr:u64,len:u64)->i64{
   let r=if tcp{crate::net::tcp_bind(sock-crate::socket::INET_TCP_BASE,ip,port)}else{crate::net::udp_bind(sock-crate::socket::INET_UDP_BASE,ip,port)};
   return match r{Ok(())=>0,Err(e)=>errno::neg(e)};
  }
- let (pb,pl)=match sockaddr_path(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- let path=match core::str::from_utf8(&pb[..pl]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
- match crate::socket::bind(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
+  let (pb,pl)=match sockaddr_path(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  match crate::socket::bind_bytes(sock,&pb[..pl]){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_listen(fd:usize,_backlog:i32)->i64{
  if netlink_fd(fd){return errno::neg(errno::EOPNOTSUPP);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>{return errno::neg(e)}};
- if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  if !tcp{return errno::neg(errno::EOPNOTSUPP)}
+  return match crate::net::tcp_listen(sock-crate::socket::INET_TCP_BASE){Ok(())=>0,Err(e)=>errno::neg(e)};
+ }
  match crate::socket::listen(sock){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_accept(fd:usize,addr:u64,addrlen:u64)->i64{accept_impl(fd,addr,addrlen,0)}
 fn accept_impl(fd:usize,addr:u64,addrlen:u64,extra:u32)->i64{
  if netlink_fd(fd){return errno::neg(errno::EOPNOTSUPP);}
  let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
- if crate::socket::inet_kind(sock).is_some(){return errno::neg(errno::EOPNOTSUPP)}
+ if let Some(tcp)=crate::socket::inet_kind(sock){
+  if !tcp{return errno::neg(errno::EOPNOTSUPP)}
+  let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||extra&crate::socket::SOCK_NONBLOCK!=0;
+  let server=match crate::net::tcp_accept(sock-crate::socket::INET_TCP_BASE,nonblock){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+  let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(crate::socket::INET_TCP_BASE+server)){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+  if extra&crate::socket::SOCK_NONBLOCK!=0{crate::fd::flags_set(desc,crate::fd::O_NONBLOCK,0);}
+  return match crate::task::with_current_process(|p|p.fds.install(desc)){
+   Some(Ok(newfd))=>{
+    if extra&crate::socket::SOCK_CLOEXEC!=0{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(newfd as usize,true));}
+    /* Report the peer address like Linux does. */
+    if let Ok((ip,port))=crate::net::tcp_peername(server){
+     if let Err(e)=write_sockaddr_in(addr,addrlen,ip,port){let _=crate::fd::close(newfd as usize);return errno::neg(e)}
+    }
+    newfd as i64
+   }
+   Some(Err(e))=>{crate::fd::release(desc);errno::neg(e)}
+   None=>{crate::fd::release(desc);errno::neg(errno::ESRCH)}
+  }
+ }
  let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||extra&crate::socket::SOCK_NONBLOCK!=0;
  let server=match crate::socket::accept(sock,nonblock){Ok(s)=>s,Err(e)=>return errno::neg(e)};
  let desc=match crate::fd::alloc_file(crate::fd::OpenKind::Socket(server)){Ok(d)=>d,Err(e)=>{crate::socket::close(server);return errno::neg(e)}};
@@ -994,8 +1088,7 @@ fn sys_connect(fd:usize,addr:u64,len:u64)->i64{
   return match r{Ok(())=>0,Err(e)=>errno::neg(e)};
  }
  let (pb,pl)=match sockaddr_path(addr,len){Ok(v)=>v,Err(e)=>return errno::neg(e)};
- let path=match core::str::from_utf8(&pb[..pl]){Ok(p)=>p,Err(_)=>return errno::neg(errno::EINVAL)};
- match crate::socket::connect(sock,path){Ok(())=>0,Err(e)=>errno::neg(e)}
+ match crate::socket::connect_bytes(sock,&pb[..pl]){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
  let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||_flags&0x40!=0;
@@ -1016,6 +1109,18 @@ fn sys_sendto(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64{
   let mut chunk=[0u8;1472];
   if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut chunk[..len],buf as usize)}{return errno::neg(e)}
   return match crate::net::udp_send(sock-crate::socket::INET_UDP_BASE,to,&chunk[..len]){Ok(g)=>g as i64,Err(e)=>errno::neg(e)};
+ }
+ if matches!(crate::socket::kind_of(sock),Some(crate::socket::SockKind::Dgram)){
+  /* Datagram: one message per call, with an optional destination. */
+  if len>crate::socket::DGRAM_DATA_MAX{return errno::neg(errno::EMSGSIZE)}
+  let mut msg=[0u8;4096];
+  if len>0{if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut msg[..len],buf as usize)}{return errno::neg(e)}}
+  if addr!=0{
+   let (pb,pl)=match sockaddr_path(addr,addrlen){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+   return match crate::socket::dgram_sendto(sock,&pb[..pl],&msg[..len],nonblock){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+  }else{
+   return match crate::socket::send(sock,&msg[..len],nonblock){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+  }
  }
  let mut chunk=[0u8;512];let mut done=0usize;
  while done<len{
@@ -1047,6 +1152,14 @@ fn sys_recvfrom(fd:usize,buf:u64,len:usize,_flags:u64,addr:u64,addrlen:u64)->i64
   if let Err(e)=write_sockaddr_in(addr,addrlen,ip,port){return errno::neg(e)}
   return got as i64;
  }
+ if matches!(crate::socket::kind_of(sock),Some(crate::socket::SockKind::Dgram)){
+  let n=core::cmp::min(len,crate::socket::DGRAM_DATA_MAX);
+  let mut chunk=[0u8;4096];
+  let (got,src,srclen)=match crate::socket::dgram_recvfrom(sock,&mut chunk[..n],nonblock){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  if got>0{if let Err(e)=unsafe{crate::usercopy::copy_to_user(buf as usize,&chunk[..got])}{return errno::neg(e)}}
+  if let Err(e)=write_sockaddr_un(addr,addrlen,&src[..srclen]){return errno::neg(e)}
+  return got as i64;
+ }
  let mut chunk=[0u8;512];let mut done=0usize;
  while done<len{
   let n=core::cmp::min(chunk.len(),len-done);
@@ -1076,7 +1189,22 @@ fn sys_getpeername(fd:usize,addr:u64,addrlen:u64)->i64{
    Err(e)=>errno::neg(e),
   };
  }
- errno::neg(errno::ENOTCONN)
+ if matches!(crate::socket::kind_of(sock),Some(crate::socket::SockKind::Dgram)){
+  return match crate::socket::dgram_peer_of(sock){
+   Ok((p,n))=>match write_sockaddr_un(addr,addrlen,&p[..n]){Ok(())=>0,Err(e)=>errno::neg(e)},
+   Err(e)=>errno::neg(e),
+  };
+ }
+ /* Stream: report the connected peer's path if there is one. */
+ let peer=crate::socket::peer_of(sock);
+ match peer{
+  Some(p)=>{
+   let path=crate::socket::path_of(p).unwrap_or([0;108]);
+   let n=crate::socket::path_len_of(p);
+   match write_sockaddr_un(addr,addrlen,&path[..n]){Ok(())=>0,Err(e)=>errno::neg(e)}
+  }
+  None=>errno::neg(errno::ENOTCONN),
+ }
 }
 fn sys_getsockname(fd:usize,addr:u64,addrlen:u64)->i64{
  if netlink_fd(fd){
@@ -1316,7 +1444,7 @@ fn select_impl(nfds:i32,rfds:u64,wfds:u64,efds:u64,mut to_ns:u64,has_timeout:boo
    if !want_r&&!want_w{continue;}
    match fd_id(fd as u64){
     Some(id)=>{
-     let readable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)=>true,Some(crate::fd::OpenKind::PipeRead(_))=>true,Some(crate::fd::OpenKind::Inode(_))=>true,Some(crate::fd::OpenKind::Socket(_))=>true,_=>false};
+     let readable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)=>true,Some(crate::fd::OpenKind::PipeRead(_))=>true,Some(crate::fd::OpenKind::Inode(_))=>true,Some(crate::fd::OpenKind::Socket(_))=>true,Some(crate::fd::OpenKind::SignalFd(mask))=>crate::fd::signalfd_readable(mask),_=>false};
      let writable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))|Some(crate::fd::OpenKind::Socket(_))=>true,_=>false};
      if want_r&&readable{bit_set(&mut r_out,fd);ready+=1;}
      if want_w&&writable{bit_set(&mut w_out,fd);ready+=1;}
@@ -1599,40 +1727,59 @@ fn sys_rt_sigtimedwait(setptr:u64,infoptr:u64,timeoutptr:u64,setsize:u64)->i64{
   let ns=(ts.tv_sec as u64).saturating_mul(1_000_000_000).saturating_add(ts.tv_nsec as u64);
   Some(crate::time::ticks_after_ns(ns))
  }else{None};
- loop{
-  let found=crate::task::with_current_process(|p|{
-   let m=p.pending&mask&!(crate::signal::unblockable_mask());
-   if m==0{return None}
-   let sig=(m.trailing_zeros()as i32)+1;
-   /* The value comes from the process's stored value for this signal.
-      Real-time signals keep a queue; the standard signals keep one. */
-   let value=if crate::signal::is_rt(sig){
-    let i=crate::signal::rt_index(sig);
-    if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
-   }else{p.si_value[sig as usize]};
-   if crate::signal::is_rt(sig){
-    let i=crate::signal::rt_index(sig);
-    if p.rt_len[i]>0{
-     p.rt_len[i]-=1;
-     let n=p.rt_len[i] as usize;
-     let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
-     if p.rt_len[i]>0{p.pending|=crate::signal::bit(sig);}
+  loop{
+   let found=crate::task::with_current_process(|p|{
+    let m=p.pending&mask&!(crate::signal::unblockable_mask());
+    if m==0{return None}
+    let sig=(m.trailing_zeros()as i32)+1;
+    /* SIGCHLD carries the coalesced child status, not the generic slots. */
+    if sig==crate::signal::SIGCHLD{
+     let code=p.sch_code;let pid=p.sch_pid;let uid=p.sch_uid;let status=p.sch_status;
+     p.pending&=!crate::signal::bit(sig);
+     p.sch_code=0;p.sch_pid=0;p.sch_uid=0;p.sch_status=0;
+     let combined=(pid as u64)|((uid as u64)<<32);
+     return Some((sig,code,combined,status as u32))
     }
-   }else{
-    p.pending&=!crate::signal::bit(sig);
+    /* The value comes from the process's stored value for this signal.
+       Real-time signals keep a queue; the standard signals keep one. */
+    let value=if crate::signal::is_rt(sig){
+     let i=crate::signal::rt_index(sig);
+     if p.rt_len[i]>0{p.rt_value[i][0]}else{0}
+    }else{p.si_value[sig as usize]};
+    if crate::signal::is_rt(sig){
+     let i=crate::signal::rt_index(sig);
+     if p.rt_len[i]>0{
+      p.rt_len[i]-=1;
+      let n=p.rt_len[i] as usize;
+      let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
+      if p.rt_len[i]>0{p.pending|=crate::signal::bit(sig);}
+     }
+    }else{
+     p.pending&=!crate::signal::bit(sig);
+    }
+    Some((sig,p.si_code[sig as usize],value,p.si_overrun[sig as usize]))
+   }).flatten();
+   if let Some((sig,code,value,overrun))=found{
+    if infoptr!=0{
+     /* SIGCHLD packs pid/uid into value and the status into overrun. */
+     let b=if sig==crate::signal::SIGCHLD{
+      let pid=(value&0xffffffff) as u32;let uid=(value>>32) as u32;
+      let status=overrun;
+      let mut s=[0u8;128];
+      s[0..4].copy_from_slice(&(sig as i32).to_ne_bytes());
+      s[8..12].copy_from_slice(&code.to_ne_bytes());
+      s[12..16].copy_from_slice(&pid.to_ne_bytes());
+      s[16..20].copy_from_slice(&uid.to_ne_bytes());
+      s[20..24].copy_from_slice(&status.to_ne_bytes());
+      s
+     }else{build_siginfo(sig,code,value,overrun)};
+     if let Err(e)=crate::usercopy::copy_to_user(infoptr as usize,&b){return errno::neg(e)}
+     /* Read back to verify. */
+     let mut rb=[0u8;4];
+     let _=crate::usercopy::copy_from_user(&mut rb,(infoptr+20) as usize);
+    }
+    return sig as i64
    }
-   Some((sig,p.si_code[sig as usize],value,p.si_overrun[sig as usize]))
-  }).flatten();
-  if let Some((sig,code,value,overrun))=found{
-   if infoptr!=0{
-    let b=build_siginfo(sig,code,value,overrun);
-    if let Err(e)=crate::usercopy::copy_to_user(infoptr as usize,&b){return errno::neg(e)}
-    /* Read back to verify. */
-    let mut rb=[0u8;4];
-    let _=crate::usercopy::copy_from_user(&mut rb,(infoptr+20) as usize);
-   }
-   return sig as i64
-  }
   if let Some(d)=deadline{
    /* The deadline is an absolute time, so the wait uses the clock. */
    if crate::time::monotonic_ns()>=crate::time::ticks_to_ns(d){return errno::neg(errno::EAGAIN)}
@@ -1816,19 +1963,32 @@ fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{
 }
 
 fn sys_fallocate(fd:usize,mode:u64,offset:u64,len:u64)->i64{
- if mode!=0{return errno::neg(errno::EOPNOTSUPP)}
+ const FALLOC_FL_KEEP_SIZE:u64=1;const FALLOC_FL_PUNCH_HOLE:u64=2;
+ if mode&!(FALLOC_FL_KEEP_SIZE|FALLOC_FL_PUNCH_HOLE)!=0{return errno::neg(errno::EOPNOTSUPP)}
+ if mode&FALLOC_FL_PUNCH_HOLE!=0&&mode&FALLOC_FL_KEEP_SIZE==0{return errno::neg(errno::EOPNOTSUPP)}
  let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
- match crate::fd::kind(id){
-  Some(crate::fd::OpenKind::Inode(n))=>{
-   let end=match offset.checked_add(len){Some(v)=>v,None=>return errno::neg(errno::EINVAL)};
-   if end>n.capacity{return errno::neg(errno::ENOSPC)}
-   if end>n.size{
-    let _=crate::vfs::truncate_ino(n.ino,end);
-   }
-   0
+ let ino=match crate::fd::kind(id){Some(crate::fd::OpenKind::Inode(n))=>n.ino,_=>return errno::neg(errno::ENODEV)};
+ if len==0{return errno::neg(errno::EINVAL)}
+ let end=match offset.checked_add(len){Some(v)=>v,None=>return errno::neg(errno::EINVAL)};
+ if mode&FALLOC_FL_PUNCH_HOLE!=0{
+  /* Deallocate: zero the range intersected with the live size. */
+  let size=crate::vfs::inode_size(ino).unwrap_or(0);
+  if offset>=size{return 0}
+  let end=core::cmp::min(end,size);
+  let zero=[0u8;512];
+  let mut off=offset;
+  let inode=match crate::vfs::inode_by_ino(ino){Some(n)=>n,None=>return errno::neg(errno::EBADF)};
+  while off<end{
+   let n=core::cmp::min(zero.len() as u64,end-off) as usize;
+   if let Err(e)=crate::vfs::write_off(inode,off,&zero[..n]){return errno::neg(e)}
+   off+=n as u64;
   }
-  _=>errno::neg(errno::ENODEV)
+  return 0;
  }
+ if let Err(e)=crate::vfs::reserve_ino(ino,end){return errno::neg(e)}
+ if mode&FALLOC_FL_KEEP_SIZE!=0{return 0}
+ if let Err(e)=crate::vfs::truncate_ino(ino,end){return errno::neg(e)}
+ 0
 }
 fn sys_sendfile(out_fd:usize,in_fd:usize,off:u64,count:usize)->i64{
  if count==0{return 0}
@@ -1841,6 +2001,136 @@ fn sys_sendfile(out_fd:usize,in_fd:usize,off:u64,count:usize)->i64{
   let got=match crate::fd::read(in_id,&mut buf[..n]){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
   if got==0{break}
   match crate::fd::write(out_id,&buf[..got]){Ok(m)=>done+=m,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+ }
+ done as i64
+}
+/* True for a regular-file description; directories report EISDIR and
+   anything else (pipes, sockets, devices, ... ) reports EINVAL. */
+fn regular_ino(id:u32)->Result<crate::vfs::Inode,i64>{
+ match crate::fd::kind(id){
+  Some(crate::fd::OpenKind::Inode(n))=>{
+   if n.mode&0o170000==crate::vfs::S_IFDIR{return Err(errno::EISDIR)}
+   if n.mode&0o170000!=crate::vfs::S_IFREG{return Err(errno::EINVAL)}
+   Ok(n)
+  }
+  _=>Err(errno::EINVAL),
+ }
+}
+fn user_off(ptr:u64)->Result<Option<u64>,i64>{
+ if ptr==0{return Ok(None)}
+ let mut b=[0u8;8];
+ crate::usercopy::copy_from_user(&mut b,ptr as usize)?;
+ Ok(Some(u64::from_ne_bytes(b)))
+}
+fn store_off(ptr:u64,v:u64)->Result<(),i64>{
+ if ptr==0{return Ok(())}
+ crate::usercopy::copy_to_user(ptr as usize,&v.to_ne_bytes())?;
+ Ok(())
+}
+/* copy_file_range(2): file-to-file copy with explicit or current offsets.
+   Pipes, sockets and other non-regular files report EINVAL, directories
+   EISDIR, and any flag reports EINVAL, matching native Linux. */
+fn sys_copy_file_range(fd_in:usize,off_in:u64,fd_out:usize,off_out:u64,len:usize,flags:u64)->i64{
+ if flags!=0{return errno::neg(errno::EINVAL)}
+ if len==0{return 0}
+ let in_id=match fd_id(fd_in as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let out_id=match fd_id(fd_out as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match regular_ino(in_id){Ok(_)=>{},Err(e)=>return errno::neg(e)}
+ match regular_ino(out_id){Ok(_)=>{},Err(e)=>return errno::neg(e)}
+ let mut rin=match user_off(off_in){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let mut rout=match user_off(off_out){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<len{
+  let n=core::cmp::min(buf.len(),len-done);
+  let got=match (rin,rout){
+   (Some(o),_)=>crate::fd::read_at(in_id,o+done as u64,&mut buf[..n]),
+   (None,_)=>crate::fd::read(in_id,&mut buf[..n]),
+  };
+  let got=match got{Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
+  if got==0{break}
+  match rout{
+   Some(o)=>{if let Err(e)=crate::fd::write_at(out_id,o+done as u64,&buf[..got]){return if done==0{errno::neg(e)}else{done as i64}}},
+   None=>{if let Err(e)=crate::fd::write(out_id,&buf[..got]){return if done==0{errno::neg(e)}else{done as i64}}},
+  }
+  done+=got;
+  if got<n{break}
+ }
+ if let Some(o)=rin{rin=Some(o+done as u64);if let Err(e)=store_off(off_in,rin.unwrap()){return errno::neg(e)}}
+ if let Some(o)=rout{rout=Some(o+done as u64);if let Err(e)=store_off(off_out,rout.unwrap()){return errno::neg(e)}}
+ done as i64
+}
+/* splice(2): one side must be a pipe. A pipe side with a non-null offset
+   reports ESPIPE; two non-pipes report EINVAL, as does an unknown flag. */
+fn sys_splice(fd_in:usize,off_in:u64,fd_out:usize,off_out:u64,len:usize,flags:u64)->i64{
+ const MOVE:u64=1;const NONBLOCK:u64=2;const MORE:u64=4;const GIFT:u64=8;
+ if flags&!(MOVE|NONBLOCK|MORE|GIFT)!=0{return errno::neg(errno::EINVAL)}
+ if len==0{return 0}
+ let in_id=match fd_id(fd_in as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let out_id=match fd_id(fd_out as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let in_pipe=matches!(crate::fd::kind(in_id),Some(crate::fd::OpenKind::PipeRead(_)));
+ let out_pipe=matches!(crate::fd::kind(out_id),Some(crate::fd::OpenKind::PipeWrite(_)));
+ if !in_pipe&&!out_pipe{return errno::neg(errno::EINVAL)}
+ if in_pipe&&off_in!=0{return errno::neg(errno::ESPIPE)}
+ if out_pipe&&off_out!=0{return errno::neg(errno::ESPIPE)}
+ /* Directories on the file side report EINVAL, like native Linux. */
+ if !in_pipe{match crate::fd::kind(in_id){Some(crate::fd::OpenKind::Inode(n)) if n.mode&0o170000==crate::vfs::S_IFDIR=>return errno::neg(errno::EINVAL),_=>{}}}
+ if !out_pipe{match crate::fd::kind(out_id){Some(crate::fd::OpenKind::Inode(n)) if n.mode&0o170000==crate::vfs::S_IFDIR=>return errno::neg(errno::EINVAL),_=>{}}}
+ let nb=flags&NONBLOCK!=0||(crate::fd::is_nonblock(in_id)&&in_pipe)||(crate::fd::is_nonblock(out_id)&&out_pipe);
+ let rin=if !in_pipe{match user_off(off_in){Ok(v)=>v,Err(e)=>return errno::neg(e)}}else{None};
+ let rout=if !out_pipe{match user_off(off_out){Ok(v)=>v,Err(e)=>return errno::neg(e)}}else{None};
+ /* A null file offset means the current file position, advanced by the move. */
+ let mut cur_in=match rin{Some(o)=>o,None=>crate::fd::offset_get(in_id)};
+ let mut cur_out=match rout{Some(o)=>o,None=>crate::fd::offset_get(out_id)};
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<len{
+  let n=core::cmp::min(buf.len(),len-done);
+  let got=if in_pipe{
+   match crate::fd::read(in_id,&mut buf[..n]){Ok(g)=>g,Err(e)=>{
+    if e==errno::EAGAIN&&nb{return if done==0{errno::neg(e)}else{done as i64}}
+    return if done==0{errno::neg(e)}else{done as i64}
+   }}
+  }else{
+   let o=cur_in+done as u64;
+   match crate::fd::read_at(in_id,o,&mut buf[..n]){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+  };
+  if got==0{break}
+  if out_pipe{
+   match crate::fd::write(out_id,&buf[..got]){
+    Ok(m)=>done+=m,
+    Err(e)=>{
+     if e==errno::EAGAIN&&nb{return if done==0{errno::neg(e)}else{done as i64}}
+     return if done==0{errno::neg(e)}else{done as i64}
+    }
+   }
+  }else{
+   let o=cur_out+done as u64;
+   match crate::fd::write_at(out_id,o,&buf[..got]){Ok(m)=>done+=m,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+  }
+  if got<n{break}
+ }
+ if rin.is_some(){if let Err(e)=store_off(off_in,cur_in+done as u64){return errno::neg(e)}}else if !in_pipe{crate::fd::offset_set(in_id,cur_in+done as u64);}
+ if rout.is_some(){if let Err(e)=store_off(off_out,cur_out+done as u64){return errno::neg(e)}}else if !out_pipe{crate::fd::offset_set(out_id,cur_out+done as u64);}
+ done as i64
+}
+/* tee(2): duplicates pipe content to a second pipe without consuming it.
+   Both sides must be pipes; flags are ignored like native Linux. */
+fn sys_tee(fd_in:usize,fd_out:usize,len:usize,_flags:u64)->i64{
+ if len==0{return 0}
+ let in_id=match fd_id(fd_in as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let out_id=match fd_id(fd_out as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ let in_pipe=match crate::fd::kind(in_id){Some(crate::fd::OpenKind::PipeRead(p))=>p,_=>return errno::neg(errno::EINVAL)};
+ let out_pipe=match crate::fd::kind(out_id){Some(crate::fd::OpenKind::PipeWrite(p))=>p,_=>return errno::neg(errno::EINVAL)};
+ let nb=crate::fd::is_nonblock(in_id)||crate::fd::is_nonblock(out_id);
+ let mut buf=[0u8;512];
+ let mut done=0usize;
+ while done<len{
+  let n=core::cmp::min(buf.len(),len-done);
+  let got=match crate::pipe::peek(in_pipe,&mut buf[..n],nb){Ok(g)=>g,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}};
+  if got==0{break}
+  match crate::pipe::write(out_pipe,&buf[..got],nb){Ok(m)=>done+=m,Err(e)=>return if done==0{errno::neg(e)}else{done as i64}}
+  if got<n{break}
  }
  done as i64
 }
@@ -1906,6 +2196,7 @@ fn epoll_ready(epfd:usize,events:u32,fd:usize)->bool{
   crate::fd::OpenKind::Socket(_)=>true,
   crate::fd::OpenKind::CharDevice(_)=>true,
   crate::fd::OpenKind::EventFd(c,_)=>c!=0,
+  crate::fd::OpenKind::SignalFd(mask)=>crate::fd::signalfd_readable(mask),
   crate::fd::OpenKind::TimerFd(_,_)=>true,
   _=>false,
  };
@@ -2178,11 +2469,42 @@ fn sys_inotify_rm_watch(fd:usize,wd:i32)->i64{
   if !matches!(crate::fd::kind(fdid),Some(crate::fd::OpenKind::Inotify)){return errno::neg(errno::EINVAL)}
   match crate::inotify::rm_watch(fdid,wd){Ok(())=>0,Err(e)=>errno::neg(e)}
 }
-fn sys_signalfd4(fd:i32,mask:u64,flags:u64,sizemask:u64)->i64{
- let _=(fd,mask,flags,sizemask);
- if fd!=-1{return fd as i64}
- let id=match crate::fd::alloc_file(crate::fd::OpenKind::SignalFd(mask)){Ok(d)=>d,Err(e)=>return errno::neg(e)};
- match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(newfd))=>newfd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+fn sys_signalfd4(fd:i32,mask_ptr:u64,flags:u64,sizemask:u64)->i64{
+ /* Linux order is (fd, mask_ptr, sizemask, flags); the dispatcher passes
+    (a0, a1, a2, a3), so a2 is the size and a3 the flags here. The old code
+    read the pointer as the mask and swapped the last two arguments. */
+ let (size, fl) = (flags, sizemask);
+ if size!=8{
+  /* musl passes 8; a zero size with a null mask means "keep". */
+  if !(size==0&&mask_ptr==0){return errno::neg(errno::EINVAL)}
+ }
+ const SFD_NONBLOCK:u64=0o4000;const SFD_CLOEXEC:u64=0x80000;
+ if fl&!(SFD_NONBLOCK|SFD_CLOEXEC)!=0{return errno::neg(errno::EINVAL)}
+ let mut mask:u64=0;
+ if mask_ptr!=0{
+  let mut b=[0u8;8];
+  if let Err(e)=crate::usercopy::copy_from_user(&mut b,mask_ptr as usize){return errno::neg(e)}
+  mask=u64::from_ne_bytes(b);
+ }else if fd==-1{
+  return errno::neg(errno::EINVAL)
+ }
+ if fd!=-1{
+  /* Reprogram the mask of an existing signalfd, like Linux. */
+  if mask_ptr==0{return fd as i64}
+  let id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+  match crate::fd::kind(id){
+   Some(crate::fd::OpenKind::SignalFd(_))=>{},
+   _=>return errno::neg(errno::EINVAL),
+  }
+  crate::fd::signalfd_set_mask(id,mask);
+  if fl&SFD_NONBLOCK!=0{crate::fd::flags_set(id,crate::fd::O_NONBLOCK,0);}
+  return fd as i64
+ }
+ let status=if fl&SFD_NONBLOCK!=0{crate::fd::O_NONBLOCK}else{0};
+ let id=match crate::fd::alloc_file_flags(crate::fd::OpenKind::SignalFd(mask),status){Ok(d)=>d,Err(e)=>return errno::neg(e)};
+ let newfd=match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(newfd))=>newfd,Some(Err(e))=>{crate::fd::release(id);return errno::neg(e)},None=>{crate::fd::release(id);return errno::neg(errno::ESRCH)}};
+ if fl&SFD_CLOEXEC!=0{let _=crate::task::with_current_process(|p|p.fds.set_close_exec(newfd as usize,true));}
+ newfd as i64
 }
 
 fn sys_mount(source:u64,target:u64,fstype:u64,flags:u64,data:u64)->i64{

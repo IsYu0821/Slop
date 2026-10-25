@@ -18,6 +18,9 @@
 #include <sys/signalfd.h>
 #include <sys/random.h>
 #include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
 #include <sys/sysinfo.h>
@@ -117,6 +120,32 @@ static void *pt_tls_worker(void *arg) {
     pt_tls_slot = (int)(n * 7);
     for (int i = 0; i < 20; i++) usleep(2000);
     return (void *)(long)pt_tls_slot;
+}
+
+/* Stopped/continued job control and the ucontext floating-point state. */
+static volatile sig_atomic_t fp_hits;
+static volatile int fp_fpregs_ok;
+static volatile int fp_mxcsr_ok;
+static void fp_handler(int sig, siginfo_t *si, void *ctx) {
+    (void)sig; (void)si;
+    ucontext_t *uc = (ucontext_t *)ctx;
+    if (!uc) return;
+    /* The machine context carries the floating-point area: the kernel
+       publishes the FXSAVE layout with the SSE registers at offset 160. */
+    void *fp = (void *)uc->uc_mcontext.fpregs;
+    unsigned char *mem = 0;
+    if (fp) mem = (unsigned char *)fp;
+    else mem = uc->__fpregs_mem;
+    if (!mem) return;
+    /* MXCSR reset value 0x1f80 lives at offset 24. */
+    if (mem[24] == 0x80 && mem[25] == 0x1f) fp_mxcsr_ok = 1;
+    fp_fpregs_ok = (fp != 0);
+    /* Publish a known SSE pattern for the interrupted context: the kernel
+       restores it through rt_sigreturn, so the pattern survives the call. */
+    static const unsigned char pat[16] __attribute__((aligned(16))) =
+        {0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22};
+    __builtin_memcpy(mem + 160, pat, 16);
+    fp_hits++;
 }
 
 static int fail(const char *what) {
@@ -1267,6 +1296,654 @@ int main(int argc, char **argv) {
             if ((long)r != (i + 1) * 7) return fail("tls value");
         }
         printf("DIFF_TLS_OK\n");
+    }
+
+    /* Stopped-child wait status: a child that stops itself reports
+       WIFSTOPPED with WUNTRACED, then WIFCONTINUED with WCONTINUED. */
+    {
+        pid_t c = fork();
+        if (c < 0) return fail("stop fork");
+        if (c == 0) {
+            raise(SIGSTOP);
+            sleep(1);
+            _exit(43);
+        }
+        int st;
+        if (waitpid(c, &st, WUNTRACED) != c) return fail("stop wait");
+        if (!WIFSTOPPED(st) || WSTOPSIG(st) != SIGSTOP) return fail("stop status");
+        if (kill(c, SIGCONT) != 0) return fail("cont send");
+        if (waitpid(c, &st, WCONTINUED) != c) return fail("cont wait");
+        if (!WIFCONTINUED(st)) return fail("cont status");
+        if (waitpid(c, &st, 0) != c) return fail("stop reap");
+        if (!WIFEXITED(st) || WEXITSTATUS(st) != 43) return fail("stop exit");
+        printf("DIFF_STOP_OK\n");
+    }
+
+    /* Floating-point state in the ucontext: the handler sees the FXSAVE
+       area through fpregs and a pattern it writes there survives. */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_sigaction = fp_handler;
+        sa.sa_flags = SA_SIGINFO | SA_RESTART;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGUSR2, &sa, 0) != 0) return fail("fp sigaction");
+        fp_hits = 0; fp_fpregs_ok = 0; fp_mxcsr_ok = 0;
+        if (raise(SIGUSR2) != 0) return fail("fp raise");
+        if (fp_hits != 1) return fail("fp hits");
+        if (!fp_fpregs_ok) return fail("fp fpregs");
+        if (!fp_mxcsr_ok) return fail("fp mxcsr");
+        /* The handler wrote 0x22 across XMM0 into the FXSAVE area: the
+           interrupted context resumes with it. */
+        unsigned char out[16] __attribute__((aligned(16))) = {0};
+        __asm__ volatile("movups %%xmm0, %0" : "=m"(out) :: "memory");
+        for (int i = 0; i < 16; i++) if (out[i] != 0x22) return fail("fp roundtrip");
+        printf("DIFF_FP_OK\n");
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = SIG_DFL;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGUSR2, &sa, 0);
+    }
+
+    /* copy_file_range: explicit and current offsets, flags and type errors. */
+    {
+        int f = open("/tmp/cfr-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int g = open("/tmp/cfr-dst", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (f < 0 || g < 0) return fail("cfr open");
+        if (write(f, "0123456789abcdef", 16) != 16) return fail("cfr seed");
+        loff_t oi = 4, oo = 0;
+        if (copy_file_range(f, &oi, g, &oo, 8, 0) != 8) return fail("cfr basic");
+        if (oi != 12 || oo != 8) return fail("cfr offsets");
+        char buf[16] = {0};
+        lseek(g, 0, SEEK_SET);
+        if (read(g, buf, 8) != 8 || memcmp(buf, "456789ab", 8) != 0) return fail("cfr content");
+        lseek(f, 0, SEEK_SET); lseek(g, 0, SEEK_SET);
+        if (copy_file_range(f, NULL, g, NULL, 4, 0) != 4) return fail("cfr nulloff");
+        if (lseek(f, 0, SEEK_CUR) != 4 || lseek(g, 0, SEEK_CUR) != 4) return fail("cfr cur off");
+        if (copy_file_range(f, NULL, g, NULL, 4, 1) != -1 || errno != EINVAL) return fail("cfr flags");
+        if (copy_file_range(f, NULL, g, NULL, 0, 0) != 0) return fail("cfr len0");
+        int pp[2];
+        if (pipe(pp) != 0) return fail("cfr pipe");
+        if (write(pp[1], "ZZZZ", 4) != 4) return fail("cfr pipe seed");
+        if (copy_file_range(pp[0], NULL, g, NULL, 4, 0) != -1 || errno != EINVAL) return fail("cfr from pipe");
+        if (copy_file_range(f, NULL, pp[1], NULL, 4, 0) != -1 || errno != EINVAL) return fail("cfr onto pipe");
+        int dd = open("/tmp", O_RDONLY);
+        if (dd < 0) return fail("cfr dir open");
+        if (copy_file_range(dd, NULL, g, NULL, 4, 0) != -1 || errno != EISDIR) return fail("cfr from dir");
+        close(dd); close(pp[0]); close(pp[1]); close(f); close(g);
+        printf("DIFF_CFR_OK\n");
+    }
+
+    /* splice: file<->pipe moves, pipe offsets, type and flag errors. */
+    {
+        int f = open("/tmp/spl-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int g = open("/tmp/spl-dst", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (f < 0 || g < 0) return fail("splice open");
+        if (write(f, "0123456789abcdef", 16) != 16) return fail("splice seed");
+        int sp[2];
+        if (pipe(sp) != 0) return fail("splice pipe");
+        lseek(f, 0, SEEK_SET);
+        if (splice(f, NULL, sp[1], NULL, 6, 0) != 6) return fail("splice file pipe");
+        if (lseek(f, 0, SEEK_CUR) != 6) return fail("splice offset");
+        char buf[8] = {0};
+        if (read(sp[0], buf, 6) != 6 || memcmp(buf, "012345", 6) != 0) return fail("splice content");
+        loff_t z = 0;
+        if (splice(f, NULL, sp[1], &z, 6, 0) != -1 || errno != ESPIPE) return fail("splice pipe off");
+        if (splice(f, NULL, g, NULL, 6, 0) != -1 || errno != EINVAL) return fail("splice file file");
+        if (splice(f, NULL, sp[1], NULL, 6, 0x100) != -1 || errno != EINVAL) return fail("splice flags");
+        if (splice(f, NULL, sp[1], NULL, 0, 0) != 0) return fail("splice len0");
+        /* pipe -> file with an explicit file offset. */
+        if (write(sp[1], "PIPEPIPE", 8) != 8) return fail("splice refill");
+        loff_t at = 16;
+        if (splice(sp[0], NULL, g, &at, 8, 0) != 8) return fail("splice pipe file");
+        if (at != 24) return fail("splice file off update");
+        lseek(g, 16, SEEK_SET);
+        memset(buf, 0, sizeof buf);
+        if (read(g, buf, 8) != 8 || memcmp(buf, "PIPEPIPE", 8) != 0) return fail("splice pipe file content");
+        close(sp[0]); close(sp[1]); close(f); close(g);
+        printf("DIFF_SPLICE_OK\n");
+    }
+
+    /* tee: duplicates pipe content without consuming it. */
+    {
+        int ta[2], tb[2];
+        if (pipe(ta) != 0 || pipe(tb) != 0) return fail("tee pipe");
+        if (write(ta[1], "HelloW", 6) != 6) return fail("tee seed");
+        if (tee(ta[0], tb[1], 6, 0) != 6) return fail("tee basic");
+        char a1[8] = {0}, b1[8] = {0};
+        if (read(ta[0], a1, 6) != 6 || memcmp(a1, "HelloW", 6) != 0) return fail("tee kept");
+        if (read(tb[0], b1, 6) != 6 || memcmp(b1, "HelloW", 6) != 0) return fail("tee copy");
+        int f = open("/tmp/tee-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (f < 0) return fail("tee open");
+        if (write(f, "data", 4) != 4) return fail("tee file seed");
+        if (tee(f, tb[1], 4, 0) != -1 || errno != EINVAL) return fail("tee file in");
+        if (tee(ta[0], f, 4, 0) != -1 || errno != EINVAL) return fail("tee file out");
+        if (tee(ta[0], tb[1], 0, 0) != 0) return fail("tee len0");
+        if (write(ta[1], "AB", 2) != 2) return fail("tee refill");
+        /* Flags are ignored by Linux. */
+        if (tee(ta[0], tb[1], 2, 1) != 2) return fail("tee flags");
+        close(ta[0]); close(ta[1]); close(tb[0]); close(tb[1]); close(f);
+        printf("DIFF_TEE_OK\n");
+    }
+
+    /* fallocate: extend with zeros, KEEP_SIZE, PUNCH_HOLE, bad modes. */
+    {
+        int h = open("/tmp/falloc", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (h < 0) return fail("falloc open");
+        if (fallocate(h, 0, 0, 8192) != 0) return fail("falloc extend");
+        struct stat st;
+        if (fstat(h, &st) != 0 || st.st_size != 8192) return fail("falloc size");
+        char z8[8] = {1,1,1,1,1,1,1,1};
+        if (pread(h, z8, 8, 4096) != 8) return fail("falloc read");
+        for (int i = 0; i < 8; i++) if (z8[i] != 0) return fail("falloc zero");
+        if (write(h, "0123456789abcdef", 16) != 16) return fail("falloc seed");
+        if (fallocate(h, FALLOC_FL_KEEP_SIZE, 0, 16384) != 0) return fail("falloc keep");
+        if (fstat(h, &st) != 0 || st.st_size != 8192) return fail("falloc keep size");
+        if (fallocate(h, FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE, 4, 4) != 0) return fail("falloc punch");
+        char p8[8] = {0};
+        lseek(h, 0, SEEK_SET);
+        if (read(h, p8, 8) != 8 || memcmp(p8, "0123\0\0\0\0", 8) != 0) return fail("falloc punched");
+        if (fallocate(h, 0x100, 0, 100) != -1 || errno != EOPNOTSUPP) return fail("falloc mode");
+        if (fallocate(h, 0, 0, 0) != -1 || errno != EINVAL) return fail("falloc len0");
+        close(h);
+        printf("DIFF_FALLOC_OK\n");
+    }
+
+    /* TCP passive open over loopback: bind conflict, refused connect,
+       listener peername, accept with peer address, echo, orderly EOF. */
+    {
+        int ls = socket(AF_INET, SOCK_STREAM, 0);
+        if (ls < 0) return fail("tcpsrv socket");
+        struct sockaddr_in a;
+        memset(&a, 0, sizeof a);
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        a.sin_port = htons(45311);
+        if (bind(ls, (struct sockaddr *)&a, sizeof a) != 0) return fail("tcpsrv bind");
+        int dup = socket(AF_INET, SOCK_STREAM, 0);
+        if (dup < 0) return fail("tcpsrv dup socket");
+        if (bind(dup, (struct sockaddr *)&a, sizeof a) != -1 || errno != EADDRINUSE) return fail("tcpsrv dupbind");
+        close(dup);
+        if (listen(ls, 4) != 0) return fail("tcpsrv listen");
+        int bad = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in z;
+        memset(&z, 0, sizeof z);
+        z.sin_family = AF_INET;
+        z.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        z.sin_port = htons(45312);
+        if (connect(bad, (struct sockaddr *)&z, sizeof z) != -1 || errno != ECONNREFUSED) return fail("tcpsrv refused");
+        close(bad);
+        struct sockaddr_in p;
+        socklen_t pl = sizeof p;
+        if (getpeername(ls, (struct sockaddr *)&p, &pl) != -1 || errno != ENOTCONN) return fail("tcpsrv peername");
+        pid_t c = fork();
+        if (c < 0) return fail("tcpsrv fork");
+        if (c == 0) {
+            int s = socket(AF_INET, SOCK_STREAM, 0);
+            if (s < 0) _exit(10);
+            struct sockaddr_in sa;
+            memset(&sa, 0, sizeof sa);
+            sa.sin_family = AF_INET;
+            sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            sa.sin_port = htons(45311);
+            if (connect(s, (struct sockaddr *)&sa, sizeof sa) != 0) _exit(11);
+            struct sockaddr_in pp;
+            socklen_t ppl = sizeof pp;
+            if (getpeername(s, (struct sockaddr *)&pp, &ppl) != 0) _exit(12);
+            if (ntohs(pp.sin_port) != 45311) _exit(13);
+            if (pp.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) _exit(14);
+            if (send(s, "HelloSrv", 8, 0) != 8) _exit(15);
+            char rb[8] = {0};
+            int got = 0;
+            while (got < 8) { int n = recv(s, rb + got, 8 - got, 0); if (n <= 0) _exit(16); got += n; }
+            if (memcmp(rb, "HiClient", 8) != 0) _exit(17);
+            close(s);
+            _exit(0);
+        }
+        struct sockaddr_in peer;
+        socklen_t peerlen = sizeof peer;
+        int conn = accept(ls, (struct sockaddr *)&peer, &peerlen);
+        if (conn < 0) return fail("tcpsrv accept");
+        if (peer.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) return fail("tcpsrv peer ip");
+        if (ntohs(peer.sin_port) == 0) return fail("tcpsrv peer port");
+        char rb[8] = {0};
+        int got = 0;
+        while (got < 8) { int n = recv(conn, rb + got, 8 - got, 0); if (n <= 0) return fail("tcpsrv recv"); got += n; }
+        if (memcmp(rb, "HelloSrv", 8) != 0) return fail("tcpsrv content");
+        if (send(conn, "HiClient", 8, 0) != 8) return fail("tcpsrv send");
+        int st;
+        if (waitpid(c, &st, 0) != c) return fail("tcpsrv wait");
+        if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) return fail("tcpsrv child");
+        char eofb[4];
+        if (recv(conn, eofb, sizeof eofb, 0) != 0) return fail("tcpsrv eof");
+        close(conn);
+        close(ls);
+        printf("DIFF_TCPSRV_OK\n");
+    }
+
+    /* UDP loopback: sendto 127.0.0.1 is delivered locally with the address. */
+    {
+        int s = socket(AF_INET, SOCK_DGRAM, 0);
+        int t = socket(AF_INET, SOCK_DGRAM, 0);
+        if (s < 0 || t < 0) return fail("udploop socket");
+        struct sockaddr_in a;
+        memset(&a, 0, sizeof a);
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        a.sin_port = htons(45321);
+        if (bind(s, (struct sockaddr *)&a, sizeof a) != 0) return fail("udploop bind");
+        if (sendto(t, "ping", 4, 0, (struct sockaddr *)&a, sizeof a) != 4) return fail("udploop sendto");
+        char buf[8] = {0};
+        struct sockaddr_in from;
+        socklen_t fl = sizeof from;
+        memset(&from, 0, sizeof from);
+        if (recvfrom(s, buf, sizeof buf, 0, (struct sockaddr *)&from, &fl) != 4) return fail("udploop recv");
+        if (memcmp(buf, "ping", 4) != 0) return fail("udploop content");
+        if (from.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) return fail("udploop src ip");
+        /* Connected datagrams report the peer too. */
+        if (connect(t, (struct sockaddr *)&a, sizeof a) != 0) return fail("udploop connect");
+        struct sockaddr_in pp;
+        socklen_t ppl = sizeof pp;
+        if (getpeername(t, (struct sockaddr *)&pp, &ppl) != 0) return fail("udploop peername");
+        if (pp.sin_addr.s_addr != htonl(INADDR_LOOPBACK) || ntohs(pp.sin_port) != 45321) return fail("udploop peer");
+        if (send(t, "pong", 4, 0) != 4) return fail("udploop send");
+        memset(buf, 0, sizeof buf);
+        fl = sizeof from;
+        memset(&from, 0, sizeof from);
+        if (recvfrom(s, buf, sizeof buf, 0, (struct sockaddr *)&from, &fl) != 4) return fail("udploop recv2");
+        if (memcmp(buf, "pong", 4) != 0) return fail("udploop content2");
+        close(s);
+        close(t);
+        printf("DIFF_UDPLOOP_OK\n");
+    }
+
+    /* signalfd observes stop/continue/exit as SIGCHLD with the Linux codes:
+       CLD_STOPPED=5, CLD_CONTINUED=6, CLD_EXITED=1, CLD_KILLED=2. */
+    {
+        sigset_t chmask, chold;
+        sigemptyset(&chmask);
+        sigaddset(&chmask, SIGCHLD);
+        if (sigprocmask(SIG_BLOCK, &chmask, &chold) != 0) return fail("sfd block");
+        int sfd = signalfd(-1, &chmask, 0);
+        if (sfd < 0) return fail("sfd create");
+        /* Read semantics on an empty blocking set is covered by poll
+           timeouts below; check the nonblocking and short-read errors. */
+        {
+            int nfsd = signalfd(-1, &chmask, SFD_NONBLOCK);
+            if (nfsd < 0) return fail("sfd nonblock create");
+            struct signalfd_siginfo tmp;
+            ssize_t nn = read(nfsd, &tmp, sizeof tmp);
+            if (nn != -1 || errno != EAGAIN) return fail("sfd nonblock empty");
+            nn = read(nfsd, &tmp, 10);
+            if (nn != -1 || errno != EINVAL) return fail("sfd short read");
+            close(nfsd);
+        }
+        pid_t c = fork();
+        if (c < 0) return fail("sfd stop fork");
+        if (c == 0) {
+            raise(SIGSTOP);
+            sleep(1);
+            _exit(43);
+        }
+        struct pollfd pfd = {sfd, POLLIN, 0};
+        if (poll(&pfd, 1, 5000) <= 0) return fail("sfd stop poll");
+        struct signalfd_siginfo si;
+        if (read(sfd, &si, sizeof si) != sizeof si) return fail("sfd stop read");
+        if (si.ssi_signo != SIGCHLD) return fail("sfd stop signo");
+        if (si.ssi_code != 5) return fail("sfd stop code");
+        if (si.ssi_pid != (uint32_t)c) return fail("sfd stop pid");
+        if (si.ssi_status != SIGSTOP) return fail("sfd stop status");
+        int st;
+        if (waitpid(c, &st, WUNTRACED) != c) return fail("sfd stop wait");
+        if (!WIFSTOPPED(st) || WSTOPSIG(st) != SIGSTOP) return fail("sfd stop wait status");
+        if (kill(c, SIGCONT) != 0) return fail("sfd cont send");
+        pfd.revents = 0;
+        if (poll(&pfd, 1, 5000) <= 0) return fail("sfd cont poll");
+        if (read(sfd, &si, sizeof si) != sizeof si) return fail("sfd cont read");
+        if (si.ssi_signo != SIGCHLD) return fail("sfd cont signo");
+        if (si.ssi_code != 6) return fail("sfd cont code");
+        if (si.ssi_pid != (uint32_t)c) return fail("sfd cont pid");
+        if (si.ssi_status != SIGCONT) return fail("sfd cont status");
+        if (waitpid(c, &st, WCONTINUED) != c) return fail("sfd cont wait");
+        if (!WIFCONTINUED(st)) return fail("sfd cont wait status");
+        if (waitpid(c, &st, 0) != c) return fail("sfd exit wait");
+        if (!WIFEXITED(st) || WEXITSTATUS(st) != 43) return fail("sfd exit wait status");
+        pfd.revents = 0;
+        if (poll(&pfd, 1, 5000) <= 0) return fail("sfd exit poll");
+        if (read(sfd, &si, sizeof si) != sizeof si) return fail("sfd exit read");
+        if (si.ssi_signo != SIGCHLD) return fail("sfd exit signo");
+        if (si.ssi_code != 1) return fail("sfd exit code");
+        if (si.ssi_pid != (uint32_t)c) return fail("sfd exit pid");
+        if (si.ssi_status != 43) return fail("sfd exit status");
+        close(sfd);
+        sigprocmask(SIG_SETMASK, &chold, NULL);
+        printf("DIFF_SIGNALFD_STOP_OK\n");
+    }
+
+    /* SA_NOCLDSTOP suppresses the stop/continue SIGCHLD on signalfd but
+       waitpid still observes the states; the exit event still arrives.
+       Suppression is checked with a nonblocking read after the state is
+       confirmed via waitpid, so a later exit cannot fall into the window
+       and look like a leak; every wait is bounded. */
+    {
+        struct sigaction sa, oldsa;
+        memset(&sa, 0, sizeof sa);
+        sa.sa_handler = SIG_DFL;
+        sa.sa_flags = SA_NOCLDSTOP;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGCHLD, &sa, &oldsa) != 0) return fail("nocld sigaction");
+        sigset_t chmask, chold;
+        sigemptyset(&chmask);
+        sigaddset(&chmask, SIGCHLD);
+        if (sigprocmask(SIG_BLOCK, &chmask, &chold) != 0) return fail("nocld block");
+        int sfd = signalfd(-1, &chmask, 0);
+        if (sfd < 0) return fail("nocld sfd create");
+        int nbfd = signalfd(-1, &chmask, SFD_NONBLOCK);
+        if (nbfd < 0) return fail("nocld nb create");
+        pid_t c = fork();
+        if (c < 0) return fail("nocld fork");
+        if (c == 0) {
+            raise(SIGSTOP);
+            sleep(2);
+            _exit(7);
+        }
+        /* Bounded wait for the stop; the exit cannot arrive first. */
+        int st = 0, waited = 0;
+        for (int i = 0; i < 100; i++) {
+            pid_t r = waitpid(c, &st, WUNTRACED | WNOHANG);
+            if (r == c) { waited = 1; break; }
+            if (r != 0) return fail("nocld stop wait err");
+            usleep(50000);
+        }
+        if (!waited) return fail("nocld stop wait timeout");
+        if (!WIFSTOPPED(st) || WSTOPSIG(st) != SIGSTOP) return fail("nocld stop status");
+        /* No stop SIGCHLD may be queued: nonblocking read must be empty. */
+        {
+            struct signalfd_siginfo dbg;
+            ssize_t dbg_n = read(nbfd, &dbg, sizeof dbg);
+            if (dbg_n != -1 || errno != EAGAIN) return fail("nocld stop signaled");
+        }
+        if (kill(c, SIGCONT) != 0) return fail("nocld cont send");
+        st = 0; waited = 0;
+        for (int i = 0; i < 100; i++) {
+            pid_t r = waitpid(c, &st, WCONTINUED | WNOHANG);
+            if (r == c) { waited = 1; break; }
+            if (r != 0) return fail("nocld cont wait err");
+            usleep(50000);
+        }
+        if (!waited) return fail("nocld cont wait timeout");
+        if (!WIFCONTINUED(st)) return fail("nocld cont status");
+        {
+            struct signalfd_siginfo dbg;
+            ssize_t dbg_n = read(nbfd, &dbg, sizeof dbg);
+            if (dbg_n != -1 || errno != EAGAIN) {
+                if (dbg_n == (ssize_t)sizeof dbg)
+                    printf("nocld cont unexpected: code=%u pid=%u status=%d\n",
+                        dbg.ssi_code, dbg.ssi_pid, dbg.ssi_status);
+                return fail("nocld cont signaled");
+            }
+        }
+        st = 0; waited = 0;
+        for (int i = 0; i < 100; i++) {
+            pid_t r = waitpid(c, &st, WNOHANG);
+            if (r == c) { waited = 1; break; }
+            if (r != 0) return fail("nocld exit wait err");
+            usleep(50000);
+        }
+        if (!waited) return fail("nocld exit wait timeout");
+        if (!WIFEXITED(st) || WEXITSTATUS(st) != 7) return fail("nocld exit status");
+        struct pollfd pfd = {sfd, POLLIN, 0};
+        if (poll(&pfd, 1, 5000) <= 0) return fail("nocld exit poll");
+        struct signalfd_siginfo si;
+        if (read(sfd, &si, sizeof si) != sizeof si) return fail("nocld exit read");
+        if (si.ssi_signo != SIGCHLD) return fail("nocld exit signo");
+        if (si.ssi_code != 1) return fail("nocld exit code");
+        if (si.ssi_pid != (uint32_t)c) return fail("nocld exit pid");
+        if (si.ssi_status != 7) return fail("nocld exit status value");
+        close(nbfd);
+        close(sfd);
+        sigprocmask(SIG_SETMASK, &chold, NULL);
+        sigaction(SIGCHLD, &oldsa, NULL);
+        printf("DIFF_SIGNALFD_NOCLDSTOP_OK\n");
+    }
+
+    /* AF_UNIX datagrams: bind/sendto/recvfrom with source addresses,
+       connected sends, unbound senders, abstract names and socketpair. */
+    {
+        char pa[108], pb[108];
+        snprintf(pa, sizeof pa, "/tmp/slop-dg-a-%d", (int)getpid());
+        snprintf(pb, sizeof pb, "/tmp/slop-dg-b-%d", (int)getpid());
+        (void)unlink(pa); (void)unlink(pb);
+        int a = socket(AF_UNIX, SOCK_DGRAM, 0);
+        int b = socket(AF_UNIX, SOCK_DGRAM, 0);
+        if (a < 0 || b < 0) return fail("unixdg socket");
+        struct sockaddr_un au, bu;
+        memset(&au, 0, sizeof au); memset(&bu, 0, sizeof bu);
+        au.sun_family = AF_UNIX; bu.sun_family = AF_UNIX;
+        snprintf(au.sun_path, sizeof au.sun_path, "%s", pa);
+        snprintf(bu.sun_path, sizeof bu.sun_path, "%s", pb);
+        if (bind(a, (struct sockaddr *)&au, sizeof au) != 0) return fail("unixdg bind a");
+        if (bind(b, (struct sockaddr *)&bu, sizeof bu) != 0) return fail("unixdg bind b");
+        /* Duplicate bind must fail with EADDRINUSE. */
+        {
+            int d = socket(AF_UNIX, SOCK_DGRAM, 0);
+            if (d < 0) return fail("unixdg dup socket");
+            if (bind(d, (struct sockaddr *)&au, sizeof au) != -1 || errno != EADDRINUSE) return fail("unixdg dupbind");
+            close(d);
+        }
+        /* getsockname reports the bound path. */
+        {
+            struct sockaddr_un gn; socklen_t gl = sizeof gn;
+            memset(&gn, 0, sizeof gn);
+            if (getsockname(b, (struct sockaddr *)&gn, &gl) != 0) return fail("unixdg getsockname");
+            if (gn.sun_family != AF_UNIX) return fail("unixdg getsockname family");
+            if (strcmp(gn.sun_path, pb) != 0) return fail("unixdg getsockname path");
+        }
+        /* Unconnected send must fail with ENOTCONN. */
+        if (send(a, "x", 1, 0) != -1 || errno != ENOTCONN) return fail("unixdg unconn send");
+        /* sendto with an explicit destination, recvfrom reports the source. */
+        if (sendto(a, "hello", 5, 0, (struct sockaddr *)&bu, sizeof bu) != 5) return fail("unixdg sendto");
+        {
+            char rbuf[32] = {0};
+            struct sockaddr_un from; socklen_t fl = sizeof from;
+            memset(&from, 0, sizeof from);
+            if (recvfrom(b, rbuf, sizeof rbuf, 0, (struct sockaddr *)&from, &fl) != 5) return fail("unixdg recvfrom");
+            if (memcmp(rbuf, "hello", 5) != 0) return fail("unixdg content");
+            if (from.sun_family != AF_UNIX) return fail("unixdg from family");
+            if (strcmp(from.sun_path, pa) != 0) return fail("unixdg from path");
+        }
+        /* Connected datagrams use send/recv and report the peer. */
+        if (connect(a, (struct sockaddr *)&bu, sizeof bu) != 0) return fail("unixdg connect");
+        {
+            struct sockaddr_un pp; socklen_t ppl = sizeof pp;
+            memset(&pp, 0, sizeof pp);
+            if (getpeername(a, (struct sockaddr *)&pp, &ppl) != 0) return fail("unixdg peername");
+            if (strcmp(pp.sun_path, pb) != 0) return fail("unixdg peer path");
+        }
+        if (send(a, "world", 5, 0) != 5) return fail("unixdg send");
+        {
+            char rbuf[32] = {0};
+            if (recv(b, rbuf, sizeof rbuf, 0) != 5) return fail("unixdg recv");
+            if (memcmp(rbuf, "world", 5) != 0) return fail("unixdg recv content");
+        }
+        /* Message boundaries are preserved: two sends arrive as two reads. */
+        if (send(a, "AB", 2, 0) != 2) return fail("unixdg msg1");
+        if (send(a, "CDEF", 4, 0) != 4) return fail("unixdg msg2");
+        {
+            char r1[16] = {0}, r2[16] = {0};
+            if (recv(b, r1, sizeof r1, 0) != 2) return fail("unixdg boundary1");
+            if (memcmp(r1, "AB", 2) != 0) return fail("unixdg boundary1 content");
+            if (recv(b, r2, sizeof r2, 0) != 4) return fail("unixdg boundary2");
+            if (memcmp(r2, "CDEF", 4) != 0) return fail("unixdg boundary2 content");
+        }
+        /* Unbound sender: source is the empty address. */
+        {
+            int c = socket(AF_UNIX, SOCK_DGRAM, 0);
+            if (c < 0) return fail("unixdg unbound socket");
+            if (sendto(c, "anon", 4, 0, (struct sockaddr *)&bu, sizeof bu) != 4) return fail("unixdg anon sendto");
+            char rbuf[16] = {0};
+            struct sockaddr_un from; socklen_t fl = sizeof from;
+            memset(&from, 0, sizeof from);
+            if (recvfrom(b, rbuf, sizeof rbuf, 0, (struct sockaddr *)&from, &fl) != 4) return fail("unixdg anon recv");
+            if (memcmp(rbuf, "anon", 4) != 0) return fail("unixdg anon content");
+            if (from.sun_path[0] != '\0') return fail("unixdg anon source");
+            close(c);
+        }
+        /* Unknown destination reports ENOENT. */
+        {
+            struct sockaddr_un nz;
+            memset(&nz, 0, sizeof nz);
+            nz.sun_family = AF_UNIX;
+            snprintf(nz.sun_path, sizeof nz.sun_path, "/tmp/slop-dg-nope-%d", (int)getpid());
+            if (sendto(a, "x", 1, 0, (struct sockaddr *)&nz, sizeof nz) != -1 || errno != ENOENT) return fail("unixdg nope");
+        }
+        /* Oversize datagrams report EMSGSIZE on both ends. Linux allows
+           ~212 KiB; the guest caps at 4 KiB, so probe above the Linux
+           limit so both ends agree. */
+        {
+            size_t huge = 300 * 1024;
+            char *bigm = malloc(huge);
+            if (!bigm) return fail("unixdg huge alloc");
+            memset(bigm, 'q', huge);
+            int rc = sendto(a, bigm, huge, 0, (struct sockaddr *)&bu, sizeof bu);
+            free(bigm);
+            if (rc != -1 || errno != EMSGSIZE) return fail("unixdg msgsize");
+        }
+        /* Abstract names (leading NUL) rendezvous without the filesystem. */
+        {
+            int x = socket(AF_UNIX, SOCK_DGRAM, 0);
+            int y = socket(AF_UNIX, SOCK_DGRAM, 0);
+            if (x < 0 || y < 0) return fail("unixdg abs socket");
+            struct sockaddr_un xa, ya;
+            memset(&xa, 0, sizeof xa); memset(&ya, 0, sizeof ya);
+            xa.sun_family = AF_UNIX; ya.sun_family = AF_UNIX;
+            char aname[32];
+            snprintf(aname, sizeof aname, "slopdg-%d", (int)getpid());
+            size_t anl = strlen(aname);
+            xa.sun_path[0] = '\0';
+            memcpy(&xa.sun_path[1], aname, anl);
+            socklen_t xlen = (socklen_t)(2 + 1 + anl);
+            if (bind(x, (struct sockaddr *)&xa, xlen) != 0) return fail("unixdg abs bind");
+            if (sendto(y, "abs", 3, 0, (struct sockaddr *)&xa, xlen) != 3) return fail("unixdg abs sendto");
+            char rbuf[16] = {0};
+            struct sockaddr_un from; socklen_t fl = sizeof from;
+            memset(&from, 0, sizeof from);
+            if (recvfrom(x, rbuf, sizeof rbuf, 0, (struct sockaddr *)&from, &fl) != 3) return fail("unixdg abs recv");
+            if (memcmp(rbuf, "abs", 3) != 0) return fail("unixdg abs content");
+            close(x); close(y);
+        }
+        /* DGRAM socketpair behaves as a connected pair. */
+        {
+            int sv[2] = {-1, -1};
+            if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sv) != 0) return fail("unixdg pair");
+            if (send(sv[0], "pq", 2, 0) != 2) return fail("unixdg pair send");
+            char rbuf[8] = {0};
+            if (recv(sv[1], rbuf, sizeof rbuf, 0) != 2) return fail("unixdg pair recv");
+            if (memcmp(rbuf, "pq", 2) != 0) return fail("unixdg pair content");
+            if (send(sv[1], "qp", 2, 0) != 2) return fail("unixdg pair send2");
+            memset(rbuf, 0, sizeof rbuf);
+            if (recv(sv[0], rbuf, sizeof rbuf, 0) != 2) return fail("unixdg pair recv2");
+            if (memcmp(rbuf, "qp", 2) != 0) return fail("unixdg pair content2");
+            close(sv[0]); close(sv[1]);
+        }
+        close(a); close(b);
+        (void)unlink(pa); (void)unlink(pb);
+        printf("DIFF_UNIXDG_OK\n");
+    }
+
+    /* Persistent-style files on a real on-disk filesystem: natively /tmp,
+       in the guest the ext2 mount. Exercises create/write/read/truncate,
+       multi-block mappings, sparse holes, directories and removal. */
+    {
+        const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag" : "/tmp/xdiag";
+        char sub[128], f1[128], f2[128], big[128], keep[128];
+        snprintf(sub, sizeof sub, "%s/sub", base);
+        snprintf(f1, sizeof f1, "%s/a.txt", base);
+        snprintf(f2, sizeof f2, "%s/sub/b.txt", base);
+        snprintf(big, sizeof big, "%s/big.bin", base);
+        snprintf(keep, sizeof keep, "%s/keep.bin", base);
+        /* Best-effort cleanup so reruns start from the same state. */
+        (void)unlink(f1); (void)unlink(f2); (void)unlink(big); (void)unlink(keep);
+        (void)rmdir(sub); (void)rmdir(base);
+        if (mkdir(base, 0755) != 0) return fail("ext2 mkdir base");
+        if (mkdir(base, 0755) != -1 || errno != EEXIST) return fail("ext2 mkdir eexist");
+        if (mkdir(sub, 0700) != 0) return fail("ext2 mkdir sub");
+        int f = open(f1, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (f < 0) return fail("ext2 create");
+        if (write(f, "0123456789abcdef", 16) != 16) return fail("ext2 seed");
+        close(f);
+        f = open(f1, O_RDONLY);
+        if (f < 0) return fail("ext2 reopen");
+        char head[16] = {0};
+        if (read(f, head, sizeof head) != 16 || memcmp(head, "0123456789abcdef", 16) != 0) return fail("ext2 content");
+        struct stat st;
+        if (fstat(f, &st) != 0 || st.st_size != 16) return fail("ext2 fstat");
+        close(f);
+        /* A 20 KiB patterned file crosses the 12 direct blocks into the
+           single-indirect range on 1 KiB blocks. */
+        int bf = open(big, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (bf < 0) return fail("ext2 big create");
+        unsigned char chunk[1024];
+        for (int c = 0; c < 20; c++) {
+            for (int i = 0; i < 1024; i++) chunk[i] = (unsigned char)((c * 131 + i * 7 + 3) & 0xff);
+            if (write(bf, chunk, sizeof chunk) != (ssize_t)sizeof chunk) return fail("ext2 big write");
+        }
+        close(bf);
+        bf = open(big, O_RDONLY);
+        if (bf < 0) return fail("ext2 big reopen");
+        if (fstat(bf, &st) != 0 || st.st_size != 20480) return fail("ext2 big size");
+        for (int c = 0; c < 20; c++) {
+            unsigned char rb[1024];
+            if (read(bf, rb, sizeof rb) != (ssize_t)sizeof rb) return fail("ext2 big read");
+            for (int i = 0; i < 1024; i++)
+                if (rb[i] != (unsigned char)((c * 131 + i * 7 + 3) & 0xff)) return fail("ext2 big content");
+        }
+        close(bf);
+        /* Sparse growth reads back as zeros; an interior write sticks. */
+        int sf = open(f2, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (sf < 0) return fail("ext2 sparse create");
+        if (ftruncate(sf, 8192) != 0) return fail("ext2 sparse grow");
+        if (lseek(sf, 5000, SEEK_SET) != 5000) return fail("ext2 sparse seek");
+        if (write(sf, "XYZ", 3) != 3) return fail("ext2 sparse write");
+        close(sf);
+        sf = open(f2, O_RDONLY);
+        if (sf < 0) return fail("ext2 sparse reopen");
+        if (fstat(sf, &st) != 0 || st.st_size != 8192) return fail("ext2 sparse size");
+        unsigned char zb[5003] = {0};
+        if (read(sf, zb, sizeof zb) != (ssize_t)sizeof zb) return fail("ext2 sparse read");
+        for (int i = 0; i < 5000; i++) if (zb[i] != 0) return fail("ext2 hole zero");
+        if (memcmp(zb + 5000, "XYZ", 3) != 0) return fail("ext2 sparse content");
+        close(sf);
+        /* Shrink, directory listing, error cases, removal. */
+        if (truncate(big, 100) != 0) return fail("ext2 shrink");
+        if (stat(big, &st) != 0 || st.st_size != 100) return fail("ext2 shrink size");
+        DIR *dd = opendir(sub);
+        if (!dd) return fail("ext2 opendir");
+        int saw_b = 0, entries = 0;
+        struct dirent *de;
+        while ((de = readdir(dd)) != NULL) {
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            entries++;
+            if (!strcmp(de->d_name, "b.txt")) saw_b = 1;
+        }
+        closedir(dd);
+        if (!saw_b || entries != 1) return fail("ext2 readdir");
+        if (unlink(sub) != -1 || errno != EISDIR) return fail("ext2 unlink dir");
+        if (rmdir(sub) != -1 || errno != ENOTEMPTY) return fail("ext2 rmdir full");
+        char missing[128];
+        snprintf(missing, sizeof missing, "%s/nope", base);
+        if (unlink(missing) != -1 || errno != ENOENT) return fail("ext2 unlink missing");
+        if (rmdir(missing) != -1 || errno != ENOENT) return fail("ext2 rmdir missing");
+        if (unlink(f1) != 0 || unlink(f2) != 0 || unlink(big) != 0) return fail("ext2 unlink");
+        if (stat(f1, &st) == 0 || errno != ENOENT) return fail("ext2 gone");
+        if (rmdir(sub) != 0) return fail("ext2 rmdir");
+        /* keep.bin stays on purpose: the host verifies its bytes straight
+           off the platter with debugfs after the guest run. */
+        int kf = open(keep, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (kf < 0) return fail("ext2 keep create");
+        if (write(kf, "0123456789abcdef", 16) != 16) return fail("ext2 keep write");
+        close(kf);
+        printf("DIFF_EXT2_OK\n");
     }
 
     if (access("/bin/nopie-helper", X_OK) == 0) {

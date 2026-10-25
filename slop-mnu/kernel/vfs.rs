@@ -211,7 +211,7 @@ pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 }
 pub fn create(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},None=>{}}
   /* The parent directory must exist, like on Linux. */
   if let Some(parent)=path.rfind('/').map(|i|&path[..i]).filter(|p|!p.is_empty()){
    if lookup(parent).map(|n|n.mode&0o170000!=S_IFDIR).unwrap_or(true){return Err(errno::ENOENT)}
@@ -234,7 +234,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
 }
 pub fn unlink(path:&str)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
@@ -245,7 +245,7 @@ pub fn unlink(path:&str)->Result<()>{
 }
 pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},None=>{}}
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
@@ -329,7 +329,7 @@ pub fn is_dir(path:&str)->bool{
 pub fn rmdir(path:&str)->Result<()>{
   if path=="/"{return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR==0{return Err(errno::ENOTDIR)}
@@ -389,7 +389,7 @@ pub fn rename(old:&str,new:&str)->Result<()>{
 }
 pub fn chmod_path(path:&str,mode:u32)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;let ty=node.mode&0o170000;node.mode=ty|(mode&0o7777);return Ok(())},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;let ty=node.mode&0o170000;node.mode=ty|(mode&0o7777);return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::chmod(ino as u32,mode&0o7777)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  let ty=m.nodes[idx].mode&0o170000;
@@ -406,7 +406,7 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
@@ -415,7 +415,14 @@ pub fn truncate_path(path:&str,size:u64)->Result<()>{
  m.nodes[idx].size=size;
  Ok(())
 }
+/* ext2 on-disk inodes surface as 0x100000+inum, disjoint from the tmpfs
+   tag range and the small ROOT ids. */
+pub fn is_ext2_ino(ino:u64)->bool{ino>=0x100000&&ino<0x200000}
+fn is_ext2_inode(n:&Inode)->bool{
+ (n.mode&0o170000==S_IFREG||n.mode&0o170000==S_IFDIR)&&n.npages==0&&n.data.is_null()&&n.rdev!=0&&tmpfs_fs_id(n.ino).is_none()&&is_ext2_ino(n.ino)
+}
 pub fn truncate_ino(ino:u64,size:u64)->Result<()>{
+  if is_ext2_ino(ino){return crate::ext2::truncate((ino-0x100000) as u32,size)}
   if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}if size>node.capacity{return Err(errno::ENOSPC)}node.size=size;return Ok(())}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
@@ -423,6 +430,39 @@ pub fn truncate_ino(ino:u64,size:u64)->Result<()>{
  if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
  if size>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
  m.nodes[idx].size=size;
+ Ok(())
+}
+/* Grows backing capacity for fallocate without changing the size: allocates
+   zeroed pages up to the 8-page per-file limit, like the write path does.
+   Initramfs image entries cannot grow beyond their mapped span. */
+pub fn reserve_ino(ino:u64,end:u64)->Result<()>{
+ use crate::arch::x86_64::phys::Identity;
+ use crate::arch::x86_64::paging::PhysAccess;
+ if let Some(fs_id)=tmpfs_fs_id(ino){
+  let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;
+  if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}
+  if node.mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
+  let needed=((end as usize+4095)/4096).max(1);
+  while (node.npages as usize)<needed&&(node.npages as usize)<8{
+   let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
+   unsafe{Identity.table(frame).fill(0)}
+   node.pages[node.npages as usize]=crate::arch::x86_64::phys::phys_to_virt(frame);node.npages+=1;node.capacity=node.npages as u64*4096;
+  }
+  if end>node.capacity{return Err(errno::ENOSPC)}
+  return Ok(())
+ }
+ let mut m=ROOT.lock();
+ let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
+ if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
+ if m.nodes[idx].mode&0o170000!=S_IFREG{return Err(errno::ENODEV)}
+ if m.nodes[idx].npages==0 { m.nodes[idx].pages[0]=m.nodes[idx].data as u64; m.nodes[idx].npages=1; m.nodes[idx].capacity=m.nodes[idx].capacity.max(4096); }
+ let needed=((end as usize+4095)/4096).max(1);
+ while (m.nodes[idx].npages as usize)<needed&&(m.nodes[idx].npages as usize)<8{
+  let frame=crate::memory::alloc_frame().ok_or(errno::ENOMEM)?;
+  unsafe{Identity.table(frame).fill(0)}
+  let i=m.nodes[idx].npages as usize;m.nodes[idx].pages[i]=crate::arch::x86_64::phys::phys_to_virt(frame);m.nodes[idx].npages+=1;m.nodes[idx].capacity=m.nodes[idx].npages as u64*4096;
+ }
+ if end>m.nodes[idx].capacity{return Err(errno::ENOSPC)}
  Ok(())
 }
 
@@ -796,6 +836,7 @@ pub fn inode_by_ino(ino:u64)->Option<Inode>{
 /* Current live size for an inode; Inode values held by open files are
    snapshots whose size field goes stale after another description writes. */
 pub fn inode_size(ino:u64)->Option<u64>{
+ if is_ext2_ino(ino){return crate::ext2::file_size((ino-0x100000) as u32)}
  if let Some(fs_id)=tmpfs_fs_id(ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==ino)?;return Some(node.size)}
  let m=ROOT.lock();
  let node=m.nodes[..m.len].iter().find(|n|n.ino==ino)?;
@@ -803,6 +844,7 @@ pub fn inode_size(ino:u64)->Option<u64>{
 }
 pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){return Err(errno::EROFS)}
+ if is_ext2_inode(&inode){return crate::ext2::write_file(inode.rdev as u32,off,src)}
  if let Some(fs_id)=tmpfs_fs_id(inode.ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;let wrote=tmpfs_write_inode(node,off,src)?;drop(registry);if wrote>0{if let Ok(path)=core::str::from_utf8(&inode.name[..inode.name_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}return Ok(wrote)}
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;

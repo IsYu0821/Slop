@@ -57,6 +57,26 @@
   lock, so the entry point can tell the time without asking the kernel
 - the processor time charged to the program that spends it, like Linux
   reports it
+- the stopped-child wait status: `WIFSTOPPED`/`WSTOPSIG` with `WUNTRACED`,
+  `WIFCONTINUED` with `WCONTINUED`, `CLD_STOPPED`/`CLD_CONTINUED` for
+  `waitid`, and `SIGCHLD` on stop and continue unless `SA_NOCLDSTOP`
+- the floating-point state in the ucontext: the 512-byte FXSAVE area with
+  the SSE registers at offset 160, `MXCSR` at its reset value and `fpregs`
+  pointing at the area, preserved across syscalls and context switches
+- signalfd child-status parity: `CLD_STOPPED`/`CLD_CONTINUED`/`CLD_EXITED`/
+  `CLD_KILLED` with child pid/uid/status, `SA_NOCLDSTOP` suppressing only
+  generation, first-wins coalescing shared with `sigwaitinfo` and handler
+  delivery, waits never consuming the pending bit, `poll`/`select`/`epoll`
+  readiness following the mask
+- file plumbing: `copy_file_range`/`splice`/`tee`/`fallocate` with native
+  offsets, flags and errors, backed by pipe `peek` and VFS capacity
+  reservation
+- TCP passive open and loopback: `listen`/`accept` with per-listener
+  queues, handshake/retransmit/RST, `127.0.0.1` self-delivery for TCP
+  and UDP, INET socket lifetime tied to file descriptions
+- `AF_UNIX` datagrams with addresses: `bind` conflicts, unconnected
+  `sendto`/`recvfrom` with source reporting, connected `send`/`recv`
+  with `getpeername`, boundaries, abstract names, `socketpair` pairs
 
 ## Open defects
 
@@ -67,8 +87,9 @@
 
 ## Next in line for the Linux ABI
 
-1. A real-time signal range with `sigqueue` and the queued values.
-3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
-4. The stopped-child wait status, so a parent can observe `WIFSTOPPED`.
-5. The floating-point state in the ucontext, so a handler sees the registers.
-6. Copy-on-write for `fork`, which removes the deep copy of the private slots.
+ 1. A real-time signal range with `sigqueue` and the queued values.
+ 3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
+ 4. Copy-on-write for `fork`, which is already implemented as a
+    share-and-fault path and covered by `DIFF_COW_OK`.
+ 5. Per-CPU scheduler preparation for SMP: run queues, IPIs, per-CPU FPU
+    areas, allocator sharding and TLB shootdown.

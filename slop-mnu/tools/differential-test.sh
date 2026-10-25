@@ -24,7 +24,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
   exit 1
 fi
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_EXT2_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -68,14 +68,17 @@ s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').
 p.write_text(s)
 PY
 ./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
+./tools/build-ext2.sh >/tmp/scratchpad/ext2-build.log 2>&1
 OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
 OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
 cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
 rm -f build/differential-serial.log
-if timeout 40 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
+if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
   -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
   -drive format=raw,file=fat:rw:build/efi \
+  -drive file=build/ext2.img,format=raw,if=none,id=hd0 \
+  -device virtio-blk-pci,drive=hd0 \
   -device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   -serial file:build/differential-serial.log -display none -no-reboot -no-shutdown >/dev/null 2>&1; then
@@ -88,10 +91,44 @@ if [ "$guest_status" -ne 33 ]; then
   exit 1
 fi
 
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
     exit 1
   fi
 done
+
+# Host-side proof that the guest wrote a real ext2 filesystem: the journal
+# of record is the platter itself, checked with the host e2fsprogs.
+if ! command -v e2fsck >/dev/null 2>&1 || ! command -v debugfs >/dev/null 2>&1; then
+  echo "missing required tools: e2fsck/debugfs (e2fsprogs)" >&2
+  exit 1
+fi
+if ! e2fsck -n -f build/ext2.img >/tmp/scratchpad/ext2-fsck.log 2>&1; then
+  echo "ext2 image failed consistency check after guest run:"
+  cat /tmp/scratchpad/ext2-fsck.log >&2
+  exit 1
+fi
+echo "ext2: e2fsck clean"
+# The guest test leaves exactly the base dir and keep.bin allocated, so the
+# free counts must be the pristine ones minus 2 blocks and 2 inodes.
+pristine_blocks=$(awk '/^Free blocks/{print $3}' build/ext2-pristine-counts.txt)
+pristine_inodes=$(awk '/^Free inodes/{print $3}' build/ext2-pristine-counts.txt)
+now_blocks=$(dumpe2fs -h build/ext2.img 2>/dev/null | awk '/^Free blocks/{print $3}')
+now_inodes=$(dumpe2fs -h build/ext2.img 2>/dev/null | awk '/^Free inodes/{print $3}')
+if [ "$now_blocks" != "$((pristine_blocks - 2))" ] || [ "$now_inodes" != "$((pristine_inodes - 2))" ]; then
+  echo "ext2 free-count mismatch: blocks $now_blocks (want $((pristine_blocks - 2))), inodes $now_inodes (want $((pristine_inodes - 2)))" >&2
+  exit 1
+fi
+echo "ext2: free counts account exactly (blocks=$now_blocks inodes=$now_inodes)"
+printf '0123456789abcdef' > /tmp/scratchpad/ext2-expect.bin
+if ! debugfs -R "dump xdiag/keep.bin /tmp/scratchpad/ext2-got.bin" build/ext2.img >/dev/null 2>&1; then
+  echo "ext2: debugfs could not dump the guest-written file" >&2
+  exit 1
+fi
+if ! cmp -s /tmp/scratchpad/ext2-expect.bin /tmp/scratchpad/ext2-got.bin; then
+  echo "ext2: guest-written bytes differ on the platter" >&2
+  exit 1
+fi
+echo "ext2: guest bytes verified on the platter"
 echo "differential test: PASS"

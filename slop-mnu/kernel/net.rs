@@ -43,6 +43,10 @@ fn idle_hlt(){unsafe{core::arch::asm!("sti","hlt","cli",options(nomem,nostack,pr
 fn nap(round:u32){
  for _ in 0..20_000{core::hint::spin_loop();}
  if round%8==7{idle_hlt();}
+ /* Cooperative scheduling has no preemption inside one syscall, so a
+    spinning waiter (connect/send/recv) would otherwise starve the peer
+    task it is rendezvousing with. Yield regularly to let it run. */
+ if round%16==15{crate::task::yield_now();}
 }
 
 /* ---------- link layer ---------- */
@@ -211,6 +215,10 @@ pub fn udp_send(id:u8,to:Option<(u32,u16)>,data:&[u8])->Result<usize,i64>{
   if s.lport==0{autobind(&mut s,i)}
   (ip,port,s.lport)
  };
+ /* Loopback datagrams are delivered locally without ARP or the wire. */
+ if is_loopback(dst_ip){
+  return match loopback_udp(dst_ip,src_port,dst_port,data){Ok(())=>Ok(data.len()),Err(e)=>Err(e)};
+ }
  let mac=resolve_peer(dst_ip)?;
  udp_emit(src_port,dst_ip,dst_port,&mac,data)?;
  Ok(data.len())
@@ -238,12 +246,18 @@ fn udp_input(src_ip:u32,seg:&[u8]){
  if ulen<8||seg.len()<ulen{return}
  let sum=be16(seg,6);
  if sum!=0&&csum_pseudo(src_ip,OUR_IP,IP_UDP,ulen,&seg[..ulen])!=0{return}
- udp_deliver(src_ip,sp,dp,&seg[8..ulen]);
+ udp_deliver(src_ip,sp,OUR_IP,dp,&seg[8..ulen]);
 }
-fn udp_deliver(src_ip:u32,src_port:u16,dst_port:u16,data:&[u8]){
+fn udp_addr_match(bound:u32,dst:u32)->bool{
+ if bound==0||bound==dst{return true}
+ /* A socket bound to our address takes wire unicast and broadcast, but not
+    loopback traffic aimed at 127/8. */
+ bound==OUR_IP&&dst>>24!=127
+}
+fn udp_deliver(src_ip:u32,src_port:u16,dst_ip:u32,dst_port:u16,data:&[u8]){
  for i in 0..MAX_UDP{
   let mut s=UDPS[i].lock();
-  if !s.used||s.lport!=dst_port||(s.laddr!=0&&s.laddr!=OUR_IP){continue}
+  if !s.used||s.lport!=dst_port||!udp_addr_match(s.laddr,dst_ip){continue}
   if s.connected&&!(s.raddr==src_ip&&s.rport==src_port){continue}
   if s.rxn==UDPQ{continue}
   let slot=(s.rxhead+s.rxn)%UDPQ;
@@ -297,8 +311,8 @@ pub fn udp_peername(id:u8)->Result<(u32,u16),i64>{
 pub const MAX_TCP:usize=8;
 const TCP_RCV_CAP:usize=8192;const TCP_SND_CAP:usize=4096;
 const SYN:u8=0x02;const ACK:u8=0x10;const FIN:u8=0x01;const RST:u8=0x04;const PSH:u8=0x08;
-#[derive(Clone,Copy,PartialEq)]enum TcpState{Closed,SynSent,Established,FinWait1,FinWait2,CloseWait,LastAck,TimeWait}
-struct TcpConn{
+#[derive(Clone,Copy,PartialEq)]enum TcpState{Closed,SynSent,Listen,SynRcvd,Established,FinWait1,FinWait2,CloseWait,LastAck,TimeWait}
+#[derive(Clone,Copy)]struct TcpConn{
  used:bool,state:TcpState,
  laddr:u32,lport:u16,rip:u32,rport:u16,
  dmac:[u8;6],
@@ -314,6 +328,53 @@ impl TcpConn{
  fn window(&self)->u16{(TCP_RCV_CAP-self.wlen)as u16}
 }
 static TCPS:[SpinLock<TcpConn>;MAX_TCP]=[const{SpinLock::new(TcpConn::new())};MAX_TCP];
+/* Server-side accept queues: one pending-child list plus a waiter queue per
+   connection slot. Only slots in Listen state use them. Kept outside
+   TcpConn so the connection table stays Copy. */
+const ACCEPTQ:usize=4;
+static TCP_ACCEPTQ:[SpinLock<[Option<u8>;ACCEPTQ]>;MAX_TCP]=[const{SpinLock::new([None;ACCEPTQ])};MAX_TCP];
+static TCP_ACCEPTWQ:[WaitQueue;MAX_TCP]=[const{WaitQueue::new()};MAX_TCP];
+fn acceptq_push(listener:usize,child:u8)->bool{
+ let mut q=TCP_ACCEPTQ[listener].lock();
+ if let Some(slot)=q.iter_mut().find(|s|s.is_none()){*slot=Some(child);true}else{false}
+}
+fn acceptq_pop(listener:usize)->Option<u8>{
+ let mut q=TCP_ACCEPTQ[listener].lock();
+ match q.iter_mut().find(|s|s.is_some()){Some(slot)=>{let c=slot.take();*slot=None;c},None=>None}
+}
+fn acceptq_len(listener:usize)->usize{TCP_ACCEPTQ[listener].lock().iter().filter(|s|s.is_some()).count()}
+fn acceptq_clear(listener:usize){*TCP_ACCEPTQ[listener].lock()=[None;ACCEPTQ];}
+/* Loopback delivery: frames for 127/8 or our own address never reach the
+   wire. They are queued here and dispatched from poll(), which runs without
+   connection locks held, so a looped-back segment can never deadlock on the
+   sender's own slot lock. The source is presented as the destination, so
+   both directions of a loopback connection use one consistent address. */
+const LOOPQ:usize=8;const LOOP_SEGSZ:usize=1536;
+#[derive(Clone,Copy)]enum LoopItem{Empty,Udp{src:u32,sp:u16,dp:u16,len:usize,data:[u8;DGRAM_MAX]},Tcp{src:u32,dst:u32,len:usize,seg:[u8;LOOP_SEGSZ]}}
+struct LoopBuf{items:[LoopItem;LOOPQ],head:usize,count:usize}
+impl LoopBuf{const fn new()->Self{Self{items:[LoopItem::Empty;LOOPQ],head:0,count:0}}}
+static LOOPBACK:SpinLock<LoopBuf>=SpinLock::new(LoopBuf::new());
+fn is_loopback(ip:u32)->bool{ip>>24==127||ip==OUR_IP}
+fn loopback_push(item:LoopItem)->Result<(),i64>{
+ let mut q=LOOPBACK.lock();
+ if q.count>=LOOPQ{return Err(errno::ENOMEM)}
+ let slot=(q.head+q.count)%LOOPQ;
+ q.items[slot]=item;
+ q.count+=1;
+ Ok(())
+}
+fn loopback_udp(src:u32,sp:u16,dp:u16,data:&[u8])->Result<(),i64>{
+ if data.len()>DGRAM_MAX{return Err(errno::EMSGSIZE)}
+ let mut buf=[0u8;DGRAM_MAX];
+ buf[..data.len()].copy_from_slice(data);
+ loopback_push(LoopItem::Udp{src,sp,dp,len:data.len(),data:buf})
+}
+fn loopback_tcp(src:u32,dst:u32,seg:&[u8])->Result<(),i64>{
+ if seg.len()>LOOP_SEGSZ{return Err(errno::EMSGSIZE)}
+ let mut buf=[0u8;LOOP_SEGSZ];
+ buf[..seg.len()].copy_from_slice(seg);
+ loopback_push(LoopItem::Tcp{src,dst,len:seg.len(),seg:buf})
+}
 fn tcp_emit(t:&TcpConn,seq:u32,ack:u32,flags:u8,payload:&[u8]){
  let len=20+payload.len();
  let mut seg=[0u8;1500];
@@ -327,6 +388,12 @@ fn tcp_emit(t:&TcpConn,seq:u32,ack:u32,flags:u8,payload:&[u8]){
  seg[20..len].copy_from_slice(payload);
  let c=csum_pseudo(OUR_IP,t.rip,IP_TCP,len,&seg[..len]);
  seg[16..18].copy_from_slice(&c.to_be_bytes());
+ /* Loopback and self sends never reach the wire; they re-enter through
+    poll() so arrival processing never runs under a connection lock. */
+ if is_loopback(t.rip){
+  let _=loopback_tcp(t.rip,t.rip,&seg[..len]);
+  return;
+ }
  let _=ip_emit(IP_TCP,t.rip,&t.dmac,&seg[..len]);
 }
 fn tcp_ack(t:&TcpConn){tcp_emit(t,t.snd_nxt,t.rcv_nxt,ACK,&[])}
@@ -370,17 +437,51 @@ pub fn tcp_open()->Result<u8,i64>{
  }
  Err(errno::EMFILE)
 }
+/* Resets a half-open or queued server-side connection by slot. */
+fn tcp_reset_child(ci:usize){
+ if ci>=MAX_TCP{return}
+ let (rip,rport,lport,dmac,sn,rn)={
+  let mut c=TCPS[ci].lock();
+  if !c.used{return}
+  let v=(c.rip,c.rport,c.lport,c.dmac,c.snd_nxt,c.rcv_nxt);
+  c.reset=true;c.state=TcpState::Closed;
+  v
+ };
+ let mut tmp=TcpConn::new();
+ tmp.lport=lport;tmp.rport=rport;tmp.rip=rip;tmp.dmac=dmac;
+ tcp_emit(&tmp,sn,rn,RST|ACK,&[]);
+ *TCPS[ci].lock()=TcpConn::new();
+}
 pub fn tcp_close(id:u8){
  let i=id as usize;
  if i>=MAX_TCP{return}
+ /* A listener goes away at once; queued children are reset so no slot
+    leaks. An embryonic connection is reset outright. */
  {
+  let (used,state)={let t=TCPS[i].lock();(t.used,t.state)};
+  if !used{return}
+  if state==TcpState::Listen{
+   loop{
+    match acceptq_pop(i){
+     Some(child)=>tcp_reset_child(child as usize),
+     None=>break,
+    }
+   }
+   *TCPS[i].lock()=TcpConn::new();
+   return;
+  }
+  if state==TcpState::SynRcvd{
+   tcp_reset_child(i);
+   return;
+  }
+ }
   let mut t=TCPS[i].lock();
   if !t.used{return}
   if !t.fin_sent&&!t.reset&&matches!(t.state,TcpState::Established|TcpState::CloseWait){
    t.fin_pending=true;
    tcp_flush(&mut t);
   }
- }
+  drop(t);
  let mut round=0u32;
  loop{
   poll();
@@ -398,6 +499,16 @@ pub fn tcp_bind(id:u8,ip:u32,port:u16)->Result<(),i64>{
  if i>=MAX_TCP{return Err(errno::EBADF)}
  let mut t=TCPS[i].lock();
  if !t.used{return Err(errno::EBADF)}
+ /* A bound, listening or connected socket cannot be rebound. */
+ if t.state!=TcpState::Closed{return Err(errno::EINVAL)}
+ if port!=0{
+  for j in 0..MAX_TCP{
+   if j==i{continue}
+   let o=TCPS[j].lock();
+   if !o.used||o.lport!=port{continue}
+   if o.laddr==0||ip==0||o.laddr==ip{return Err(errno::EADDRINUSE)}
+  }
+ }
  t.laddr=ip;
  t.lport=port;
  Ok(())
@@ -405,13 +516,65 @@ pub fn tcp_bind(id:u8,ip:u32,port:u16)->Result<(),i64>{
 fn tcp_autobind(t:&mut TcpConn,id:usize){
  while t.lport==0{
   let p=((EPHEMERAL.fetch_add(1,Ordering::Relaxed)&0x3fff)as u16).wrapping_add(0xC000);
-  if p>=0xC000&&!port_in_use(id,p){t.lport=p;}
+  if p>=0xC000&&!port_in_use(id,p)&&!tcp_port_in_use(id,p){t.lport=p;}
  }
+}
+fn tcp_port_in_use(skip:usize,port:u16)->bool{
+ for j in 0..MAX_TCP{
+  if j==skip{continue}
+  let o=TCPS[j].lock();
+  if o.used&&o.lport==port{return true}
+ }
+ false
+}
+/* Marks a bound socket listening. An unbound socket is auto-bound to the
+   wildcard first, matching Linux; re-listening is idempotent. */
+pub fn tcp_listen(id:u8)->Result<(),i64>{
+ let i=id as usize;
+ if i>=MAX_TCP{return Err(errno::EBADF)}
+ let mut t=TCPS[i].lock();
+ if !t.used{return Err(errno::EBADF)}
+ match t.state{
+  TcpState::Closed=>{
+   if t.lport==0{t.laddr=0;tcp_autobind(&mut t,i);}
+   t.state=TcpState::Listen;
+   t.rip=0;t.rport=0;
+   acceptq_clear(i);
+   Ok(())
+  }
+  TcpState::Listen=>Ok(()),
+  _=>Err(errno::EINVAL),
+ }
+}
+/* Takes the next completed connection. Blocks while the queue is empty. */
+pub fn tcp_accept(id:u8,nonblock:bool)->Result<u8,i64>{
+ let i=id as usize;
+ if i>=MAX_TCP{return Err(errno::EBADF)}
+ loop{
+  {
+   let t=TCPS[i].lock();
+   if !t.used{return Err(errno::EBADF)}
+   if t.state!=TcpState::Listen{return Err(errno::EINVAL)}
+  }
+  if let Some(child)=acceptq_pop(i){return Ok(child)}
+  if nonblock{return Err(errno::EAGAIN)}
+  let registered=TCP_ACCEPTWQ[i].register().is_ok();
+  if acceptq_len(i)>0{continue}
+  if !registered{return Err(errno::EAGAIN)}
+  crate::task::block_current();
+ }
+}
+pub fn tcp_pending(id:u8)->bool{
+ let i=id as usize;
+ if i>=MAX_TCP{return false}
+ let t=TCPS[i].lock();
+ t.used&&t.state==TcpState::Listen&&acceptq_len(i)>0
 }
 pub fn tcp_connect(id:u8,ip:u32,port:u16)->Result<(),i64>{
  let i=id as usize;
  if i>=MAX_TCP{return Err(errno::EBADF)}
- let mac=mac_for(ip)?;
+ /* Loopback needs no ARP: the peer is local by construction. */
+ let mac=if is_loopback(ip){[0;6]}else{mac_for(ip)?};
  {
   let mut t=TCPS[i].lock();
   if !t.used{return Err(errno::EBADF)}
@@ -528,10 +691,50 @@ pub fn tcp_local(id:u8)->Result<(u32,u16),i64>{
 pub fn tcp_peername(id:u8)->Result<(u32,u16),i64>{
  let t=TCPS[id as usize].lock();
  if !t.used{return Err(errno::EBADF)}
- if t.state==TcpState::Closed{return Err(errno::ENOTCONN)}
+ if !matches!(t.state,TcpState::SynRcvd|TcpState::Established|TcpState::FinWait1|TcpState::FinWait2|TcpState::CloseWait|TcpState::LastAck){return Err(errno::ENOTCONN)}
  Ok((t.rip,t.rport))
 }
-fn tcp_input(src_ip:u32,seg:&[u8],src_mac:[u8;6]){
+fn tcp_listen_match(dp:u16,dst:u32)->Option<usize>{
+ for i in 0..MAX_TCP{
+  let t=TCPS[i].lock();
+  if t.used&&t.state==TcpState::Listen&&t.lport==dp&&(t.laddr==0||t.laddr==dst){return Some(i)}
+ }
+ None
+}
+/* Allocates an embryonic server-side connection for an incoming SYN. */
+fn tcp_syn_rcvd(listener:usize,src_ip:u32,sp:u16,dp:u16,seq:u32,window:u16,src_mac:[u8;6])->Result<(),i64>{
+ if acceptq_len(listener)>=ACCEPTQ{return Err(errno::ENOMEM)}
+ let mut child:Option<usize>=None;
+ for j in 0..MAX_TCP{
+  let mut c=TCPS[j].lock();
+  if !c.used{
+   let (lladdr,_)={let l=TCPS[listener].lock();(l.laddr,l.lport)};
+   *c=TcpConn::new();
+   c.used=true;c.state=TcpState::SynRcvd;
+   c.laddr=lladdr;c.lport=dp;c.rip=src_ip;c.rport=sp;c.dmac=src_mac;
+   let isn=0x5000_0000u32^(ticks()as u32).wrapping_mul(0x0100_0101).wrapping_add(j as u32);
+   c.snd_una=isn;c.snd_nxt=isn.wrapping_add(1);
+   c.rcv_nxt=seq.wrapping_add(1);
+   c.peer_window=window;{let w=c.window();c.adv_window=w;}
+   c.retrans_at=ticks()+RTO_TICKS;c.retrans_budget=0;
+   child=Some(j);
+   break;
+  }
+ }
+ let j=match child{Some(v)=>v,None=>return Err(errno::EMFILE)};
+ let snap=*TCPS[j].lock();
+ tcp_emit(&snap,snap.snd_una,snap.rcv_nxt,SYN|ACK,&[]);
+ Ok(())
+}
+fn tcp_send_rst(dp:u16,sp:u16,dst_ip:u32,src_mac:[u8;6],seq:u32,ack:u32,has_ack:bool){
+ /* Refusing a connection: RST|ACK acknowledging the SYN. Anything else is
+    ignored to avoid reset wars. */
+ let mut tmp=TcpConn::new();
+ tmp.lport=dp;tmp.rport=sp;tmp.rip=dst_ip;tmp.dmac=src_mac;
+ let (s,a)=if has_ack{(ack,0)}else{(0,seq.wrapping_add(1))};
+ tcp_emit(&tmp,s,a,RST|ACK,&[]);
+}
+fn tcp_input(src_ip:u32,dst_ip:u32,seg:&[u8],src_mac:[u8;6]){
  if seg.len()<20{return}
  let sp=be16(seg,0);let dp=be16(seg,2);
  let seq=be32(seg,4);let ack=be32(seg,8);
@@ -545,6 +748,39 @@ fn tcp_input(src_ip:u32,seg:&[u8],src_mac:[u8;6]){
   if !guard.used||guard.lport!=dp||guard.rip!=src_ip||guard.rport!=sp{continue}
   let t=&mut *guard;
   t.dmac=src_mac;
+  /* Server-side embryonic connection. */
+  if t.state==TcpState::SynRcvd{
+   if flags&RST!=0{t.reset=true;t.state=TcpState::Closed;return}
+   if flags&SYN!=0&&flags&ACK==0{
+    /* Retransmitted SYN: the SYN-ACK was lost. Resend it. */
+    let snap=*t;
+    tcp_emit(&snap,snap.snd_una,snap.rcv_nxt,SYN|ACK,&[]);
+    return;
+   }
+   if flags&ACK!=0&&flags&SYN==0&&ack==t.snd_nxt{
+    t.snd_una=ack;
+    t.state=TcpState::Established;
+    t.retrans_at=0;
+    tcp_ack(t);
+    let child=i as u8;
+    drop(guard);
+    /* Find the listener that owns this port and queue the child. */
+    let mut li:Option<usize>=None;
+    for l in 0..MAX_TCP{
+     let o=TCPS[l].lock();
+     if o.used&&o.state==TcpState::Listen&&o.lport==dp&&(o.laddr==0||o.laddr==dst_ip){li=Some(l);break}
+    }
+    match li{
+     Some(l)=>{
+      if acceptq_push(l,child){TCP_ACCEPTWQ[l].wake_all();}
+      else{tcp_reset_child(child as usize);}
+     }
+     None=>tcp_reset_child(child as usize),
+    }
+    return;
+   }
+   return;
+  }
   if flags&RST!=0{
    t.reset=true;
    t.state=TcpState::Closed;
@@ -616,6 +852,16 @@ fn tcp_input(src_ip:u32,seg:&[u8],src_mac:[u8;6]){
   }
   return;
  }
+ /* No connection owns this segment. An initial SYN goes to a listener, or
+    is refused with RST so connect() reports ECONNREFUSED instead of timing
+    out. Anything else is ignored. */
+ if flags&SYN!=0&&flags&ACK==0{
+  if let Some(l)=tcp_listen_match(dp,dst_ip){
+   let _=tcp_syn_rcvd(l,src_ip,sp,dp,seq,window as u16,src_mac);
+  }else{
+   tcp_send_rst(dp,sp,dst_ip,src_mac,seq,ack,false);
+  }
+ }
 }
 fn tcp_retransmit(t:&mut TcpConn){
  let now=ticks();
@@ -631,6 +877,9 @@ fn tcp_retransmit(t:&mut TcpConn){
  match t.state{
   TcpState::SynSent=>{
    tcp_emit(t,t.snd_una,0,SYN,&[]);
+  }
+  TcpState::SynRcvd=>{
+   tcp_emit(t,t.snd_una,t.rcv_nxt,SYN|ACK,&[]);
   }
   TcpState::Established|TcpState::CloseWait|TcpState::FinWait1|TcpState::FinWait2|TcpState::LastAck=>{
    let inflight=t.snd_nxt.wrapping_sub(t.snd_una)as usize;
@@ -652,7 +901,7 @@ fn tcp_tick(){
  for i in 0..MAX_TCP{
   let mut t=TCPS[i].lock();
   if !t.used||t.reset{continue}
-  let active=matches!(t.state,TcpState::SynSent|TcpState::Established|TcpState::FinWait1|TcpState::FinWait2|TcpState::CloseWait|TcpState::LastAck);
+  let active=matches!(t.state,TcpState::SynSent|TcpState::SynRcvd|TcpState::Established|TcpState::FinWait1|TcpState::FinWait2|TcpState::CloseWait|TcpState::LastAck);
   if active&&now>=t.retrans_at{tcp_retransmit(&mut t);}
  }
 }
@@ -682,8 +931,33 @@ fn dispatch_ip(frame:&[u8]){
  match proto{
   IP_ICMP=>icmp_input(src,&[frame[6],frame[7],frame[8],frame[9],frame[10],frame[11]],payload),
   IP_UDP=>udp_input(src,payload),
-  IP_TCP=>tcp_input(src,payload,[frame[6],frame[7],frame[8],frame[9],frame[10],frame[11]]),
+  IP_TCP=>tcp_input(src,dst,payload,[frame[6],frame[7],frame[8],frame[9],frame[10],frame[11]]),
   _=>{}
+ }
+}
+/* Drains queued loopback segments with no locks held. */
+fn poll_loopback(){
+ loop{
+  let (head,count)={let q=LOOPBACK.lock();(q.head,q.count)};
+  if count==0{break}
+  let item={let q=LOOPBACK.lock();q.items[head]};
+  {
+   let mut q=LOOPBACK.lock();
+   q.items[head]=LoopItem::Empty;
+   q.head=(head+1)%LOOPQ;
+   q.count-=1;
+  }
+  match item{
+   LoopItem::Empty=>break,
+   LoopItem::Udp{src,sp,dp,len,data}=>{
+    let n=core::cmp::min(len,DGRAM_MAX);
+    udp_deliver(src,sp,src,dp,&data[..n]);
+   }
+   LoopItem::Tcp{src,dst,len,seg}=>{
+    let n=core::cmp::min(len,LOOP_SEGSZ);
+    tcp_input(src,dst,&seg[..n],[0;6]);
+   }
+  }
  }
 }
 fn dispatch(frame:&[u8]){
@@ -699,9 +973,10 @@ fn dispatch(frame:&[u8]){
    and never held across nested polls. */
 pub fn poll(){
  if !crate::driver::virtio_net::ready(){return}
- let mut frame=[0u8;2048];
- while let Some(len)=crate::driver::virtio_net::poll_frame(&mut frame){
-  dispatch(&frame[..len]);
+  let mut frame=[0u8;2048];
+  while let Some(len)=crate::driver::virtio_net::poll_frame(&mut frame){
+   dispatch(&frame[..len]);
+  }
+  poll_loopback();
+  tcp_tick();
  }
- tcp_tick();
-}

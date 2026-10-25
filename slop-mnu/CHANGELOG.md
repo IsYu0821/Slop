@@ -1,3 +1,40 @@
+## 0.78.0 - 2026-10-26
+- `AF_UNIX` datagrams carry addresses: `bind` (`EADDRINUSE`/`EINVAL`), unconnected-`send` `ENOTCONN`, `sendto` to unknown paths `ENOENT`, `recvfrom` source reporting (empty for unbound senders), connected `send`/`recv` with `getpeername`, message-boundary preservation, abstract names (leading NUL) and `socketpair(SOCK_DGRAM)` as a connected pair.
+- Per-socket datagram inbox (8 x 4 KiB messages with sender paths) blocking on the existing wait queues with `EAGAIN` for nonblocking sockets; `listen`/`accept` on datagrams report `EOPNOTSUPP` as on Linux.
+- `sockaddr_un` handling keeps abstract names raw so they never collide with filesystem paths; oversize datagrams report `EMSGSIZE` (guest caps at 4 KiB; the probe uses 300 KiB where Linux agrees).
+- Small ABI corrections: `NICE` is 134 (not 34, which is `PAUSE`) and `TIMES=100` now reaches the existing `sys_times` instead of `ENOSYS`.
+- Fixed an ext2 block leak: a failed `mkdir` (e.g. the `EEXIST` probe) released the inode but not the data block, because the cleanup called `truncate_file`, which refuses directories. The cleanup now frees directory blocks directly; the host `e2fsck` gate is clean and free counts account exactly.
+- The differential battery covers it with `DIFF_UNIXDG_OK` on native Linux and in the guest.
+
+## 0.77.0 - 2026-10-26
+- Real network servers in the guest: TCP passive open with `Listen`/`SynRcvd` states, per-listener accept queues, SYN/ACK handshake, RST refusal (`ECONNREFUSED`), retransmitted-SYN handling and listener-close resets.
+- Loopback transport for 127/8 and the guest's own address: TCP segments and UDP datagrams are delivered locally through a lock-free-to-callers in-kernel queue drained by `poll()`, with symmetric addressing so both directions and `getpeername`/`recvfrom` match Linux.
+- `listen`/`accept`/`accept4` now serve `AF_INET` (peer `sockaddr_in` reporting, `EINVAL` for non-listeners, `ENOTCONN` peername on listeners); `bind` rejects conflicts (`EADDRINUSE`) and rebinding (`EINVAL`); UDP `listen` stays `EOPNOTSUPP` as on Linux.
+- INET sockets are freed on last close/exit instead of leaking slots.
+- Cooperative-scheduler fix: blocking network waits yield regularly instead of starving the peer task they rendezvous with.
+- The differential battery covers it with `DIFF_TCPSRV_OK` (bind conflicts, refused connect, echo server, orderly EOF) and `DIFF_UDPLOOP_OK` over `127.0.0.1`.
+
+## 0.76.0 - 2026-10-25
+- File plumbing for real software: `copy_file_range` (explicit/current offsets, `EINVAL` for pipes and flags, `EISDIR` for directories), `splice` (one side must be a pipe, `ESPIPE` for pipe+offset, `EINVAL` otherwise), `tee` (pipe-to-pipe duplication without consuming, flags ignored) and `fallocate` mode 0 plus `FALLOC_FL_KEEP_SIZE` and `FALLOC_FL_PUNCH_HOLE` over a new capacity-reserving `vfs::reserve_ino`.
+- New `pipe::peek` primitive backs `tee` without waking writers or freeing space.
+- Dispatch cleanup: live arms replace stale `ENOSYS` entries and unreachable duplicate arms for working calls are removed.
+- The differential battery covers all four calls byte-for-byte with `DIFF_CFR_OK`, `DIFF_SPLICE_OK`, `DIFF_TEE_OK` and `DIFF_FALLOC_OK` on native Linux and in the guest.
+
+## 0.75.0 - 2026-10-24
+- signalfd now reports child stop, continue and exit with Linux contents: `CLD_STOPPED=5` with the stop signal, `CLD_CONTINUED=6` with `SIGCONT`, `CLD_EXITED=1` with the exit code and `CLD_KILLED=2` with the terminating signal, plus the child pid and uid in a full 128-byte `signalfd_siginfo`.
+- One coalesced `SIGCHLD` slot with first-wins semantics backs signalfd, `sigwaitinfo`/`sigtimedwait` and handler delivery: consuming one path never consumes a child task state, and `wait4`/`waitid` never consume the pending bit, so read-then-wait and wait-then-read both observe the sequence.
+- `SA_NOCLDSTOP` (even with `SIG_DFL`) suppresses stop/continue generation without affecting `waitpid`/`waitid` observation; the exit event still arrives.
+- `signalfd4` dereferences the user mask, honors `SFD_NONBLOCK`/`SFD_CLOEXEC` and reprograms an existing fd; short reads fail `EINVAL`, empty nonblocking reads fail `EAGAIN`, blocking reads wait; `poll`/`select`/`epoll` follow `pending & mask`, and `poll` rechecks until its timeout instead of sleeping once.
+- `waitid` reports `CLD_STOPPED=5` and `CLD_KILLED` for signaled children and accepts `WCONTINUED=8`; `sigtimedwait` returns the stored child pid/uid/status/code for `SIGCHLD`.
+- The differential battery covers all of it with `DIFF_SIGNALFD_STOP_OK` and `DIFF_SIGNALFD_NOCLDSTOP_OK` on native Linux and in the guest.
+
+## 0.74.0 - 2026-10-24
+- Added stopped/continued job control: a `Stopped` scheduler state for `SIGSTOP`/`SIGTSTP`/`SIGTTIN`/`SIGTTOU` with the default disposition, `WIFSTOPPED` with `WUNTRACED` and `WIFCONTINUED` with `WCONTINUED` in `wait4`, `CLD_STOPPED`/`CLD_CONTINUED` in `waitid`, and `SIGCHLD` on stop and continue unless `SA_NOCLDSTOP`.
+- Added the floating-point state to the signal `ucontext_t`: the 512-byte FXSAVE area with the SSE registers at offset 160, `MXCSR` at its reset value and `fpregs` pointing at the area, round-tripped through `rt_sigreturn`.
+- User SSE registers now survive system calls: the syscall entry parks them in the running task's per-task FPU area and restores them before `iretq`, so handlers observe the interrupted registers and their edits take effect.
+- Fixed `pending()` masking `SIGKILL` and `SIGSTOP` out of the deliverable set, so neither was ever delivered through the normal path.
+- The differential battery covers both with `DIFF_STOP_OK` and `DIFF_FP_OK` on native Linux and in the guest.
+
 ## 0.71.0 - 2026-10-22
 - Added the vector system call entry point, the page of code Linux gives every program so it can read the clock without entering the kernel. The page carries the entry points `__vdso_clock_gettime`, `__vdso_gettimeofday`, `__vdso_time` and `__vdso_getcpu`, the same names Linux uses, and the auxiliary vector points at it, so the C library finds them in the dynamic symbol table and uses them.
 - The entry point reads the time from a shared page that the kernel keeps up to date: the rate of the time stamp counter, the value of the counter at the last update, and the monotonic and the wall clock at that moment. The page is read under a sequence lock, so a program either sees a complete update or the one that follows it. The page is the same physical frame in every process, so the kernel writes it without knowing which program runs.

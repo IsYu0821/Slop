@@ -15,7 +15,7 @@ const VIRTIO_BLK_T_OUT:u32=1;
 struct Blk{ready:bool,transport:Transport,capacity:u64,qsize:usize}
 static BLK:IrqSpinLock<Blk>=IrqSpinLock::new(Blk{ready:false,transport:Transport::legacy(0),capacity:0,qsize:0});
 
-const MAX_Q:usize=128;
+const MAX_Q:usize=256;
 const RING_BYTES:usize=12288;
 #[repr(C,align(4096))]struct Rings([u8;RING_BYTES]);
 static mut RING:Rings=Rings([0;RING_BYTES]);
@@ -78,23 +78,36 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
   desc_set(r,size,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
   desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
   desc_set(r,size,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
-  // The available ring.
-  let ai=avail_idx(r,size).read_volatile();
-  avail_slot(r,size,ai as usize).write_volatile(0);
-  core::sync::atomic::compiler_fence(Ordering::SeqCst);
-  avail_idx(r,size).write_volatile(ai.wrapping_add(1));
-  core::sync::atomic::compiler_fence(Ordering::SeqCst);
-  t.notify(0);
-  // Wait for the device to consume the request.
-  let start=used_idx(r,size).read_volatile();
-  let mut used=start;
-  for _ in 0..100000{
-   used=used_idx(r,size).read_volatile();
-   if used!=start{break;}
+  // Queue one attempt and wait for its completion. The device side runs
+  // while the vCPU is outside the guest, so halt regularly to hand the CPU
+  // back instead of spinning a fixed count that can expire first under TCG.
+  // Sector reads and writes are idempotent, so a bounded re-ring on a
+  // missed completion is safe.
+  let mut attempt=0;
+  loop{
+   let ai=avail_idx(r,size).read_volatile();
+   avail_slot(r,size,ai as usize).write_volatile(0);
+   core::sync::atomic::compiler_fence(Ordering::SeqCst);
+   avail_idx(r,size).write_volatile(ai.wrapping_add(1));
+   core::sync::atomic::compiler_fence(Ordering::SeqCst);
+   t.notify(0);
+   let start=used_idx(r,size).read_volatile();
+   let mut used=start;
+   let mut round=0u32;
+   while used==start&&round<20000{
+    used=used_idx(r,size).read_volatile();
+    if used!=start{break}
+    round+=1;
+    for _ in 0..20000{core::hint::spin_loop();}
+    if round%8==7{unsafe{core::arch::asm!("sti","hlt","cli",options(nomem,nostack))};}
+   }
+   if used!=start{break}
+   attempt+=1;
+   if attempt>=3{return Err(crate::errno::EIO)}
   }
-  if used==start{return Err(crate::errno::EIO)}
-  let _=used_entry(r,size,used.wrapping_sub(1)as usize);
-  if (BLK_STATUS.0[0]as*const u8).read_volatile()!=0{return Err(crate::errno::EIO)}
+  let _=used_entry(r,size,used_idx(r,size).read_volatile().wrapping_sub(1)as usize);
+  let sb=unsafe{core::ptr::addr_of!(BLK_STATUS.0[0]).read_volatile()};
+  if sb!=0{return Err(crate::errno::EIO)}
  }
  Ok(())
 }
@@ -136,6 +149,5 @@ pub fn read_sector(sector:u64,dst:&mut [u8])->Result<(),i64>{
 pub fn write_sector(sector:u64,src:&[u8])->Result<(),i64>{
  if src.len()<512{return Err(crate::errno::EINVAL)}
  unsafe{DATA.0[..512].copy_from_slice(&src[..512]);}
- do_request(VIRTIO_BLK_T_OUT,sector)?;
- Ok(())
+ match do_request(VIRTIO_BLK_T_OUT,sector){Ok(())=>Ok(()),Err(e)=>Err(e)}
 }

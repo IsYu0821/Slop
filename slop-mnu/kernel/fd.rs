@@ -107,13 +107,85 @@ fn release_inner(id:u32,closed:bool){
  if closed{if let OpenKind::Inode(n)=kind{crate::record_lock::on_close(crate::task::current_pid(),n.ino);}}
  if !last{return}
  crate::flock::release(id);crate::record_lock::release_ofd(id);
- match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),_=>{}}
+ match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),OpenKind::Socket(_)=>crate::socket::close_by_id(id),_=>{}}
 }
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
+/* Reprograms a signalfd mask (signalfd(fd, mask) with a valid fd). */
+pub fn signalfd_set_mask(id:u32,mask:u64){if let Some(f)=OPEN.lock()[id as usize].as_mut(){if let OpenKind::SignalFd(m)=&mut f.kind{*m=mask;}}}
+/* Readiness for poll/select/epoll: a signalfd is readable when any masked
+   signal is pending in the calling process. */
+pub fn signalfd_readable(mask:u64)->bool{crate::task::with_current_process(|p|p.pending&mask!=0).unwrap_or(false)}
 /* Per-open-file status flags (O_APPEND/O_NONBLOCK), shared by dup and fork. */
 pub fn flags(id:u32)->u32{OPEN.lock()[id as usize].map(|f|f.flags).unwrap_or(0)}
 pub fn flags_set(id:u32,set:u32,clear:u32){if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.flags=(f.flags|(set&STATUS_MASK))&!(clear&STATUS_MASK)}}
 pub fn is_nonblock(id:u32)->bool{flags(id)&O_NONBLOCK!=0}
+/* Linux signalfd_siginfo: 128 bytes, signo@0 errno@4 code@8 pid@12 uid@16
+   fd@20 tid@24 band@28 overrun@32 trapno@36 status@40 int@44 ptr@48 ... */
+fn signalfd_encode(dst:&mut [u8],signo:u32,errno_:i32,code:i32,pid:u32,uid:u32,status:i32,intval:i32,ptrval:u64){
+ let mut b=[0u8;128];
+ b[0..4].copy_from_slice(&signo.to_ne_bytes());
+ b[4..8].copy_from_slice(&errno_.to_ne_bytes());
+ b[8..12].copy_from_slice(&code.to_ne_bytes());
+ b[12..16].copy_from_slice(&pid.to_ne_bytes());
+ b[16..20].copy_from_slice(&uid.to_ne_bytes());
+ /* ssi_fd/si_tid/si_band/overrun/trapno stay zero: no kernel pointers leak. */
+ b[40..44].copy_from_slice(&status.to_ne_bytes());
+ b[44..48].copy_from_slice(&intval.to_ne_bytes());
+ b[48..56].copy_from_slice(&ptrval.to_ne_bytes());
+ dst[..128].copy_from_slice(&b);
+}
+/* Reads one queued signal in the signalfd mask with Linux shared-pending
+   semantics: the same pending bit backs signalfd, sigwaitinfo/sigtimedwait
+   and handler delivery. Consuming here clears the bit (and the stored
+   SIGCHLD status / one RT queue entry) but leaves child task states alone,
+   so wait4/waitid still reap; a wait never clears the bit, so a later
+   signalfd read still reports. First queued event wins while pending. */
+fn signalfd_read(mask:u64,dst:&mut[u8],id:u32)->Result<usize,i64>{
+ if dst.len()<128{return Err(errno::EINVAL)}
+ loop{
+  let found=crate::task::with_current_process(|p|{
+   let m=p.pending&mask;
+   if m==0{return None}
+   let sig=(m.trailing_zeros()as i32)+1;
+   let (code,pid,uid,status,intval,ptrval)=if sig==crate::signal::SIGCHLD{
+    /* Child-status reports use the stored event, not the generic slots. */
+    (p.sch_code,p.sch_pid,p.sch_uid,p.sch_status,0,0u64)
+   }else if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    let v=if p.rt_len[i]>0{p.rt_value[i][0]}else{0};
+    (p.si_code[sig as usize],p.pending_from[sig as usize],0,v as i32,v as i32,v)
+   }else{
+    let c=p.si_code[sig as usize];
+    let v=p.si_value[sig as usize];
+    /* Plain kill reports SI_USER(0); sigqueue reports SI_QUEUE with value. */
+    if c==crate::signal::SI_QUEUE{(c,p.pending_from[sig as usize],0,v as i32,v as i32,v)}
+    else{(c,p.pending_from[sig as usize],0,0,0,0)}
+   };
+   /* Consume: clear the bit, drop one RT instance (keeping the bit when
+      more remain), and reset the SIGCHLD slot. */
+   p.pending&=!crate::signal::bit(sig);
+   if sig==crate::signal::SIGCHLD{p.sch_code=0;p.sch_pid=0;p.sch_uid=0;p.sch_status=0;}
+   if crate::signal::is_rt(sig){
+    let i=crate::signal::rt_index(sig);
+    if p.rt_len[i]>0{
+     p.rt_len[i]-=1;
+     let n=p.rt_len[i] as usize;
+     let mut k=0;while k<n{p.rt_value[i][k]=p.rt_value[i][k+1];k+=1;}
+     if p.rt_len[i]>0{p.pending|=crate::signal::bit(sig);}
+    }
+   }
+   Some((sig as u32,code,pid,uid,status,intval,ptrval))
+  }).flatten();
+  if let Some((signo,code,pid,uid,status,intval,ptrval))=found{
+   signalfd_encode(dst,signo,0,code,pid,uid,status,intval,ptrval);
+   return Ok(128)
+  }
+  /* No masked signal queued: a handled out-of-mask signal interrupts. */
+  if crate::task::has_deliverable_signal(){return Err(errno::EINTR)}
+  if flags(id)&O_NONBLOCK!=0{return Err(errno::EAGAIN)}
+  crate::task::block_current();
+ }
+}
 /* Directory-walk cursor used by getdents64. */
 pub fn offset_get(id:u32)->u64{OPEN.lock()[id as usize].map(|f|f.offset).unwrap_or(0)}
 /* Positional variants used by pread64/pwrite64; they ignore the file offset. */
@@ -171,20 +243,9 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
   },
   OpenKind::Epoll=>Err(errno::EBADF),
   OpenKind::Inotify=>crate::inotify::read(id,dst),
-  OpenKind::SignalFd(mask)=>{
-    let pending=crate::task::with_current_process(|p|p.pending).unwrap_or(0);
-    let m=pending & mask;
-    if m==0{return Err(crate::errno::EAGAIN)}
-    let sig=(m.trailing_zeros() as i32)+1;
-    let _=crate::task::with_current_process(|p|{p.pending &= !crate::signal::bit(sig);});
-    let mut buf=[0u8;128];
-    buf[0..4].copy_from_slice(&sig.to_ne_bytes());
-    let pid=crate::task::current_pid() as i32;
-    buf[12..16].copy_from_slice(&pid.to_ne_bytes());
-    if dst.len()<128{return Err(crate::errno::EINVAL)}
-    dst[..128].copy_from_slice(&buf);
-    Ok(128)
-  },
+   OpenKind::SignalFd(mask)=>{
+     return signalfd_read(mask,dst,id)
+   },
   OpenKind::Netlink=>Ok(0),
   OpenKind::IoUring=>Err(crate::errno::EBADF),
   OpenKind::PidFd(_)=>Err(crate::errno::EBADF),

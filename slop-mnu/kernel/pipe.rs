@@ -33,6 +33,22 @@ pub fn read(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
   crate::task::block_current();
  }
 }
+/* Non-consuming reads for tee(2): reports the bytes that a read would
+   return without advancing the head, so the data stays queued. Writers are
+   not woken because no space is freed; readers sleep on readq like read. */
+pub fn peek(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
+ if dst.is_empty(){return Ok(0)}
+ loop{
+  let registered={let mut p=PIPES[id as usize].lock();
+   if p.len>0{let n=core::cmp::min(p.len,dst.len());for i in 0..n{dst[i]=p.buf[(p.head+i)%CAPACITY];}return Ok(n)}
+   if p.writers==0{return Ok(0)}
+   if nonblock{return Err(crate::errno::EAGAIN)}
+   p.readq.register().is_ok()};
+  if !registered{return Err(crate::errno::EAGAIN)}
+  if crate::task::has_deliverable_signal(){return Err(crate::errno::EINTR)}
+  crate::task::block_current();
+ }
+}
 /* Blocking writes: all bytes or an error; EPIPE when every reader has closed. */
 pub fn write(id:u8,src:&[u8],nonblock:bool)->Result<usize,i64>{
  let mut done=0usize;

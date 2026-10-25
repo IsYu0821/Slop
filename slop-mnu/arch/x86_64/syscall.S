@@ -27,6 +27,31 @@ syscall_entry:
        +64 r8 +72 rdx +80 rsi +88 rdi +96 rax(nr) +104 rcx +112 r11.
        Linux ABI: rax=nr, rdi,rsi,rdx,r10,r8,r9=args. SysV call has arg7 on stack. */
     mov %rsp, SYSCALL_FRAME(%rip)
+    /* The kernel uses XMM registers, so the user SSE file is parked in the
+       running task's FPU area on entry and restored on exit. The area is
+       per-task, so a task blocked inside a syscall keeps its registers while
+       another task runs. FXSAVE is avoided because it traps on several TCG
+       builds; the sixteen registers are moved directly. */
+    mov CURRENT_FPU(%rip), %r11
+    test %r11, %r11
+    jz .Lfpu_saved
+    movups %xmm0,0(%r11)
+    movups %xmm1,16(%r11)
+    movups %xmm2,32(%r11)
+    movups %xmm3,48(%r11)
+    movups %xmm4,64(%r11)
+    movups %xmm5,80(%r11)
+    movups %xmm6,96(%r11)
+    movups %xmm7,112(%r11)
+    movups %xmm8,128(%r11)
+    movups %xmm9,144(%r11)
+    movups %xmm10,160(%r11)
+    movups %xmm11,176(%r11)
+    movups %xmm12,192(%r11)
+    movups %xmm13,208(%r11)
+    movups %xmm14,224(%r11)
+    movups %xmm15,240(%r11)
+.Lfpu_saved:
     mov 96(%rsp), %rdi
     mov 88(%rsp), %rsi
     mov 80(%rsp), %rdx
@@ -69,6 +94,28 @@ syscall_entry:
     je .Lno_sigret
     mov SIGRET_VALUE(%rip), %rax
 .Lno_sigret:
+    /* The FPU area may have been updated by rt_sigreturn, so the exit
+       restores whatever the running task now owns. */
+    mov CURRENT_FPU(%rip), %r11
+    test %r11, %r11
+    jz .Lfpu_restored
+    movups 0(%r11),%xmm0
+    movups 16(%r11),%xmm1
+    movups 32(%r11),%xmm2
+    movups 48(%r11),%xmm3
+    movups 64(%r11),%xmm4
+    movups 80(%r11),%xmm5
+    movups 96(%r11),%xmm6
+    movups 112(%r11),%xmm7
+    movups 128(%r11),%xmm8
+    movups 144(%r11),%xmm9
+    movups 160(%r11),%xmm10
+    movups 176(%r11),%xmm11
+    movups 192(%r11),%xmm12
+    movups 208(%r11),%xmm13
+    movups 224(%r11),%xmm14
+    movups 240(%r11),%xmm15
+.Lfpu_restored:
     /* SYSRET loads RFLAGS from RAX, so a SYSRET return would replace the user
        flags with the syscall result. The return uses IRETQ instead: it
        restores RIP, CS, RFLAGS, RSP and SS and leaves RAX alone, which keeps

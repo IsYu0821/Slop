@@ -55,4 +55,43 @@ Driver facts (v0.66.0):
 - A split virtqueue starts with the descriptor table, followed by the available ring with its flags word, and the used ring at the next page boundary: the public virtio 1.0 specification. Implementer: opencode. Reviewer: pending. Tests: the block driver reads and writes a sector over both interfaces.
 
 
+Job-control and floating-point facts (v0.74.0):- A child stopped by `SIGSTOP`/`SIGTSTP`/`SIGTTIN`/`SIGTTOU` with the default disposition reports `WIFSTOPPED` with `WSTOPSIG` to `waitpid` with `WUNTRACED`=2 and `WIFCONTINUED` (status `0xffff`) to `waitpid` with `WCONTINUED`=8; `waitid` reports `CLD_STOPPED`=2 and `CLD_CONTINUED`=6 with `WSTOPPED`=2 and `WCONTINUED`=8: public Linux man-pages for `waitpid`/`waitid` and `sys/wait.h`. Implementer: opencode. Reviewer: pending. Tests: `DIFF_STOP_OK` in the differential battery forks, stops, continues and reaps.
+- The parent receives `SIGCHLD` when a child stops or continues unless the `SIGCHLD` disposition carries `SA_NOCLDSTOP`=1: public Linux man-pages for `sigaction`. Implementer: opencode. Reviewer: pending. Tests: the stopped parent wakes from `waitpid` without `EINTR`.
+- `SIGSTOP`=19 cannot be blocked, handled or ignored and `SIGCONT`=18 resumes a stopped task; with the default disposition `SIGCONT` is consumed, with a handler it is delivered: public Linux man-pages for `signal`. Implementer: opencode. Reviewer: pending. Tests: `raise(SIGSTOP)` parks the caller and `kill(pid,SIGCONT)` resumes it.
+- A pending `SIGKILL`/`SIGSTOP` ignores the signal mask: public Linux man-pages for `sigprocmask`. Implementer: opencode. Reviewer: pending. Tests: the self-stop test delivers with an empty mask and the `SIGKILL` self-termination still ends the caller.
+- The x86-64 `ucontext_t` ends with the 512-byte FXSAVE area; the sixteen SSE registers live at offset 160, `MXCSR` (`0x1f80`) at offset 24 and `fpregs` points at the area: public libc `ucontext_t`/`mcontext_t` description and the published FXSAVE layout. Implementer: opencode. Reviewer: pending. Tests: `DIFF_FP_OK` reads `fpregs`/`__fpregs_mem` in a `SA_SIGINFO` handler and round-trips an SSE pattern through `rt_sigreturn`.
+- The user SSE file survives system calls and context switches without `FXSAVE`/`FXRSTOR` traps: AMD64 architecture manual `MOVUPS` semantics and the TCG-friendly save area already used by the scheduler. Implementer: opencode. Reviewer: pending. Tests: the full acceptance, differential, BusyBox and heap batteries pass with the entry/exit save in place.
+
+
+signalfd facts (v0.75.0):
+- `signalfd_siginfo` is 128 bytes: `ssi_signo@0`, `ssi_errno@4`, `ssi_code@8`, `ssi_pid@12`, `ssi_uid@16`, `ssi_status@40`, `ssi_int@44`, `ssi_ptr@48`, remainder zeroed with no kernel pointers leaked: public `sys/signalfd.h` header layout, verified against the native header. Implementer: opencode. Reviewer: pending. Tests: `DIFF_SIGNALFD_STOP_OK` reads every field.
+- Child stop reports `SIGCHLD`/`CLD_STOPPED=5` with the stop signal, continue reports `CLD_CONTINUED=6` with `SIGCONT=18`, exit reports `CLD_EXITED=1` with the exit code, signal death reports `CLD_KILLED=2` with the terminating signal, `ssi_uid` is the child uid: native probe programs recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_SIGNALFD_STOP_OK` and the native-vs-guest differential comparison.
+- `SA_NOCLDSTOP` on `SIGCHLD` (even with `SIG_DFL`) suppresses stop/continue `SIGCHLD` generation but `waitpid`/`waitid` still report the states and the exit event still arrives: native probe with `SA_NOCLDSTOP`. Implementer: opencode. Reviewer: pending. Tests: `DIFF_SIGNALFD_NOCLDSTOP_OK`.
+- One pending `SIGCHLD` bit with first-wins coalescing backs signalfd, `sigwaitinfo`/`sigtimedwait` and handler delivery; consuming one never consumes a child task state and waiting never consumes the pending bit: native probes (stop-then-cont yields one read; two exits yield one read; wait-then-read and read-then-wait both observe). Implementer: opencode. Reviewer: pending. Tests: the differential signalfd battery.
+- `signalfd4(fd, mask, sizemask, flags)` dereferences the user mask with `sizemask==8`, honors `SFD_NONBLOCK`/`SFD_CLOEXEC`, reprograms an existing fd, returns `EINVAL` for short reads and `EAGAIN` for empty nonblocking reads; `poll`/`select`/`epoll` report readability exactly when `pending & mask != 0`, and `poll` rechecks until its timeout: public Linux man-pages. Implementer: opencode. Reviewer: pending. Tests: nonblocking/short-read checks and the poll-driven differential battery.
+- `waitid` reports `CLD_STOPPED=5` (not 2) and `CLD_KILLED` for signaled children, and accepts `WCONTINUED=8`: native `sys/wait.h` codes and the native probe. Implementer: opencode. Reviewer: pending. Tests: the differential battery plus `waitid` continued/exit paths.
+
+
+File plumbing facts (v0.76.0):
+- `copy_file_range` copies file to file with explicit offsets advanced by the moved length or with null offsets using the file positions; any flag reports `EINVAL`; length 0 returns 0; pipes/sockets report `EINVAL` and directories `EISDIR`: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_CFR_OK` in the differential battery.
+- `splice` requires a pipe on exactly one side (`EINVAL` otherwise), reports `ESPIPE` for a pipe side with a non-null offset, accepts `SPLICE_F_MOVE|NONBLOCK|MORE|GIFT` and rejects the rest with `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_SPLICE_OK`.
+- `tee` duplicates pipe content without consuming it, requires pipes on both sides (`EINVAL` otherwise) and ignores flags: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_TEE_OK`.
+- `fallocate` mode 0 extends with zeroed bytes, `FALLOC_FL_KEEP_SIZE` reserves without changing the size, `KEEP_SIZE|PUNCH_HOLE` zeroes the live range, unknown modes report `EOPNOTSUPP` and length 0 reports `EINVAL`: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_FALLOC_OK`.
+
+
+Network server facts (v0.77.0):
+- `listen` on an unbound socket auto-binds and succeeds, `listen(fd, -1)` succeeds, `accept` on a non-listening socket reports `EINVAL`, duplicate `bind` reports `EADDRINUSE`, refused `connect` reports `ECONNREFUSED`, `getpeername` on a listener reports `ENOTCONN`, `bind` on a connected socket reports `EINVAL`, and `listen` on `SOCK_DGRAM` reports `EOPNOTSUPP`: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_TCPSRV_OK` in the differential battery.
+- An unmatched SYN to a listening port completes the three-way handshake and queues the child for `accept`; without a listener the kernel resets so `connect` fails fast: native handshake observation plus the in-guest echo test. Implementer: opencode. Reviewer: pending. Tests: `DIFF_TCPSRV_OK` (peer address, 8-byte echo each way, orderly EOF).
+- Loopback to 127/8 is delivered locally with the peer reported as `127.0.0.1` for both TCP and UDP: native loopback probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_TCPSRV_OK` and `DIFF_UDPLOOP_OK` over `127.0.0.1`.
+
+
+AF_UNIX datagram facts (v0.78.0):
+- `bind` of a second `SOCK_DGRAM` socket to the same `sockaddr_un` reports `EADDRINUSE`, rebinding reports `EINVAL`, `send` without a peer reports `ENOTCONN`, `sendto` to an unknown path reports `ENOENT`, and `listen`/`accept` on datagrams report `EOPNOTSUPP`: native probes recording Linux behavior. Implementer: opencode. Reviewer: pending. Tests: `DIFF_UNIXDG_OK` in the differential battery.
+- `recvfrom` on a datagram socket reports the sender's bound path; an unbound sender is reported as the empty (family-only) address; `connect` records the peer so `send`/`recv` work and `getpeername` reports it: native probes. Implementer: opencode. Reviewer: pending. Tests: `DIFF_UNIXDG_OK` (source verification, connected peer, anonymous sender).
+- Abstract names start with a NUL byte and rendezvous without the filesystem; `socketpair(AF_UNIX, SOCK_DGRAM)` behaves as a connected pair; oversize datagrams report `EMSGSIZE`: native probes (300 KiB probe where both ends agree). Implementer: opencode. Reviewer: pending. Tests: `DIFF_UNIXDG_OK` (abstract rendezvous, socketpair both ways).
+
+ABI correction facts (v0.78.0):
+- `NICE` is syscall 134 (`PAUSE` is 34); `TIMES` is syscall 100: public Linux man-pages and the published x86-64 syscall table. Implementer: opencode. Reviewer: pending. Tests: `check-source.sh` pins the numbers and the differential battery runs `times()` through the new dispatch.
+
+
 Before release, legal counsel must approve the clean-room protocol, licenses, trademarks and distribution process.
