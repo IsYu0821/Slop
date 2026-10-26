@@ -12,6 +12,11 @@ pub unsafe fn fill_gdt(gdt:*mut [u64;7],tss_addr:u64){unsafe{let g=&mut *gdt;g[1
    establishes it), so no far return is needed here. */
 pub unsafe fn load_gdt(gdt_addr:u64){unsafe{let p=Ptr{limit:(core::mem::size_of::<[u64;7]>()-1)as u16,base:gdt_addr};core::arch::asm!("lgdt [{}]",in(reg)&p,options(readonly,nostack));core::arch::asm!("mov ds, ax","mov es, ax","mov ss, ax",in("ax")KDATA,options(nostack));}}
 pub unsafe fn load_tr(){unsafe{core::arch::asm!("ltr ax",in("ax")TSS,options(nostack))}}
+/* Reloads CS after a GDT replacement (APs arrive with the trampoline's
+   selector, which is stale under the kernel GDT). Without this the first
+   interrupt return reloads a stale CS and #GPs. Mirrors init()'s far return
+   without touching the BSP's BOOT_TSS. */
+pub unsafe fn reload_cs(){unsafe{core::arch::asm!("push {cs}","lea {tmp},[rip + 2f]","push {tmp}","retfq","2:",cs=in(reg)KCODE as u64,tmp=out(reg)_,options(nostack));}}
 pub unsafe fn init(rsp0:u64,ist1:u64,ist2:u64){unsafe{BOOT_TSS.rsp[0]=rsp0;BOOT_TSS.ist[0]=ist1;BOOT_TSS.ist[1]=ist2;fill_gdt(core::ptr::addr_of_mut!(GDT),core::ptr::addr_of!(BOOT_TSS) as u64);let p=Ptr{limit:(core::mem::size_of::<[u64;7]>()-1)as u16,base:core::ptr::addr_of!(GDT)as u64};core::arch::asm!("lgdt [{}]",in(reg)&p,options(readonly,nostack));
 /* Firmware selectors must not survive the GDT replacement: reload CS through a far return and refresh the data segments, otherwise the first interrupt return reloads a stale selector and #GPs. */
 core::arch::asm!("push {cs}","lea {tmp},[rip + 2f]","push {tmp}","retfq","2:","mov ds, ax","mov es, ax","mov ss, ax",cs=in(reg)KCODE as u64,tmp=out(reg)_,in("ax")KDATA);

@@ -42,6 +42,15 @@ apic_timer_entry:
     push %r14
     push %r15
     mov %rsp, %r15
+    /* DIAG-MS93: record entry RSP if GS is live (zero before bringup). */
+    mov $0xc0000101, %ecx
+    rdmsr
+    test %edx, %edx
+    jne 1f
+    test %eax, %eax
+    je 2f
+1:  movq %r15, %gs:88
+2:
     /* The vector register save area and the pushed registers lie between
        the stack pointer and the frame of the processor, so the code
        segment is 384 bytes above the stack pointer: 256 bytes of vector
@@ -132,6 +141,15 @@ apic_resched_entry:
     push %r14
     push %r15
     mov %rsp, %r15
+    /* DIAG-MS93: record entry RSP if GS is live (zero before bringup). */
+    mov $0xc0000101, %ecx
+    rdmsr
+    test %edx, %edx
+    jne 1f
+    test %eax, %eax
+    je 3f
+1:  movq %r15, %gs:88
+3:
     and $-16, %rsp
     call apic_resched_rust
     mov %r15, %rsp

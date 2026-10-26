@@ -136,7 +136,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::STATFS=>sys_statfs(a[0],a[1]), nr::FSTATFS=>sys_fstatfs(a[0] as usize,a[1]),
     nr::READLINK=>sys_readlink(a[0],a[1],a[2]),
     nr::CLOSE_RANGE=>sys_close_range(a[0] as usize,a[1] as usize,a[2]),
-    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>0, nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
+    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>sys_getcpu(a[0],a[1]), nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
     nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>sys_fallocate(a[0] as usize,a[1],a[2],a[3]),
     nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>sys_splice(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::TEE=>sys_tee(a[0] as usize,a[1] as usize,a[2] as usize,a[3]),
     nr::COPY_FILE_RANGE=>sys_copy_file_range(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::FUTIMESAT=>0, nr::UTIMES=>0,
@@ -2102,6 +2102,12 @@ fn sys_close_range(first:usize,last:usize,flags:u64)->i64{
   let _=crate::task::with_current_process(|p|p.fds.close(fd));
   fd+=1;
  }
+ 0
+}
+fn sys_getcpu(cpu:u64,node:u64)->i64{
+ let c=crate::smp::current_cpu() as u32;
+ if cpu!=0{let b=c.to_ne_bytes();if crate::usercopy::copy_to_user(cpu as usize,&b).is_err(){return errno::neg(errno::EFAULT)}}
+ if node!=0{let z=0u32.to_ne_bytes();if crate::usercopy::copy_to_user(node as usize,&z).is_err(){return errno::neg(errno::EFAULT)}}
  0
 }
 fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{

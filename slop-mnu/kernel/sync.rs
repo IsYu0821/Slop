@@ -11,6 +11,10 @@ impl<T> SpinLock<T> {
         }
         Guard { lock: self }
     }
+    pub fn try_lock(&self) -> Option<Guard<'_, T>> {
+        self.held.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).ok()?;
+        Some(Guard { lock: self })
+    }
 }
 pub struct Guard<'a, T> { lock: &'a SpinLock<T> }
 impl<T> Deref for Guard<'_, T> { type Target=T; fn deref(&self)->&T { unsafe { &*self.lock.value.get() } } }
@@ -19,7 +23,7 @@ impl<T> Drop for Guard<'_, T> { fn drop(&mut self) { self.lock.held.store(false,
 
 /// Spin lock that cannot be interrupted on the local CPU while held.
 pub struct IrqSpinLock<T>{inner:SpinLock<T>}
-impl<T> IrqSpinLock<T>{pub const fn new(value:T)->Self{Self{inner:SpinLock::new(value)}}pub fn lock(&self)->IrqGuard<'_,T>{let flags=irq_save();IrqGuard{guard:core::mem::ManuallyDrop::new(self.inner.lock()),flags}}}
+impl<T> IrqSpinLock<T>{pub const fn new(value:T)->Self{Self{inner:SpinLock::new(value)}}pub fn lock(&self)->IrqGuard<'_,T>{let flags=irq_save();IrqGuard{guard:core::mem::ManuallyDrop::new(self.inner.lock()),flags}}pub fn try_lock(&self)->Option<IrqGuard<'_,T>>{let flags=irq_save();match self.inner.try_lock(){Some(g)=>Some(IrqGuard{guard:core::mem::ManuallyDrop::new(g),flags}),None=>{irq_restore(flags);None}}}}
 pub struct IrqGuard<'a,T>{guard:core::mem::ManuallyDrop<Guard<'a,T>>,flags:u64}
 impl<T>Deref for IrqGuard<'_,T>{type Target=T;fn deref(&self)->&T{&self.guard}}
 impl<T>DerefMut for IrqGuard<'_,T>{fn deref_mut(&mut self)->&mut T{&mut self.guard}}

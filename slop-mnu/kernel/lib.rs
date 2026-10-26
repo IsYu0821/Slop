@@ -145,6 +145,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     println!("task: user process runnable pid={}",user_pid);
     let status=match task::wait_child(user_pid){Ok(v)=>v,Err(e)=>{println!("wait for user task failed errno={}",e);arch::halt()}};
     println!("scheduler: user process reaped pid={} status={}",user_pid,status);
+    task::report_smp_stats();
     arch::x86_64::qemu::exit(if status==0{0x10}else{0x11})
 }
 

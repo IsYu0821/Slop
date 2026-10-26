@@ -7,7 +7,9 @@
 //! stack by checking a per-CPU attestation, then continues with the
 //! available CPU set when a deadline expires instead of hanging.
 //! Scheduling on APs, IPIs and TLB shootdown belong to later milestones.
-use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+//! MS93: after attestation each AP enters the shared run-queue scheduler
+//! (task::ap_enter) instead of halting; see kernel/task.rs.
+use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
 
 use crate::arch::x86_64::paging::PhysAccess;
 
@@ -50,6 +52,79 @@ static CPU_COUNT: AtomicU32 = AtomicU32::new(0);
 static CPU_ONLINE: AtomicU32 = AtomicU32::new(0);
 /// BSP's slot index.
 static BSP_SLOT: AtomicU32 = AtomicU32::new(0);
+/// Set by the BSP once the scheduler is ready to accept APs.
+static SCHED_READY: AtomicBool = AtomicBool::new(false);
+
+pub fn sched_ready() -> bool {
+    SCHED_READY.load(Ordering::Acquire)
+}
+
+pub fn set_sched_ready(v: bool) {
+    SCHED_READY.store(v, Ordering::Release)
+}
+
+pub fn bsp_slot() -> usize {
+    BSP_SLOT.load(Ordering::Relaxed) as usize
+}
+
+pub fn online_count() -> u32 {
+    CPU_ONLINE.load(Ordering::Relaxed)
+}
+
+pub fn apic_id_of_slot(slot: usize) -> u32 {
+    if slot >= MAX_CPUS {
+        return 0xFFFF_FFFF;
+    }
+    unsafe { core::ptr::read_volatile(&raw const TRAMP_IDS[slot]) }
+}
+
+/// Writes an AP's TSS RSP0 (used on task switch and idle entry). The BSP
+/// uses BOOT_TSS (see descriptors::set_rsp0); APs use their CPU_TSS slot.
+pub fn set_tss_rsp0(slot: usize, v: u64) {
+    if slot >= MAX_CPUS {
+        return;
+    }
+    unsafe {
+        (*(&raw mut CPU_TSS[slot])).rsp[0] = v;
+    }
+}
+pub fn tss_diag(slot: usize) -> (u64, u64, u64) {
+    if slot >= MAX_CPUS {
+        return (0, 0, 0);
+    }
+    unsafe {
+        let tss = &raw const CPU_TSS[slot];
+        ((*tss).rsp[0], (*tss).ist[0], (*tss).ist[1])
+    }
+}
+/// DIAG: returns (tss_addr, gdt_desc_base, gdt_limit) for an AP slot.
+pub fn gdt_diag(slot: usize) -> (u64, u64, u64) {
+    if slot >= MAX_CPUS {
+        return (0, 0, 0);
+    }
+    unsafe {
+        let tss_addr = &raw const CPU_TSS[slot] as u64;
+        let g = &raw const CPU_GDT[slot];
+        let lo = core::ptr::read_volatile(g.cast::<[u64; 7]>().add(0).cast::<u64>().add(5));
+        let hi = core::ptr::read_volatile(g.cast::<[u64; 7]>().add(0).cast::<u64>().add(6));
+        let base = ((lo >> 16) & 0xffffff) | ((lo >> 32) & 0xff000000) | (hi << 32);
+        let limit = (lo & 0xffff) | ((lo >> 32) & 0xf0000);
+        (tss_addr, base, limit)
+    }
+}
+/// Points an AP's TSS at its scheduler idle stack (called before the AP
+/// enables interrupts in the scheduler). The GDT/TR bases are unchanged.
+pub fn ap_sched_stack(slot: usize, idle_top: u64) {
+    if slot >= MAX_CPUS {
+        return;
+    }
+    unsafe {
+        let tss = &raw mut CPU_TSS[slot];
+        (*tss).rsp[0] = idle_top;
+        (*tss).ist[0] = idle_top.wrapping_sub(8192);
+        (*tss).ist[1] = idle_top.wrapping_sub(16384);
+    }
+}
 
 /// How long the BSP waits for one AP to report ready. Bounded so a dead
 /// AP can never hang the boot; completion is observed through the
@@ -205,7 +280,8 @@ fn install_trampoline() -> Result<u64, &'static str> {
 }
 
 /// Runs on every application processor once the trampoline jumps high.
-/// Establishes this CPU's GDT/TSS/IDT view and APIC, attests, parks.
+/// Establishes this CPU's GDT/TSS/IDT view and APIC, attests, then waits
+/// for the scheduler and enters it (never returns once scheduled).
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
     if slot >= MAX_CPUS {
@@ -234,6 +310,10 @@ pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
             &raw const CPU_GDT[slot] as *const [u64; 7] as u64,
         );
         crate::arch::x86_64::descriptors::load_tr();
+        /* The trampoline entered long mode with its own CS; reload the
+           kernel CS now that the kernel GDT is live, otherwise the first
+           interrupt return reloads a stale selector and #GPs. */
+        crate::arch::x86_64::descriptors::reload_cs();
         crate::arch::x86_64::idt::reload();
         crate::arch::x86_64::apic::ap_enable();
     }
@@ -248,7 +328,11 @@ pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
     let _ = apic_id;
     // Release: the BSP's waiter observes READY only after every field above.
     CPU_STATE[slot].store(CPU_READY, Ordering::Release);
-    unsafe { crate::arch::halt() }
+    // Wait for scheduler init, then join the shared run queue (never returns).
+    while !SCHED_READY.load(Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    crate::task::ap_enter(slot)
 }
 
 /// Waits for one AP's attestation with a TSC deadline. Returns true only
@@ -488,17 +572,13 @@ fn report() {
         crate::println!(
             "smp: cpu{} apic={:#x} stack_top={:#x} rsp={:#x} ticks={}",
             slot,
-            apic_id_of(slot),
+            apic_id_of_slot(slot),
             CPU_STACK_TOP[slot].load(Ordering::Relaxed),
             CPU_PROBE_RSP[slot].load(Ordering::Relaxed),
             CPU_COUNTER[slot].load(Ordering::Relaxed),
         );
     }
     crate::println!("smp: {} CPUs online", online);
-}
-
-fn apic_id_of(slot: usize) -> u32 {
-    unsafe { core::ptr::read_volatile(&raw const TRAMP_IDS[slot]) }
 }
 
 /// Self-test: every READY slot must show the attestation magic, exactly
@@ -528,7 +608,7 @@ pub fn self_test() -> Result<u32, &'static str> {
             if top == 0 || rsp == 0 || rsp > top || rsp <= top.wrapping_sub(AP_STACK_SIZE as u64) {
                 return Err("smp self-test: AP stack probe outside its stack");
             }
-            if apic_id_of(slot) == 0xFFFF_FFFF {
+            if apic_id_of_slot(slot) == 0xFFFF_FFFF {
                 return Err("smp self-test: AP without table entry");
             }
         }
@@ -546,6 +626,8 @@ pub fn self_test() -> Result<u32, &'static str> {
 
 /// Per-CPU data block, addressed through GS in kernel mode during syscalls.
 /// Layout must match the offsets hard-coded in arch/x86_64/syscall.S.
+/// Fields are only appended (never reordered): the assembly offsets of the
+/// syscall path must stay stable.
 #[repr(C)]
 pub struct PerCpuData {
     pub current_fpu: u64,
@@ -560,6 +642,8 @@ pub struct PerCpuData {
     pub sigret_valid: u8,
     pub exec_pending: u8,
     pub _pad: [u8; 6],
+    pub cpu_index: u64,
+    pub diag_entry_rsp: u64,
 }
 
 impl PerCpuData {
@@ -577,6 +661,8 @@ impl PerCpuData {
             sigret_valid: 0,
             exec_pending: 0,
             _pad: [0; 6],
+            cpu_index: 0,
+            diag_entry_rsp: 0,
         }
     }
 }

@@ -33,9 +33,9 @@ pub fn unblockable(sig:i32)->bool{sig==SIGKILL||sig==SIGSTOP}
 /* Classifies the disposition installed for a signal number. */
 pub enum Disposition{Handler(u64,u64,u64),Ignore,Terminate,Stop,Continue}
 pub fn task_index(pid:u32)->Option<usize>{
- /* The scheduler has 8 tasks, so the pid has to be in one of them. */
+ /* The pid has to name a live scheduler slot. */
  let s=task::sched_pids();
- (0..8).find(|&i|s[i]==pid)
+ s.iter().position(|&p|p==pid)
 }
 /* Delivers a signal to another task by marking its pending mask. */
 pub fn send(pid:u32,sig:i32)->Result<(),i64>{

@@ -30,8 +30,9 @@ pub unsafe fn init(kernel_stack_top:u64){
 }
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a5:u64,a6:u64)->i64{
- if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
+  if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
  crate::task::stack_guard();
+ crate::task::note_syscall();
  let r=linux_abi::dispatch(nr,[a1,a2,a3,a4,a5,a6]);
  r
 }

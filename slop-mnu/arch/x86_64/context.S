@@ -61,6 +61,45 @@ switch_context:
 #endif
 
 .text
+.global switch_context_nosave
+#ifdef __ELF__
+.type switch_context_nosave,@function
+#endif
+/* SysV64: RDI=new_rsp, RSI=old_fpu_area (ignored, kept for ABI shape),
+   RDX=new_fpu_area. Switches to a new stack WITHOUT saving the old one,
+   for leaving a dead (Zombie) task whose stack is abandoned: no write to
+   the old slot happens after the scheduler lock is dropped, so a concurrent
+   reap+reuse on another CPU cannot be corrupted by a late save. */
+switch_context_nosave:
+    mov %rdi,%rsp
+    movups 0(%rdx),%xmm0
+    movups 16(%rdx),%xmm1
+    movups 32(%rdx),%xmm2
+    movups 48(%rdx),%xmm3
+    movups 64(%rdx),%xmm4
+    movups 80(%rdx),%xmm5
+    movups 96(%rdx),%xmm6
+    movups 112(%rdx),%xmm7
+    movups 128(%rdx),%xmm8
+    movups 144(%rdx),%xmm9
+    movups 160(%rdx),%xmm10
+    movups 176(%rdx),%xmm11
+    movups 192(%rdx),%xmm12
+    movups 208(%rdx),%xmm13
+    movups 224(%rdx),%xmm14
+    movups 240(%rdx),%xmm15
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %rbx
+    pop %rbp
+    ret
+#ifdef __ELF__
+.size switch_context_nosave,.-switch_context_nosave
+#endif
+
+.text
 .global fpu_save_regs
 #ifdef __ELF__
 .type fpu_save_regs,@function
