@@ -11,6 +11,14 @@ use core::sync::atomic::{AtomicU32,AtomicU64,Ordering};
 pub const OUR_IP:u32=0x0A00_020F;  /* 10.0.2.15, QEMU user networking */
 pub const GATEWAY:u32=0x0A00_0202; /* 10.0.2.2 */
 const NETMASK:u32=0xFFFF_FF00;
+/* DHCP-assigned addresses (defaults match QEMU user networking; updated by
+   dhcp_lease() when a lease is obtained). Atomics: read on every packet. */
+static CUR_IP:AtomicU32=AtomicU32::new(OUR_IP);
+static CUR_GW:AtomicU32=AtomicU32::new(GATEWAY);
+static CUR_DNS:AtomicU32=AtomicU32::new(0x0A00_0203); /* 10.0.2.3 Slirp DNS */
+#[inline]pub fn our_ip()->u32{CUR_IP.load(Ordering::Relaxed)}
+#[inline]pub fn gateway()->u32{CUR_GW.load(Ordering::Relaxed)}
+#[inline]pub fn dns_server()->u32{CUR_DNS.load(Ordering::Relaxed)}
 const ETH_ARP:u16=0x0806;const ETH_IPV4:u16=0x0800;
 const IP_ICMP:u8=1;const IP_TCP:u8=6;const IP_UDP:u8=17;
 const MSS:usize=1400;
@@ -71,7 +79,7 @@ fn ip_emit(proto:u8,dst_ip:u32,dst_mac:&[u8;6],payload:&[u8])->Result<(),i64>{
  pkt[6..8].copy_from_slice(&0x4000u16.to_be_bytes());
  pkt[8]=64;
  pkt[9]=proto;
- pkt[12..16].copy_from_slice(&OUR_IP.to_be_bytes());
+ pkt[12..16].copy_from_slice(&our_ip().to_be_bytes());
  pkt[16..20].copy_from_slice(&dst_ip.to_be_bytes());
  pkt[20..total].copy_from_slice(payload);
  let h=csum_bytes(0,&pkt[..20]);
@@ -110,7 +118,7 @@ fn arp_emit(op:u16,target_ip:u32,dst_mac:&[u8;6],target_mac:&[u8;6]){
  p[4]=6;p[5]=4;
  p[6..8].copy_from_slice(&op.to_be_bytes());
  p[8..14].copy_from_slice(&crate::driver::virtio_net::mac());
- p[14..18].copy_from_slice(&OUR_IP.to_be_bytes());
+ p[14..18].copy_from_slice(&our_ip().to_be_bytes());
  p[18..24].copy_from_slice(target_mac);
  p[24..28].copy_from_slice(&target_ip.to_be_bytes());
  let _=eth_send(ETH_ARP,dst_mac,&p);
@@ -146,7 +154,7 @@ fn resolve(hop:u32)->Result<[u8;6],i64>{
 }
 pub fn mac_for(ip:u32)->Result<[u8;6],i64>{
  if ip==0xFFFF_FFFF{return Ok(BROADCAST)}
- let hop=if ip&NETMASK==OUR_IP&NETMASK{ip}else{GATEWAY};
+ let hop=if ip&NETMASK==our_ip()&NETMASK{ip}else{gateway()};
  resolve(hop)
 }
 
@@ -259,7 +267,7 @@ fn udp_emit(sp:u16,di:u32,dp:u16,dm:&[u8;6],data:&[u8])->Result<(),i64>{
  seg[2..4].copy_from_slice(&dp.to_be_bytes());
  seg[4..6].copy_from_slice(&(len as u16).to_be_bytes());
  seg[8..len].copy_from_slice(data);
- let mut c=csum_pseudo(OUR_IP,di,IP_UDP,len,&seg[..len]);
+ let mut c=csum_pseudo(our_ip(),di,IP_UDP,len,&seg[..len]);
  if c==0{c=0xffff}
  seg[6..8].copy_from_slice(&c.to_be_bytes());
  ip_emit(IP_UDP,di,dm,&seg[..len])
@@ -270,14 +278,14 @@ fn udp_input(src_ip:u32,seg:&[u8]){
  let ulen=be16(seg,4)as usize;
  if ulen<8||seg.len()<ulen{return}
  let sum=be16(seg,6);
- if sum!=0&&csum_pseudo(src_ip,OUR_IP,IP_UDP,ulen,&seg[..ulen])!=0{return}
- udp_deliver(src_ip,sp,OUR_IP,dp,&seg[8..ulen]);
+ if sum!=0&&csum_pseudo(src_ip,our_ip(),IP_UDP,ulen,&seg[..ulen])!=0{return}
+ udp_deliver(src_ip,sp,our_ip(),dp,&seg[8..ulen]);
 }
 fn udp_addr_match(bound:u32,dst:u32)->bool{
  if bound==0||bound==dst{return true}
  /* A socket bound to our address takes wire unicast and broadcast, but not
     loopback traffic aimed at 127/8. */
- bound==OUR_IP&&dst>>24!=127
+ bound==our_ip()&&dst>>24!=127
 }
 fn udp_deliver(src_ip:u32,src_port:u16,dst_ip:u32,dst_port:u16,data:&[u8]){
  for i in 0..MAX_UDP{
@@ -379,7 +387,7 @@ const LOOPQ:usize=8;const LOOP_SEGSZ:usize=1536;
 struct LoopBuf{items:[LoopItem;LOOPQ],head:usize,count:usize}
 impl LoopBuf{const fn new()->Self{Self{items:[LoopItem::Empty;LOOPQ],head:0,count:0}}}
 static LOOPBACK:SpinLock<LoopBuf>=SpinLock::new(LoopBuf::new());
-fn is_loopback(ip:u32)->bool{ip>>24==127||ip==OUR_IP}
+fn is_loopback(ip:u32)->bool{ip>>24==127||ip==our_ip()}
 fn loopback_push(item:LoopItem)->Result<(),i64>{
  let mut q=LOOPBACK.lock();
  if q.count>=LOOPQ{return Err(errno::ENOMEM)}
@@ -411,7 +419,7 @@ fn tcp_emit(t:&TcpConn,seq:u32,ack:u32,flags:u8,payload:&[u8]){
  seg[13]=flags;
  seg[14..16].copy_from_slice(&t.window().to_be_bytes());
  seg[20..len].copy_from_slice(payload);
- let c=csum_pseudo(OUR_IP,t.rip,IP_TCP,len,&seg[..len]);
+ let c=csum_pseudo(our_ip(),t.rip,IP_TCP,len,&seg[..len]);
  seg[16..18].copy_from_slice(&c.to_be_bytes());
  /* Loopback and self sends never reach the wire; they re-enter through
     poll() so arrival processing never runs under a connection lock. */
@@ -605,7 +613,7 @@ pub fn tcp_connect(id:u8,ip:u32,port:u16)->Result<(),i64>{
   if !t.used{return Err(errno::EBADF)}
   if t.state!=TcpState::Closed{return Err(errno::EISCONN)}
   if t.lport==0{tcp_autobind(&mut t,i)}
-  if t.laddr==0{t.laddr=OUR_IP}
+  if t.laddr==0{t.laddr=our_ip()}
   t.rip=ip;
   t.rport=port;
   t.dmac=mac;
@@ -942,7 +950,7 @@ fn dispatch_arp(frame:&[u8]){
  let spa=be32(p,14);
  let tpa=be32(p,24);
  arp_insert(spa,sha);
- if op==1&&tpa==OUR_IP{arp_reply(spa,&sha)}
+ if op==1&&tpa==our_ip(){arp_reply(spa,&sha)}
 }
 fn dispatch_ip(frame:&[u8]){
  let ip=&frame[14..];
@@ -952,7 +960,7 @@ fn dispatch_ip(frame:&[u8]){
  let proto=ip[9];
  let src=be32(ip,12);
  let dst=be32(ip,16);
- if dst!=OUR_IP&&dst!=0xFFFF_FFFF{return}
+ if dst!=our_ip()&&dst!=0xFFFF_FFFF{return}
  let payload=&ip[ihl..];
  match proto{
   IP_ICMP=>icmp_input(src,&[frame[6],frame[7],frame[8],frame[9],frame[10],frame[11]],payload),
@@ -1005,4 +1013,144 @@ pub fn poll(){
   }
   poll_loopback();
   tcp_tick();
+}
+
+/* ---------- DHCP client (discover/offer/request/ack) ---------- */
+
+const DHCP_SERVER_PORT:u16=67;
+const DHCP_CLIENT_PORT:u16=68;
+const DHCP_MAGIC:[u8;4]=[99,130,83,99];
+
+fn dhcp_xid()->u32{
+ /* TSC-seeded transaction ID; uniqueness matters more than secrecy here. */
+ let t=crate::arch::x86_64::tsc::rdtsc();
+ (t ^ (t>>32) ^ 0x9e37_79b9) as u32
+}
+
+fn dhcp_build(buf:&mut [u8],msg_type:u8,xid:u32,req_ip:u32,srv_id:u32)->usize{
+ if buf.len()<300{return 0}
+ for b in buf.iter_mut(){*b=0}
+ buf[0]=1; /* BOOTREQUEST */
+ buf[1]=1; /* Ethernet */
+ buf[2]=6; /* MAC len */
+ buf[3]=0;
+ buf[4..8].copy_from_slice(&xid.to_be_bytes());
+ /* secs, flags (broadcast) */
+ buf[10..12].copy_from_slice(&0x8000u16.to_be_bytes());
+ /* ciaddr stays 0 (no address yet); chaddr = our MAC */
+ let mac=crate::driver::virtio_net::mac();
+ buf[28..34].copy_from_slice(&mac);
+ /* magic cookie */
+ buf[236..240].copy_from_slice(&DHCP_MAGIC);
+ let mut o=240;
+ let opt=(|b:&mut [u8],p:&mut usize,t:u8,v:&[u8]|{b[*p]=t;b[*p+1]=v.len() as u8;b[*p+2..*p+2+v.len()].copy_from_slice(v);*p+=2+v.len();});
+ opt(buf,&mut o,53,&[msg_type]);
+ /* client id: type 1 (Ethernet) + MAC */
+ let mut cid=[0u8;7];cid[0]=1;cid[1..7].copy_from_slice(&mac);
+ opt(buf,&mut o,61,&cid);
+ if msg_type==3{
+  opt(buf,&mut o,50,&req_ip.to_be_bytes());
+  opt(buf,&mut o,54,&srv_id.to_be_bytes());
  }
+ /* parameter request list: subnet, router, DNS, lease time */
+ opt(buf,&mut o,55,&[1,3,6,51]);
+ buf[o]=255;
+ o+=1;
+ o
+}
+
+struct DhcpOffer{ip:u32,mask:u32,gw:u32,dns:u32,srv:u32,lease:u32}
+
+fn dhcp_parse_offer(pkt:&[u8],xid:u32,expect_type:u8)->Option<DhcpOffer>{
+ if pkt.len()<244{return None}
+ if pkt[0]!=2{return None}
+ if u32::from_be_bytes([pkt[4],pkt[5],pkt[6],pkt[7]])!=xid{return None}
+ if pkt[236..240]!=DHCP_MAGIC{return None}
+ let mut msg_type=0u8;
+ let mut mask=0xFFFF_FF00u32;let mut gw=0u32;let mut dns=0u32;
+ let mut srv=0u32;let mut lease=0u32;
+ let mut o=240;
+ let mut req_ip=0u32;
+ while o<pkt.len(){
+  let t=pkt[o];
+  if t==255{break}
+  if t==0{o+=1;continue}
+  if o+1>=pkt.len(){break}
+  let l=pkt[o+1] as usize;
+  if o+2+l>pkt.len(){break}
+  let v=&pkt[o+2..o+2+l];
+  match t{
+   53=>{if !v.is_empty(){msg_type=v[0];}},
+   1=>{if l>=4{mask=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   3=>{if l>=4{gw=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   6=>{if l>=4{dns=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   51=>{if l>=4{lease=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   54=>{if l>=4{srv=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   50=>{if l>=4{req_ip=u32::from_be_bytes([v[0],v[1],v[2],v[3]]);}},
+   _=>{},
+  }
+  o+=2+l;
+ }
+ if msg_type!=expect_type{return None}
+ let _=req_ip;
+ let ip=u32::from_be_bytes([pkt[16],pkt[17],pkt[18],pkt[19]]);
+ if ip==0{return None}
+ Some(DhcpOffer{ip,mask,gw,dns,srv,lease})
+}
+
+fn dhcp_wait(sock:u8,xid:u32,expect_type:u8)->Result<DhcpOffer,i64>{
+ let mut buf=[0u8;1500];
+ /* Wait up to ~8 seconds, polling the whole stack. */
+ for _ in 0..80{
+  for _ in 0..100{
+   poll();
+   match udp_recv(sock,&mut buf){
+    Ok((n,_,_))=>{
+     if let Some(o)=dhcp_parse_offer(&buf[..n],xid,expect_type){return Ok(o)}
+    },
+    Err(e)=>{if e!=errno::ETIMEDOUT{return Err(e)}},
+   }
+   for _ in 0..5000{core::hint::spin_loop();}
+  }
+  crate::task::yield_now();
+ }
+ Err(errno::ETIMEDOUT)
+}
+
+/* Obtains a lease via DISCOVER/OFFER/REQUEST/ACK and installs it. Falls back
+   to the compiled-in static address when no server answers (isolated QEMU
+   user-net still works statically). Returns the leased IP. */
+pub fn dhcp_lease()->Result<u32,i64>{
+ crate::println!("net: dhcp start");
+ let sock=udp_open()?;
+ let r=udp_bind(sock,0,DHCP_CLIENT_PORT);
+ if r.is_err(){udp_close(sock);return r.map(|_|0)}
+ let xid=dhcp_xid();
+ crate::println!("net: dhcp discover xid={:#x}",xid);
+ /* DISCOVER */
+ let mut out=[0u8;300];
+ let n=dhcp_build(&mut out,1,xid,0,0);
+ if n==0{udp_close(sock);return Err(errno::EINVAL)}
+ if udp_send(sock,Some((0xFFFF_FFFF,DHCP_SERVER_PORT)),&out[..n]).is_err(){
+  udp_close(sock);return Err(errno::EHOSTUNREACH)
+ }
+ let offer=match dhcp_wait(sock,xid,2){Ok(o)=>o,Err(e)=>{udp_close(sock);return Err(e)}};
+ /* REQUEST the offered address. */
+ let n=dhcp_build(&mut out,3,xid,offer.ip,offer.srv);
+ if n==0{udp_close(sock);return Err(errno::EINVAL)}
+ if udp_send(sock,Some((0xFFFF_FFFF,DHCP_SERVER_PORT)),&out[..n]).is_err(){
+  udp_close(sock);return Err(errno::EHOSTUNREACH)
+ }
+ let ack=match dhcp_wait(sock,xid,5){Ok(o)=>o,Err(e)=>{udp_close(sock);return Err(e)}};
+ udp_close(sock);
+ let gw=if ack.gw!=0{ack.gw}else{offer.gw};
+ let dns=if ack.dns!=0{ack.dns}else{offer.dns};
+ CUR_IP.store(ack.ip,Ordering::Release);
+ if gw!=0{CUR_GW.store(gw,Ordering::Release);}
+ if dns!=0{CUR_DNS.store(dns,Ordering::Release);}
+ crate::println!("net: dhcp lease ip={}.{}.{}.{} gw={}.{}.{}.{} dns={}.{}.{}.{} lease={}s",
+  ack.ip>>24&255,ack.ip>>16&255,ack.ip>>8&255,ack.ip&255,
+  gw>>24&255,gw>>16&255,gw>>8&255,gw&255,
+  dns>>24&255,dns>>16&255,dns>>8&255,dns&255,ack.lease);
+ Ok(ack.ip)
+}
