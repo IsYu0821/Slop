@@ -1,5 +1,12 @@
 # Milestone 80: rename, link and symlink on ext2
 
+> Scope clarification: everything in this milestone targets the
+> **ext2** implementation (`kernel/ext2.rs`, ext4-incompatible
+> layouts are out of scope). No ext4 feature is claimed here; a
+> native ext4 image is neither mounted nor verified anywhere in
+> this milestone. Real ext4 support is MS92-MS95. ext2 and ext4
+> must not be conflated in future reports either.
+
 ## Goal
 
 Until now the on-disk filesystem could create, write and delete, but

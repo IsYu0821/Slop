@@ -19,6 +19,7 @@ a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
 d7fde2ec7dca339215324dbf68dba481ea6fd15669069e36ea3727a39429aa42     23381  docs/compat-ledger.md
 97057bcc13875bbf53fb744a0b55addb8160a2642e1a51546935766d3f10d418       699  docs/driver-compat.md
+d86e1e2d8ddaba5d93bc6420e928baffb090d8704d9abc60b76a69ecdd9a75d7      3200  docs/known-issues.md
 0cacb46fdb63b354e9a117823900bf643cc6d7d7feebaec4280a187d10a896ac      6188  docs/linux-compatibility.md
 adf305597381fd64308507aa10f380cf0eb4dcceb55ad3fc9d685e74f539e50c      1019  docs/milestone10.md
 17588f19f4370b709a150a2c6532cef9382d61ff2576cf2762ad84bff3be4487      1173  docs/milestone11.md
@@ -93,7 +94,7 @@ cdbe1818ec56942fdd79af3d122c8b44ff27c00e6f3facd258ef7c9255cab196      4024  docs
 775c3c016da5511a951511c5472a05691083839e6db42b2a077e8c7fb1523319      4709  docs/milestone78.md
 ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs/milestone79.md
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
-b59c7983c6e2190d8a1d2d95706859d8f22fbdb4de3e7b20f29f919d50a21ca2      4240  docs/milestone80.md
+74150f1b9709772fbf4e254cfb568764305a90688ced80a52f76e48076b95017      4610  docs/milestone80.md
 52258368b8949864cd4585c17b13293ea2d660ba111552ec10761b61d0a4bfe7      3181  docs/milestone81.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
@@ -210,7 +211,7 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
 c14faac4761dc780372712aee68a0e9e09b8abfd368c97e266d0434c2bb239d0      8411  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
-c7b1b8bf76bc62649ac75596d58b5e6893a7d11d0ab40685e90eba1a82de24b9      6010  tools/differential-test.sh
+ca6fc41c855c270485b00afc78acf9d756b4f161b467e9752490fe92e922d71d      7005  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
 4b846a7388218638fc158b76b346280c1a7684cbe23e6c07bfb044476828e3ab       824  tools/link.sh
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
@@ -219,7 +220,7 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 213
+TOTAL FILES: 214
 
 ================================================================================
 FILE: CHANGELOG.md
@@ -1659,6 +1660,80 @@ SHA-256: 97057bcc13875bbf53fb744a0b55addb8160a2642e1a51546935766d3f10d418
 The facade must never expose Slop/MNU internals. It uses opaque handles, generated layout assertions and explicit lifecycle rules. Each supported Linux API profile is versioned and tested independently.
 --------------------------------------------------------------------------------
 END FILE: docs/driver-compat.md
+
+================================================================================
+FILE: docs/known-issues.md
+SIZE: 3200 bytes
+SHA-256: d86e1e2d8ddaba5d93bc6420e928baffb090d8704d9abc60b76a69ecdd9a75d7
+================================================================================
+# Known issues registry
+
+Tracked instead of forgotten. Each entry names the interim behavior,
+the Linux-correct behavior, how to test it, and where the fix is
+planned. Closing an entry requires its test to go green in the
+normal gates.
+
+## KI-1: open-but-unlinked files leak their frames
+
+- Interim behavior: `unlink` (and truncate-shrink) skips frame
+  recycling while any open file description still references the
+  inode, so a use-after-free is impossible but the frames leak.
+- Linux behavior: the data stays readable/writable through open
+  fds; the last close reclaims everything, including after `fork`
+  and `dup` sharing, and on process exit.
+- Test: open, unlink, read/write through the old fd, create a new
+  file under the same name, `fork`/`dup` sharing, close the last fd
+  and verify reclamation (frame counts), plus process-exit cleanup.
+- Planned fix: per-open-file lifetime tracking with deferred
+  reclamation (proposed with the VFS hardening work, no later
+  than the ABI track MS89-MS91).
+
+## KI-2: file timestamps are not truthful
+
+- Interim behavior: `mtime`/`ctime` are stamped on some mutating
+  paths, `atime` is never updated, `btime` does not exist.
+- Linux behavior: `mtime`/`ctime`/`atime` (`relatime` semantics at
+  minimum) and `btime` where supported, consistent across `read`,
+  `write`, `truncate`, `chmod`, `rename`, `link`, `unlink`,
+  `symlink`, `utimensat`, `stat`/`fstat`/`statx`, `mmap` writes,
+  and `make`-style timestamp comparisons.
+- Test: a timestamp battery exercising every listed interaction
+  natively vs in-guest, including `make` rebuilding exactly once.
+- Planned fix: timestamp writes on all mutating paths plus
+  `utimensat`/`futimens` truthfulness (proposed MS89 ABI track).
+
+## KI-3: directory nlink on tmpfs/rootfs
+
+- Interim behavior: every inode reports `nlink == 1`, including
+  directories that gain and lose subdirectories.
+- Linux behavior: directories report 2 + subdirectory count;
+  renames and moves keep the counts exact.
+- Test: mkdir/rmdir/rename round trips asserting `nlink` on both
+  sides, natively vs in-guest.
+- Planned fix: maintain link counts in tmpfs and rootfs directory
+  operations (proposed MS89 ABI track; ext4 side already counts).
+
+## KI-4: test timeouts under host load
+
+- Interim behavior: the QEMU gates use one fixed timeout; on a
+  loaded host a slow run is indistinguishable from a hang, and
+  only the tail of the serial log survives.
+- Required instrumentation (being added incrementally):
+  - boot-completion marker in the guest serial log;
+  - per-phase progress markers with host-side timestamps;
+  - phase timeouts instead of a single global one where cheap;
+  - on timeout, preserve the full serial log plus QEMU status and
+    host load average in the failure output;
+  - no unbounded timeout extensions: slowness beyond the budget
+    stays a failure, but an *explained* one.
+- Planned work: harness improvements alongside the SMP track
+  (MS82-MS85), where timing-sensitive gates need them most.
+- Status: differential/acceptance scripts now log phase starts
+  with timestamps and dump the serial tail plus QEMU status on
+  failure. Heartbeat markers inside long guest phases are still
+  open.
+--------------------------------------------------------------------------------
+END FILE: docs/known-issues.md
 
 ================================================================================
 FILE: docs/linux-compatibility.md
@@ -5545,10 +5620,17 @@ END FILE: docs/milestone8.md
 
 ================================================================================
 FILE: docs/milestone80.md
-SIZE: 4240 bytes
-SHA-256: b59c7983c6e2190d8a1d2d95706859d8f22fbdb4de3e7b20f29f919d50a21ca2
+SIZE: 4610 bytes
+SHA-256: 74150f1b9709772fbf4e254cfb568764305a90688ced80a52f76e48076b95017
 ================================================================================
 # Milestone 80: rename, link and symlink on ext2
+
+> Scope clarification: everything in this milestone targets the
+> **ext2** implementation (`kernel/ext2.rs`, ext4-incompatible
+> layouts are out of scope). No ext4 feature is claimed here; a
+> native ext4 image is neither mounted nor verified anywhere in
+> this milestone. Real ext4 support is MS92-MS95. ext2 and ext4
+> must not be conflated in future reports either.
 
 ## Goal
 
@@ -24043,8 +24125,8 @@ END FILE: tools/check-toolchain.sh
 
 ================================================================================
 FILE: tools/differential-test.sh
-SIZE: 6010 bytes
-SHA-256: c7b1b8bf76bc62649ac75596d58b5e6893a7d11d0ab40685e90eba1a82de24b9
+SIZE: 7005 bytes
+SHA-256: ca6fc41c855c270485b00afc78acf9d756b4f161b467e9752490fe92e922d71d
 ================================================================================
 #!/bin/sh
 set -eu
@@ -24064,14 +24146,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+phase() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$1"; }
+fail_diag() {
+  echo "--- failure diagnostics ---"
+  echo "qemu status: ${guest_status:-n/a} (expected 33)"
+  echo "host load: $(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo unknown)"
+  echo "guest markers reached:"
+  for m in DIFF_OK DIFF_TCPSRV_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_DONE; do
+    if grep -qF "$m" build/differential-serial.log 2>/dev/null; then echo "  present: $m"; else echo "  MISSING from here on: $m"; break; fi
+  done
+  echo "--- serial tail ---"
+  tail -n 20 build/differential-serial.log 2>/dev/null || echo "(no serial log)"
+  echo "--- end diagnostics ---"
+}
+
+phase "native build"
+
 "$MUSL" -static -O1 -o build/differential-host tests/differential.c
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
 
 if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
+  echo "--- native tail ---"
+  tail -n 10 build/differential-native.out 2>/dev/null || echo "(no native log)"
   exit 1
 fi
+phase "native markers"
 for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
@@ -24105,6 +24206,7 @@ envp: .quad env0, 0
 INNER_EOF
 cp build/differential tests/musl/differential
 cp build/nopie-helper tests/musl/nopie-helper
+phase "uefi image"
 python3 - <<'PY'
 from pathlib import Path
 p=Path('tools/build-initramfs.py')
@@ -24115,13 +24217,14 @@ if needle not in s:
 s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').read_bytes(),0o100755),('/bin/nopie-helper',Path('tests/musl/nopie-helper').read_bytes(),0o100755),",1)
 p.write_text(s)
 PY
-./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
-./tools/build-ext2.sh >/tmp/scratchpad/ext2-build.log 2>&1
-OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
-OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
-cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
-rm -f build/differential-serial.log
-if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
+  ./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
+  ./tools/build-ext2.sh >/tmp/scratchpad/ext2-build.log 2>&1
+  OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
+  OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
+  cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
+  rm -f build/differential-serial.log
+  phase "guest run (240s budget)"
+  if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
   -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
   -drive format=raw,file=fat:rw:build/efi \
@@ -24136,15 +24239,19 @@ else
 fi
 if [ "$guest_status" -ne 33 ]; then
   echo "guest QEMU status $guest_status (expected 33)"
+  fail_diag
   exit 1
 fi
+phase "guest markers"
 
 for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
+    fail_diag
     exit 1
   fi
 done
+phase "host-side ext2 verification"
 
 # Host-side proof that the guest wrote a real ext2 filesystem: the journal
 # of record is the platter itself, checked with the host e2fsprogs.

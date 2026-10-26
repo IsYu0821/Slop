@@ -16,14 +16,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+phase() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$1"; }
+fail_diag() {
+  echo "--- failure diagnostics ---"
+  echo "qemu status: ${guest_status:-n/a} (expected 33)"
+  echo "host load: $(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo unknown)"
+  echo "guest markers reached:"
+  for m in DIFF_OK DIFF_TCPSRV_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_DONE; do
+    if grep -qF "$m" build/differential-serial.log 2>/dev/null; then echo "  present: $m"; else echo "  MISSING from here on: $m"; break; fi
+  done
+  echo "--- serial tail ---"
+  tail -n 20 build/differential-serial.log 2>/dev/null || echo "(no serial log)"
+  echo "--- end diagnostics ---"
+}
+
+phase "native build"
+
 "$MUSL" -static -O1 -o build/differential-host tests/differential.c
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
 
 if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
+  echo "--- native tail ---"
+  tail -n 10 build/differential-native.out 2>/dev/null || echo "(no native log)"
   exit 1
 fi
+phase "native markers"
 for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
@@ -57,6 +76,7 @@ envp: .quad env0, 0
 INNER_EOF
 cp build/differential tests/musl/differential
 cp build/nopie-helper tests/musl/nopie-helper
+phase "uefi image"
 python3 - <<'PY'
 from pathlib import Path
 p=Path('tools/build-initramfs.py')
@@ -67,13 +87,14 @@ if needle not in s:
 s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').read_bytes(),0o100755),('/bin/nopie-helper',Path('tests/musl/nopie-helper').read_bytes(),0o100755),",1)
 p.write_text(s)
 PY
-./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
-./tools/build-ext2.sh >/tmp/scratchpad/ext2-build.log 2>&1
-OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
-OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
-cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
-rm -f build/differential-serial.log
-if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
+  ./tools/build-uefi.sh >/tmp/scratchpad/diff-build.log 2>&1
+  ./tools/build-ext2.sh >/tmp/scratchpad/ext2-build.log 2>&1
+  OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
+  OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
+  cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
+  rm -f build/differential-serial.log
+  phase "guest run (240s budget)"
+  if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
   -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
   -drive format=raw,file=fat:rw:build/efi \
@@ -88,15 +109,19 @@ else
 fi
 if [ "$guest_status" -ne 33 ]; then
   echo "guest QEMU status $guest_status (expected 33)"
+  fail_diag
   exit 1
 fi
+phase "guest markers"
 
 for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_IOURING_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_NOPIE_OK DIFF_RTSIG_OK DIFF_ALTSTACK_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-serial.log >/dev/null; then
     echo "guest marker missing: $marker"
+    fail_diag
     exit 1
   fi
 done
+phase "host-side ext2 verification"
 
 # Host-side proof that the guest wrote a real ext2 filesystem: the journal
 # of record is the platter itself, checked with the host e2fsprogs.
