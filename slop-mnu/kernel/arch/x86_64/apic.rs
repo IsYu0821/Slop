@@ -3,6 +3,8 @@ use crate::acpi::InterruptInfo;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TIMER_VECTOR: u8 = 0x40;
+/* Cross-CPU reschedule request (MS83): fixed-delivery IPI, no LVT entry. */
+pub const RESCHED_VECTOR: u8 = 0x41;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
 
 static mut LAPIC: u64 = 0;
@@ -271,6 +273,26 @@ pub fn send_init_deassert(dest: u32) -> bool {
    level/trigger bits, which QEMU and real hardware both accept. */
 pub fn send_sipi(dest: u32, vector: u8) -> bool {
     send_ipi(dest, 0x0000_0600 | vector as u32)
+}
+
+/* Sends a fixed-delivery IPI for the given vector to one APIC ID.
+   Used for cross-CPU reschedule requests (MS83); shorthand and
+   trigger bits stay clear, destination is physical. */
+pub fn send_fixed_ipi(dest: u32, vector: u8) -> bool {
+    send_ipi(dest, 0x0000_0000 | vector as u32)
+}
+
+/* Requests a reschedule on one AP. Harmless when the target is idle:
+   the flag is still global (only the BSP runs tasks), so it just
+   marks a reschedule pending for the next yield point. */
+pub fn send_resched_ipi(dest: u32) -> bool {
+    send_fixed_ipi(dest, RESCHED_VECTOR)
+}
+
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn apic_resched_rust() {
+    crate::task::request_resched();
+    unsafe { write(0xb0, 0) }
 }
 
 /* Enables a secondary CPU's Local APIC for the parked state: the
