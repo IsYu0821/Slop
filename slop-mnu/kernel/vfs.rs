@@ -122,7 +122,7 @@ pub fn clone_mount_namespace(source_ns:u64,destination_ns:u64)->Result<()>{
  Ok(())
 }
 fn tmpfs_ino(fs_id:usize,sequence:usize)->u64{TMPFS_INO_TAG|(((fs_id+1)as u64)<<32)|sequence as u64}
-fn tmpfs_fs_id(ino:u64)->Option<usize>{if ino&0xf000_0000_0000_0000!=TMPFS_INO_TAG{return None}let id=((ino>>32)&0xff)as usize;if id==0{None}else{Some(id-1)}}
+pub fn tmpfs_fs_id(ino:u64)->Option<usize>{if ino&0xf000_0000_0000_0000!=TMPFS_INO_TAG{return None}let id=((ino>>32)&0xff)as usize;if id==0{None}else{Some(id-1)}}
 fn visible_inode(mut inode:Inode,path:&str)->Result<Inode>{if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}inode.name=[0;NAME_MAX+1];inode.name[..path.len()].copy_from_slice(path.as_bytes());inode.name_len=path.len();Ok(inode)}
 fn tmpfs_root(fs_id:usize,path:&str)->Result<Inode>{
  let mut name=[0u8;NAME_MAX+1];if path.len()>NAME_MAX{return Err(errno::ENAMETOOLONG)}name[..path.len()].copy_from_slice(path.as_bytes());
@@ -355,8 +355,27 @@ fn tmpfs_add_node(fs_id:usize,relative:&str,visible:&str,mode:u32,rdev:u64,data:
  drop(registry);crate::inotify::notify(visible,crate::inotify::IN_CREATE|if mode&0o170000==S_IFDIR{crate::inotify::IN_ISDIR}else{0});
  visible_inode(node,visible)
 }
-fn tmpfs_readdir(fs_id:usize,relative:&str,mut cb:impl FnMut(u64,u32,&str))->Result<usize>{
- let mut entries:[(u64,u32,[u8;NAME_MAX+1],usize);MAX_NODES]=[(0,0,[0;NAME_MAX+1],0);MAX_NODES];let mut count=0usize;
+/* Directory link count: 2 (dot and dot-dot) plus one per immediate
+   subdirectory, matching Linux tmpfs. Files report 1. */
+pub fn tmpfs_nlink(fs_id:usize,ino:u64)->u32{
+ let registry=MOUNT_REGISTRY.lock();let store=match registry.tmpfs.get(fs_id).filter(|s|s.used){Some(v)=>v,None=>return 1};
+ let node=match store.nodes[..store.len].iter().find(|n|n.ino==ino){Some(v)=>v,None=>return 1};
+ if node.mode&0o170000!=S_IFDIR{return 1}
+ let dirpath=match core::str::from_utf8(&node.name[..node.name_len]){Ok(v)=>v,Err(_)=>return 1};
+ let dir=if dirpath.is_empty(){"/"}else{dirpath.trim_end_matches('/')};
+ let dir=if dir.is_empty(){"/"}else{dir};
+ let mut n=2u32;
+ for i in 0..store.len{
+  let c=store.nodes[i];if !store.linked[i]||c.ino==0||c.ino==ino{continue}
+  if c.mode&0o170000!=S_IFDIR{continue}
+  let name=match core::str::from_utf8(&c.name[..c.name_len]){Ok(v)=>v,Err(_)=>continue};
+  let child=if dir=="/"{name.strip_prefix('/').unwrap_or("")}else{name.strip_prefix(dir).and_then(|r|r.strip_prefix('/')).unwrap_or("")};
+  if child.is_empty()||child.contains('/') {continue}
+  n=n.saturating_add(1);
+ }
+ n
+}
+fn tmpfs_readdir(fs_id:usize,relative:&str,mut cb:impl FnMut(u64,u32,&str))->Result<usize>{ let mut entries:[(u64,u32,[u8;NAME_MAX+1],usize);MAX_NODES]=[(0,0,[0;NAME_MAX+1],0);MAX_NODES];let mut count=0usize;
  {
   let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;
   let dir=if relative.is_empty(){"/"}else{relative.trim_end_matches('/')};

@@ -177,6 +177,10 @@ fn fd_id(fd:u64)->Option<u32>{let r=crate::task::with_current_process(|p|p.fds.g
 fn fd_nlink(ino:u64,rdev:u64)->u32{
  if crate::vfs::is_ext2_ino(ino)&&rdev!=0&&rdev<=u32::MAX as u64{
   crate::ext2::nlink(rdev as u32)
+ }else if crate::ext4::is_ext4_ino(ino){
+  crate::ext4::nlink(rdev as u32)
+ }else if let Some(fs_id)=crate::vfs::tmpfs_fs_id(ino){
+  crate::vfs::tmpfs_nlink(fs_id,ino)
  }else{1}
 }
 fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}

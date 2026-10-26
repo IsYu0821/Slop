@@ -511,6 +511,17 @@ pub fn file_size(inum: u32) -> Option<u64> {
     Some(inode_len(&inode))
 }
 
+pub fn nlink(inum: u32) -> u32 {
+    let sb = match superblock() {
+        Ok(v) => v,
+        Err(_) => return 1,
+    };
+    match read_inode(&sb, inum) {
+        Ok(inode) => inode.i_links_count as u32,
+        Err(_) => 1,
+    }
+}
+
 /* ---------- write path (overwrite within EOF; no allocation yet) ---------- */
 
 fn write_bytes_at(off: u64, src: &[u8]) -> Result<(), i64> {
