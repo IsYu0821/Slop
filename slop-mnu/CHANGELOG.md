@@ -1,3 +1,10 @@
+## 0.82.0 - 2026-10-26
+- SMP bring-up: MADT enumeration (type 0/9, enabled only), per-AP stacks and CPU state, INIT/SIPI start into a parked halt loop, and atomic attestations (state machine, magic, stack probe, single tick) with a TSC deadline instead of sleeps; missing APs stay absent and the boot continues.
+- Real-mode trampoline at physical 0x7000 (the AP starts with paging off): 16-bit entry, protected-mode transition, mailbox handoff (PML4/entry/LAPIC/ID/stack tables), long-mode entry, APIC-ID scan, per-CPU stack switch and high-half `ap_main` with per-CPU GDT/TSS/IDT and LAPIC enable, plus RAM stage markers for diagnostics.
+- The trampoline page is reclaimed safely: any page-table page living at 0x7000 is relocated to a fresh frame first, so zeroing no longer unmaps live kernel text; the mailbox/stage slots live at page offset 0x300.
+- Spurious LAPIC vector 0xFF is resumed, not fatal, and the fault code-byte dump probes the RIP page first.
+- Verified on 1/2/4/8 vCPUs (N online, self-test N attested) with all quality gates green: check-source, heap, acceptance, differential (e2fsck clean), busybox 115/115. No scheduler changes yet (MS83).
+
 ## 0.81.0 - 2026-10-26
 - Removed the 32 KiB file size cap: page-backed files (tmpfs, initramfs root) now use direct + single-indirect + double-indirect block addressing up to ~1 GiB, with holes reading back as zeros and `ENOSPC`/`EFBIG` only on true exhaustion or past the maximum.
 - Frame lifetime: unlink and truncate-shrink recycle data and indirect blocks (skipped while open descriptions still reference the file); new hard links share frames through page refcounts.

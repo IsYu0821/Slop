@@ -221,3 +221,70 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
 pub fn eoi() {
     unsafe { write(0xb0,0) }
 }
+
+/* Reads the caller's Local APIC ID (xAPIC ID register, top byte). */
+pub fn apic_id() -> u32 {
+    unsafe { read(0x20) >> 24 }
+}
+
+const ICR_LOW: u64 = 0x300;
+const ICR_HIGH: u64 = 0x310;
+/* Delivery-status bit: set while an IPI is in flight. */
+const ICR_PENDING: u32 = 1 << 12;
+
+/* Spins until no IPI is in flight, bounded so a dead APIC cannot hang
+   the boot forever. Returns false on timeout. */
+fn wait_icr_idle(mut spins: u64) -> bool {
+    while unsafe { read(ICR_LOW) } & ICR_PENDING != 0 {
+        core::hint::spin_loop();
+        if spins == 0 {
+            return false;
+        }
+        spins -= 1;
+    }
+    true
+}
+
+fn send_ipi(dest: u32, low: u32) -> bool {
+    if !wait_icr_idle(20_000_000) {
+        return false;
+    }
+    unsafe {
+        write(ICR_HIGH, dest << 24);
+        write(ICR_LOW, low);
+    }
+    wait_icr_idle(20_000_000)
+}
+
+/* Asserts INIT to one AP (level-triggered, level high). */
+pub fn send_init(dest: u32) -> bool {
+    send_ipi(dest, 0x0000_c500)
+}
+
+/* Deasserts a previously asserted INIT (level-triggered, level low). */
+pub fn send_init_deassert(dest: u32) -> bool {
+    send_ipi(dest, 0x0000_8500)
+}
+
+/* Sends a startup IPI naming the vector page (vector = page >> 12).
+   Encoded exactly like Linux does: delivery mode STARTUP with no
+   level/trigger bits, which QEMU and real hardware both accept. */
+pub fn send_sipi(dest: u32, vector: u8) -> bool {
+    send_ipi(dest, 0x0000_0600 | vector as u32)
+}
+
+/* Enables a secondary CPU's Local APIC for the parked state: the
+   spurious vector is installed so stray vectors have somewhere to go
+   and every LVT entry is masked so the parked CPU takes no interrupts
+   (it runs with IF clear until the scheduler owns it). */
+pub unsafe fn ap_enable() {
+    unsafe {
+        write(0xf0, SPURIOUS_VECTOR as u32 | (1 << 8));
+        write(0x320, 1 << 16);
+        write(0x350, 1 << 16);
+        write(0x360, 1 << 16);
+        write(0x370, 1 << 16);
+        write(0x330, 1 << 16);
+        write(0xb0, 0);
+    }
+}

@@ -4,6 +4,7 @@
 pub mod arch;
 pub mod boot;
 pub mod acpi;
+pub mod smp;
 pub mod console;
 pub mod driver;
 pub mod elf;
@@ -43,6 +44,7 @@ static mut IRQ_STACK: Stack = Stack([0; 131072]);
 
 static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
+static mut BOOT_RSDP:u64=0;
 static mut BOOT_INITRD:(u64,u64)=(0,0);
 
 #[unsafe(no_mangle)]
@@ -56,7 +58,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let pages=match memory::init(regions){Ok(n)=>n,Err(e)=>{println!("memory init failed: {}",e);arch::halt()}};
     let features=match unsafe { arch::x86_64::cpu::init() }{Ok(v)=>v,Err(e)=>{println!("CPU init failed: {}",e);arch::halt()}};
     let irq_info=match unsafe { acpi::interrupt_info(bi.rsdp) }{Ok(v)=>v,Err(e)=>{println!("ACPI interrupt discovery failed: {}",e);arch::halt()}};
-    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_INITRD=(bi.initrd_base,bi.initrd_size); }
+    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); }
     if !features.page_1g { println!("kernel requires 1 GiB pages for the direct map"); arch::halt(); }
     /* Clone the firmware root into a kernel-owned PML4 (firmware tables are
        mapped read-only), install the direct map, then copy the image to
@@ -94,6 +96,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     let ist=unsafe { core::ptr::addr_of!(DOUBLE_FAULT_STACK.0) as u64 + 65536 };
     let irq_stack=unsafe { core::ptr::addr_of!(IRQ_STACK.0) as u64 + 65536 };
     let irq_info=match unsafe { core::ptr::addr_of_mut!(BOOT_IRQ).read() }{Some(v)=>v,None=>{println!("boot hand-off data lost");arch::halt()}};
+    let rsdp=unsafe { core::ptr::addr_of!(BOOT_RSDP).read() };
     unsafe { arch::x86_64::descriptors::init(rsp0,ist,irq_stack); arch::x86_64::idt::init(); arch::x86_64::apic::init(irq_info).unwrap_or_else(|e|{println!("APIC init failed: {}",e);arch::halt()}); arch::x86_64::syscall::init(rsp0); }
     let pages=unsafe { BOOT_PAGES };
     println!("Slop/MNU 0.27.0: high-half kernel, BootInfo accepted, {} free pages",pages);
@@ -104,7 +107,14 @@ extern "sysv64" fn kmain_high_continue()->!{
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
     calibrate_clock();
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);
-    driver::init(); task::init(rsp0);
+ /* Symmetric multiprocessing: enumerate and park the APs before any
+    device or scheduler activity, so the UP self-tests below still run
+    on a single active CPU. A missing or broken AP set degrades to a
+    normal single-CPU boot instead of halting. */
+ let _online_cpus=crate::smp::bringup(rsdp);
+ if let Err(e)=crate::smp::self_test(){println!("smp self-test failed: {}",e);arch::halt();}
+ println!("resources: smp self-test passed");
+ driver::init(); task::init(rsp0);
     if !fd::resource_self_test(){println!("fd resource-accounting self-test failed");arch::halt()}
     println!("resources: fd accounting self-test passed");
     if !vm::resource_self_test(){println!("mmap ledger self-test failed");arch::halt()}

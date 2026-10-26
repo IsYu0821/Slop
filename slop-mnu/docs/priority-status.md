@@ -100,5 +100,7 @@
  3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
  4. Copy-on-write for `fork`, which is already implemented as a
     share-and-fault path and covered by `DIFF_COW_OK`.
- 5. Per-CPU scheduler preparation for SMP: run queues, IPIs, per-CPU FPU
-    areas, allocator sharding and TLB shootdown.
+ 5. SMP is enumerated and parked (MS82): MADT walk, INIT/SIPI start,
+    per-CPU stacks/GDT/TSS, atomic attestations with self-test on
+    1/2/4/8 vCPUs. Still ahead (MS83/MS84): run queues, reschedule
+    IPIs, per-CPU FPU areas, allocator sharding and TLB shootdown.

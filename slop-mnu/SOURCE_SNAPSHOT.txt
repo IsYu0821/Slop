@@ -1,13 +1,13 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.81.0
+Version: 0.82.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-efa391b38e16a2f7f3f425799289420f5cc319ff0732eb6762c6dc24aa833e56     47070  CHANGELOG.md
-99c4a228c25a5a339e2228342ce565ca929f0bfda5e0eeb757382084ad1c095d       160  Cargo.lock
-88f00b740f800f68a29a7fa2bc9c61745acd39ff016f1346ab5a4779e366c1ca       231  Cargo.toml
+d4fc6fbb27741862a1c500c7dbaeb64952558ce81d1ba284bf4c6279e05be514     48234  CHANGELOG.md
+b4e38e5489208d5867a630eebbb762f4ef58e39e9aa6d65a556829521c221330       160  Cargo.lock
+fe1530988d38b7be08f6e043968103b6e7edde30aec65ef46eb7842eeba480de       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch/x86_64/context.S
@@ -15,6 +15,7 @@ a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch
 900fea1e0624f552c6a6c7f3b633f55f0b744ddca4dae8e586348d8bcf2a2eab      3114  arch/x86_64/exceptions.S
 6ca59c435f4ba76dc2686a26427febaf86710e86f3af370f4f1fa9fbbdd11d9f      2354  arch/x86_64/irq.S
 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8      5224  arch/x86_64/syscall.S
+4c1b869591cf0070cfeaf5d1f6d21c83ccf76b8bb23f088abc49e8f98729ad7f      4184  arch/x86_64/trampoline.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
 d7fde2ec7dca339215324dbf68dba481ea6fd15669069e36ea3727a39429aa42     23381  docs/compat-ledger.md
@@ -96,18 +97,19 @@ ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs
 6296739fd6150e7a162fc2b5748490e12a4fdc2538ccedc14ea91ffe71bb7cf1      2268  docs/milestone8.md
 74150f1b9709772fbf4e254cfb568764305a90688ced80a52f76e48076b95017      4610  docs/milestone80.md
 52258368b8949864cd4585c17b13293ea2d660ba111552ec10761b61d0a4bfe7      3181  docs/milestone81.md
+83af263aead92eaea01f3e94709e5618bfa9ebda74c20e25d4ca8d15fdbea74c      3991  docs/milestone82.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
-ad9a335792e0b9ed937e05a97c4db3139d4cf02b605b4f17f6f7da193517a3ec      5819  docs/priority-status.md
+9753bdf80120895110556cf23ea56ba60d5b31b3f0e0cf208950872c6100a4ee      5966  docs/priority-status.md
 e695c21b68f2db9af27b1492b2c9282aab01e6ffcda748ea2db7e5cdfc082956     14586  docs/roadmap-next.md
 c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs/roadmap.md
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
-d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8      2914  kernel/acpi.rs
+4e19331bbfd20a977357cb44a3fe3e4eab3aa1d74b8b884225486ce717896c18      5386  kernel/acpi.rs
 6e8463960e55a8bb3a5f808d4d2f9b92a9f0c50586d6066fe9c91f722dc5ab1c       133  kernel/arch/mod.rs
-477deaeb4269142ca88f8885063e431267ad62b9c00edab40fb0edad29842998      7194  kernel/arch/x86_64/apic.rs
+6c34fdd6684a286d2ae63b0bb2e0bb9799538efe5c07378c5eaf2ae3f73ad656      9194  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
-fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4      1553  kernel/arch/x86_64/descriptors.rs
-cd7b5fbacb06b4173b91b7924f948ec0a049f7cb558db00d7af707579f767300      2731  kernel/arch/x86_64/idt.rs
+4f0b57e568ea36e8bff4be5958bd378acd869b22b0285963711baef131216981      2460  kernel/arch/x86_64/descriptors.rs
+31d6f40e2ee9dc08f9989d668da805f1b4ed9820b8aa1324ef5f6c6d304a8bdd      3657  kernel/arch/x86_64/idt.rs
 9d154a57ec79035c60cebcbedd3d08a95c6a94b22d8467e328078d3e00cc3e94       357  kernel/arch/x86_64/mod.rs
 02d81d7cc273d83e4d4bcee9ca51578603327a83f511df689c6a0ba5bee7bd05       668  kernel/arch/x86_64/msr.rs
 22b4c52392350e43db8e027efdd438de866e306322b47f7e2685e753d64f5a94      5596  kernel/arch/x86_64/paging.rs
@@ -136,7 +138,7 @@ a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kern
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
-c975b5a4beb12a7b5cc89a9c468f4dd02b44ad5efb1586606034c19e6217f7d4     10913  kernel/lib.rs
+94de4f88214ea56f7a42329c4af6f3d3b021907accb596a828d84015b34e3f72     11476  kernel/lib.rs
 bc3159baed92eed254d38deed920ba2d05a42bb94ae40da3e120e91708e8f7ed    176749  kernel/linux_abi/mod.rs
 ccc5f8af0ab871179379a7a27f64194caa6e3c0b6d6017f8a9019f56483d03d4      6888  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
@@ -149,6 +151,7 @@ baa15d12d9d78332a8bcb56281fd73092057572cbed242149c1a166f815de439     32446  kern
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
 6ed0e02059609fe1b03c577e22d6b4af29235855b7164e2665718d18857d8d56     19582  kernel/signal.rs
+b4609af8e953313f1f61fb5949708f53e231be62fd067221cd66888e6e0bb561     21279  kernel/smp.rs
 7a6cbd9728202e30e22c852806639a9d46f950a3d081e2b304e0eb1c88adb4a0     15878  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
 e597b60c1488f947cde1fc5a75a0fa9fd91337525c679aaec6c07efcdd651bee     39811  kernel/task.rs
@@ -204,12 +207,12 @@ c0c06363e78f522c99048a53a72807846aa1199f824e559f8856ea3489a61625       975  tool
 d0ca4ece563b103066f3e0eff06445de44a827061366f066ad6ffa25330d0778      2740  tools/build-initramfs.py
 709cbf94a77ecc14571a16d8ce5049f09e45c3b1a159087d59ace4e9588d51e6      1522  tools/build-libc-test.sh
 96022cf77b8dd848bb172c214baee090048096d0e7559945d587fcca32242bef       544  tools/build-test-elf.sh
-758640c7771df664a1874967d9fc3e28b3ffe42bf7a3d63680bee367e6879d67      1242  tools/build-uefi.sh
+4a8807ec1b27409ddc30ba47a4d8da807a3e83c1a4a4e54463b2173d0783e536      1293  tools/build-uefi.sh
 dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tools/build-vdso.sh
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-c14faac4761dc780372712aee68a0e9e09b8abfd368c97e266d0434c2bb239d0      8411  tools/check-source.sh
+4675b7bc0b9baaec18493de1cea3307f7ad502dd235af25a22ba617e29ea1b7b      8680  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
 ca6fc41c855c270485b00afc78acf9d756b4f161b467e9752490fe92e922d71d      7005  tools/differential-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
@@ -220,13 +223,20 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 214
+TOTAL FILES: 217
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 47070 bytes
-SHA-256: efa391b38e16a2f7f3f425799289420f5cc319ff0732eb6762c6dc24aa833e56
+SIZE: 48234 bytes
+SHA-256: d4fc6fbb27741862a1c500c7dbaeb64952558ce81d1ba284bf4c6279e05be514
 ================================================================================
+## 0.82.0 - 2026-10-26
+- SMP bring-up: MADT enumeration (type 0/9, enabled only), per-AP stacks and CPU state, INIT/SIPI start into a parked halt loop, and atomic attestations (state machine, magic, stack probe, single tick) with a TSC deadline instead of sleeps; missing APs stay absent and the boot continues.
+- Real-mode trampoline at physical 0x7000 (the AP starts with paging off): 16-bit entry, protected-mode transition, mailbox handoff (PML4/entry/LAPIC/ID/stack tables), long-mode entry, APIC-ID scan, per-CPU stack switch and high-half `ap_main` with per-CPU GDT/TSS/IDT and LAPIC enable, plus RAM stage markers for diagnostics.
+- The trampoline page is reclaimed safely: any page-table page living at 0x7000 is relocated to a fresh frame first, so zeroing no longer unmaps live kernel text; the mailbox/stage slots live at page offset 0x300.
+- Spurious LAPIC vector 0xFF is resumed, not fatal, and the fault code-byte dump probes the RIP page first.
+- Verified on 1/2/4/8 vCPUs (N online, self-test N attested) with all quality gates green: check-source, heap, acceptance, differential (e2fsck clean), busybox 115/115. No scheduler changes yet (MS83).
+
 ## 0.81.0 - 2026-10-26
 - Removed the 32 KiB file size cap: page-backed files (tmpfs, initramfs root) now use direct + single-indirect + double-indirect block addressing up to ~1 GiB, with holes reading back as zeros and `ENOSPC`/`EFBIG` only on true exhaustion or past the maximum.
 - Frame lifetime: unlink and truncate-shrink recycle data and indirect blocks (skipped while open descriptions still reference the file); new hard links share frames through page refcounts.
@@ -737,7 +747,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: 99c4a228c25a5a339e2228342ce565ca929f0bfda5e0eeb757382084ad1c095d
+SHA-256: b4e38e5489208d5867a630eebbb762f4ef58e39e9aa6d65a556829521c221330
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -745,18 +755,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.81.0"
+version = "0.82.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: 88f00b740f800f68a29a7fa2bc9c61745acd39ff016f1346ab5a4779e366c1ca
+SHA-256: fe1530988d38b7be08f6e043968103b6e7edde30aec65ef46eb7842eeba480de
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.81.0"
+version = "0.82.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -1430,6 +1440,167 @@ syscall_entry:
 #endif
 --------------------------------------------------------------------------------
 END FILE: arch/x86_64/syscall.S
+
+================================================================================
+FILE: arch/x86_64/trampoline.S
+SIZE: 4184 bytes
+SHA-256: 4c1b869591cf0070cfeaf5d1f6d21c83ccf76b8bb23f088abc49e8f98729ad7f
+================================================================================
+/* AP trampoline. Entered in real mode by SIPI, transitions 16 -> 32 ->
+   64 bit, then jumps to the kernel AP entry.
+
+   The BSP always copies this blob to TRAMPOLINE_ADDR (0x7000) and the
+   SIPI vector names that page (0x07), so every address below is an
+   absolute low-memory constant: no link-time symbol may appear as a
+   runtime value (only relative jumps). Layout of the 4 KiB page:
+     0x7000: 16-bit entry
+     0x7100: 32-bit transition
+     0x7200: GDT (null, 32-bit code, 32-bit data, 64-bit code,
+                  64-bit data)
+     0x7240: GDT pseudo-descriptor (limit u16, 32-bit base)
+     0x7300: mailbox written by the BSP (5 x u64, see below)
+     0x7400: 64-bit stub (runs identity-mapped, jumps high)
+   Mailbox (written by the BSP before SIPI):
+     0x7300: kernel PML4 physical address (for CR3)
+     0x7308: 64-bit AP entry virtual address (absolute high-half)
+     0x7310: LAPIC MMIO virtual base (direct map)
+     0x7318: APIC-ID table virtual address ([u32; 64])
+     0x7320: per-CPU stack-top table virtual address ([u64; 64])
+   Real-mode stack: SS=0, SP=0x7e00 (inside this page). */
+
+#define TRAMP_BASE 0x7000
+#define TRAMP_GDT 0x7200
+#define TRAMP_GDTPTR 0x7240
+#define TRAMP64_OFF 0x7400
+
+#define MB_PML4 0x7300
+#define MB_ENTRY 0x7308
+#define MB_LAPIC 0x7310
+#define MB_IDS 0x7318
+#define MB_STACKS 0x7320
+
+#define IA32_EFER 0xc0000080
+#define EFER_LME (1<<8)
+#define EFER_NXE (1<<11)
+
+#define CR4_PAE (1<<5)
+#define CR4_OSFXSR (1<<9)
+#define CR0_PE 1
+#define CR0_WP (1<<16)
+#define CR0_PG (1<<31)
+
+.code16
+.global trampoline_start
+trampoline_start:
+    cli
+    xor %ax, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+    mov %ax, %ss
+    mov $0x7e00, %sp
+    /* Stage marker: real mode entered. */
+    .byte 0x66
+    movl $0x11111111, 0x7328
+    /* Load our GDT (32-bit base form for the flat descriptors). */
+    .byte 0x66
+    lgdt TRAMP_GDTPTR
+    /* Enter protected mode. */
+    mov %cr0, %eax
+    or $CR0_PE, %eax
+    mov %eax, %cr0
+    ljmp $0x08, $0x7100
+
+.org 0x100
+.code32
+prot32:
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %ss
+    mov $0x7e00, %esp
+    /* Stage marker: protected mode with our segments. */
+    movl $0x22222222, 0x7328
+    /* PAE + OSFXSR on (matches the BSP); keep the rest as found. */
+    mov %cr4, %eax
+    or $(CR4_PAE|CR4_OSFXSR), %eax
+    mov %eax, %cr4
+    /* Point at the kernel page tables. */
+    mov MB_PML4, %eax
+    mov %eax, %cr3
+    /* Long mode + no-execute enable. */
+    mov $IA32_EFER, %ecx
+    rdmsr
+    or $(EFER_LME|EFER_NXE), %eax
+    wrmsr
+    /* Paging (and supervisor write protection, like the BSP). */
+    mov %cr0, %eax
+    or $(CR0_PG|CR0_WP), %eax
+    mov %eax, %cr0
+    /* Far jump into 64-bit mode at our identity address. */
+    ljmp $0x18, $0x7400
+
+/* GDT: null, 32-bit code, 32-bit data, 64-bit code, 64-bit data. */
+.org 0x200
+tramp_gdt:
+    .quad 0x0000000000000000
+    .quad 0x00cf9a000000ffff
+    .quad 0x00cf92000000ffff
+    .quad 0x00af9a000000ffff
+    .quad 0x00cf92000000ffff
+    .quad 0x0000000000000000
+    .quad 0x0000000000000000
+.org 0x240
+tramp_gdtptr:
+    .word 0x37
+    .long 0x7200
+.org 0x300
+tramp_mailbox:
+    .space 0x40, 0
+
+.code64
+.org 0x400
+tramp64:
+    /* We run identity-mapped with the old real-mode stack. Find our CPU
+       by reading the Local APIC ID through the direct map. */
+    mov $0x7300, %rbx
+    /* Stage marker: 64-bit mode on our stack. */
+    movl $0x33333333, 0x28(%rbx)
+    mov 0x10(%rbx), %rax
+    mov 0x20(%rax), %eax
+    shr $24, %eax
+    /* Linear search of the BSP-written APIC-ID table (at most 64). */
+    mov 0x18(%rbx), %rcx
+    xor %edx, %edx
+1:
+    cmp $64, %edx
+    jae 3f
+    mov (%rcx,%rdx,4), %esi
+    cmp %eax, %esi
+    je 2f
+    inc %edx
+    jmp 1b
+2:
+    /* Stage marker: APIC ID matched a table entry. */
+    movl $0x44444444, 0x28(%rbx)
+    /* Load this CPU's kernel stack (tops table indexed by CPU). */
+    mov 0x20(%rbx), %rcx
+    mov (%rcx,%rdx,8), %rsp
+    /* Hand RDI=APIC ID, RSI=cpu index to the kernel entry. */
+    mov %eax, %edi
+    mov %edx, %esi
+    mov 0x08(%rbx), %rax
+    jmp *%rax
+3:
+    cli
+4:
+    hlt
+    jmp 4b
+.global trampoline_end
+trampoline_end:
+--------------------------------------------------------------------------------
+END FILE: arch/x86_64/trampoline.S
 
 ================================================================================
 FILE: arch/x86_64/user.S
@@ -5811,6 +5982,97 @@ Probes fixed the contract before any kernel code changed:
 END FILE: docs/milestone81.md
 
 ================================================================================
+FILE: docs/milestone82.md
+SIZE: 3991 bytes
+SHA-256: 83af263aead92eaea01f3e94709e5618bfa9ebda74c20e25d4ca8d15fdbea74c
+================================================================================
+# Milestone 82: CPU enumeration and parked APs
+
+## Goal
+
+Know how many CPUs exist and get the application processors out of
+reset without disturbing the running system: walk the ACPI MADT for
+all enabled Local APIC IDs, give every AP its own stack and CPU
+state, start it through INIT/SIPI into a parked halt loop, and prove
+with atomic attestations (not sleeps) that each AP really ran on its
+own stack before the boot continues.
+
+## Firmware and protocol contract fixed first
+
+- MADT parsing handles both type 0 (legacy APIC) and type 9 (x2APIC)
+  entries, checks lengths before reading, and reports only enabled
+  CPUs; `-smp 1/2/4/8` enumerate 1/2/4/8 entries.
+- The AP starts with paging OFF, so the SIPI vector page must be
+  real physical memory: the trampoline blob hardcodes base 0x7000
+  and the vector names that page (0x07). An allocated high frame is
+  invisible to the AP.
+- Sequence per AP is INIT assert, 10 ms, INIT deassert, 10 ms,
+  SIPI, 200 us, SIPI (Linux encoding: IPI 0xC500/0x8500,
+  STARTUP 0x0600|vector, physical destination, no shorthand).
+
+## Implementation
+
+- `kernel/smp.rs` (new): MADT-driven `bringup` with per-AP frames,
+  per-CPU stacks, GDT/TSS/IDT setup on the AP, LAPIC enable, and an
+  atomic state machine (`ABSENT/PRESENT/STARTED/READY`) plus magic,
+  stack-probe and single-tick counter per slot. The BSP waits on
+  `CPU_STATE` with a TSC deadline; missing APs stay absent and the
+  boot continues single-CPU.
+- `arch/x86_64/trampoline.S` (new): 16-bit entry, protected-mode
+  transition with its own GDT, mailbox load (PML4, entry, LAPIC,
+  ID/AP tables), long-mode entry, APIC-ID scan of the BSP-written
+  table, per-CPU stack switch, and jump to `ap_main`. Stage markers
+  (`0x11111111` real, `0x22222222` prot32, `0x33333333` long,
+  `0x44444444` entered) track progress through RAM.
+- `install_trampoline` relocates any page-table page living at
+  physical 0x7000 to a fresh frame (copy + entry rewrite + CR3
+  reload) before zeroing/copying: zeroing it in place unmaps live
+  kernel text (first call into the wiped range takes a fetch fault
+  through a stale TLB gap). Mailbox and stage slots sit at page
+  offset 0x300 (0x7300); writing at offset 0x00 clobbers the AP's
+  real-mode entry.
+- `kernel/arch/x86_64/apic.rs`: `apic_id`, `send_init`,
+  `send_init_deassert`, `send_sipi`, `wait_icr_idle` bounded
+  delivery-status wait, `ap_enable` (spurious vector + masked LVTs
+  for parked CPUs).
+- `kernel/arch/x86_64/idt.rs`: spurious LAPIC vector 0xFF is
+  ignored and resumed instead of halting the boot (spurious
+  interrupts are expected around INIT/SIPI); the fault code-byte
+  dump probes the RIP page first so an unmapped RIP no longer hides
+  behind a nested fault.
+- `kernel/acpi.rs`: `cpu_list` returning APIC IDs + enabled flags
+  for up to `MAX_MADT_CPUS` entries.
+- `tools/build-uefi.sh`: assembles and links the COFF trampoline
+  object into the EFI binary.
+
+## Tests added
+
+- Boot-log attestation: `smp: cpuN apic=.. stack_top=.. rsp=..
+  ticks=1` per READY CPU, `smp: N CPUs online`, and
+  `smp: self-test passed (N attested)`. The self-test requires the
+  magic, exactly one counter tick, an in-range stack probe on the
+  AP's own stack (live RSP on the BSP), a table APIC ID, and
+  agreement with the online count; failures halt loudly.
+- Manual matrix (TCG): `-smp 1/2/4/8` all boot, enumerate, attest
+  and continue into the normal suite with zero faults.
+
+## Verification
+
+- 1/2/4/8 vCPU boots: 1/2/4/8 CPUs online, self-test passed
+  (1/2/4/8 attested), per-CPU stacks and APIC IDs correct in the
+  report, boot continues into resources/scheduler/vfs self-tests
+  and the full acceptance run.
+- Quality gates green with the SMP code in the tree:
+  `check-source`, `heap`, `acceptance`, `differential` (e2fsck
+  clean, free counts exact, platter bytes verified),
+  `busybox` 115/115.
+- No scheduler changes yet: APs park in `cli; hlt` after
+  attestation; parallel execution, IPIs and TLB shootdown belong to
+  MS83/MS84.
+--------------------------------------------------------------------------------
+END FILE: docs/milestone82.md
+
+================================================================================
 FILE: docs/milestone9.md
 SIZE: 1111 bytes
 SHA-256: 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b
@@ -5843,8 +6105,8 @@ END FILE: docs/naming.md
 
 ================================================================================
 FILE: docs/priority-status.md
-SIZE: 5819 bytes
-SHA-256: ad9a335792e0b9ed937e05a97c4db3139d4cf02b605b4f17f6f7da193517a3ec
+SIZE: 5966 bytes
+SHA-256: 9753bdf80120895110556cf23ea56ba60d5b31b3f0e0cf208950872c6100a4ee
 ================================================================================
 # One-Linux-program priority status
 
@@ -5948,8 +6210,10 @@ SHA-256: ad9a335792e0b9ed937e05a97c4db3139d4cf02b605b4f17f6f7da193517a3ec
  3. `sigaltstack` and `SA_ONSTACK` so a handler can run on its own stack.
  4. Copy-on-write for `fork`, which is already implemented as a
     share-and-fault path and covered by `DIFF_COW_OK`.
- 5. Per-CPU scheduler preparation for SMP: run queues, IPIs, per-CPU FPU
-    areas, allocator sharding and TLB shootdown.
+ 5. SMP is enumerated and parked (MS82): MADT walk, INIT/SIPI start,
+    per-CPU stacks/GDT/TSS, atomic attestations with self-test on
+    1/2/4/8 vCPUs. Still ahead (MS83/MS84): run queues, reschedule
+    IPIs, per-CPU FPU areas, allocator sharding and TLB shootdown.
 --------------------------------------------------------------------------------
 END FILE: docs/priority-status.md
 
@@ -6325,18 +6589,71 @@ END FILE: docs/security-model.md
 
 ================================================================================
 FILE: kernel/acpi.rs
-SIZE: 2914 bytes
-SHA-256: d4da035e5da67db54b40222eb2ceb569df78ac0a9be03ce5622bdff3c23941c8
+SIZE: 5386 bytes
+SHA-256: 4e19331bbfd20a977357cb44a3fe3e4eab3aa1d74b8b884225486ce717896c18
 ================================================================================
 //! Minimal ACPI table discovery for interrupt controllers.
 #[repr(C,packed)]struct Rsdp1{sig:[u8;8],checksum:u8,oem:[u8;6],revision:u8,rsdt:u32}
 #[repr(C,packed)]struct Rsdp2{v1:Rsdp1,length:u32,xsdt:u64,extended_checksum:u8,reserved:[u8;3]}
 #[repr(C,packed)]pub struct SdtHeader{pub signature:[u8;4],pub length:u32,revision:u8,checksum:u8,oem_id:[u8;6],oem_table_id:[u8;8],oem_revision:u32,creator_id:u32,creator_revision:u32}
 #[derive(Clone,Copy)]pub struct InterruptInfo{pub lapic:u64,pub ioapic:u64,pub ioapic_gsi:u32,pub iso_gsi:[u32;16],pub iso_flags:[u16;16]}
+/// One MADT processor entry: the APIC ID the CPU answers to and whether
+/// firmware marks it enabled (bootable now) as opposed to merely
+/// hot-plug capable.
+#[derive(Clone,Copy)]pub struct CpuEntry{pub apic_id:u32,pub enabled:bool}
+pub const MAX_MADT_CPUS:usize=64;
 fn sum(ptr:*const u8,len:usize)->u8{let mut v=0u8;for i in 0..len{v=v.wrapping_add(unsafe{ptr.add(i).read_unaligned()});}v}
 unsafe fn header(pa:u64)->Option<&'static SdtHeader>{if pa==0{return None}let h=unsafe{&*(pa as*const SdtHeader)};if h.length<core::mem::size_of::<SdtHeader>()as u32||sum(pa as*const u8,h.length as usize)!=0{None}else{Some(h)}}
 pub unsafe fn interrupt_info(rsdp_pa:u64)->Result<InterruptInfo,&'static str>{if rsdp_pa==0{return Err("RSDP missing")}let r=unsafe{&*(rsdp_pa as*const Rsdp2)};if &r.v1.sig!=b"RSD PTR "||sum(rsdp_pa as*const u8,20)!=0{return Err("invalid RSDP")}let(use_xsdt,root_pa)=(r.v1.revision>=2&&r.length>=36&&sum(rsdp_pa as*const u8,r.length as usize)==0,r.xsdt);let root_pa=if use_xsdt{root_pa}else{r.v1.rsdt as u64};let root=unsafe{header(root_pa)}.ok_or("invalid ACPI root")?;let es=if use_xsdt{8}else{4};let count=(root.length as usize-core::mem::size_of::<SdtHeader>())/es;let base=(root_pa as usize+core::mem::size_of::<SdtHeader>())as*const u8;let mut madt=0;for i in 0..count{let p=unsafe{if es==8{base.add(i*8).cast::<u64>().read_unaligned()}else{base.add(i*4).cast::<u32>().read_unaligned()as u64}};if let Some(h)=unsafe{header(p)}{if &h.signature==b"APIC"{madt=p;break}}}if madt==0{return Err("MADT missing")}parse_madt(madt)}
-unsafe fn parse_madt(pa:u64)->Result<InterruptInfo,&'static str>{let h=unsafe{header(pa)}.ok_or("invalid MADT")?;let lapic=unsafe{((pa+core::mem::size_of::<SdtHeader>()as u64)as*const u32).read_unaligned()}as u64;let mut out=InterruptInfo{lapic,ioapic:0,ioapic_gsi:0,iso_gsi:[0;16],iso_flags:[0;16]};for i in 0..16{out.iso_gsi[i]=i as u32}let mut p=pa as usize+core::mem::size_of::<SdtHeader>()+8;let end=pa as usize+h.length as usize;while p+2<=end{let typ=unsafe{*(p as*const u8)};let len=unsafe{*((p+1)as*const u8)}as usize;if len<2||p+len>end{return Err("corrupt MADT entry")}match typ{1 if len>=12=>{out.ioapic=unsafe{((p+4)as*const u32).read_unaligned()}as u64;out.ioapic_gsi=unsafe{((p+8)as*const u32).read_unaligned()};},2 if len>=10=>{let src=unsafe{*((p+3)as*const u8)}as usize;if src<16{out.iso_gsi[src]=unsafe{((p+4)as*const u32).read_unaligned()};out.iso_flags[src]=unsafe{((p+8)as*const u16).read_unaligned()};}},5 if len>=12=>out.lapic=unsafe{((p+4)as*const u64).read_unaligned()},_=>{}}p+=len;}if out.ioapic==0{return Err("IOAPIC missing")}Ok(out)}
+unsafe fn parse_madt(pa:u64)->Result<InterruptInfo,&'static str>{let h=unsafe{header(pa)}.ok_or("invalid MADT")?;let lapic=unsafe{((pa+core::mem::size_of::<SdtHeader>()as u64)as*const u32).read_unaligned()}as u64;let mut out=InterruptInfo{lapic,ioapic:0,ioapic_gsi:0,iso_gsi:[0;16],iso_flags:[0;16]};for i in 0..16{out.iso_gsi[i]=i as u32}let mut p=pa as usize+core::mem::size_of::<SdtHeader>()+8;let end=pa as usize+h.length as usize;while p+2<=end{let typ=unsafe{*(p as*const u8)};let len=unsafe{*((p+1)as*const u8)}as usize;if len<2||p+len>end{return Err("corrupt MADT entry")}match typ{1 if len>=12=>{out.ioapic=unsafe{((p+4)as*const u32).read_unaligned()}as u64;out.ioapic_gsi=unsafe{((p+8)as*const u32).read_unaligned()};},2 if len>=10=>{let src=unsafe{*((p+3)as*const u8)}as usize;if src<16{out.iso_gsi[src]=unsafe{((p+4)as*const u32).read_unaligned()};out.iso_flags[src]=unsafe{((p+8)as*const u16).read_unaligned()};}},5 if len>=12=>out.lapic=unsafe{((p+4)as*const u64).read_unaligned()},_=>{}}p+=len;}  if out.ioapic==0{return Err("IOAPIC missing")}Ok(out)}
+/* Lists the MADT processor entries (type 0 local APIC and type 9 x2APIC)
+   in firmware order, capped so the per-CPU tables stay bounded. */
+pub fn cpu_list(rsdp_pa:u64,out:&mut [CpuEntry;MAX_MADT_CPUS])->Result<usize,&'static str>{
+ // NOTE: this runs after the high-half transition, where low memory is no
+ // longer identity-mapped. Every firmware physical address must go through
+ // the direct map before dereferencing.
+ let pv=|pa:u64|crate::arch::x86_64::phys::phys_to_virt(pa);
+ if rsdp_pa==0{return Err("RSDP missing")}
+ let r=unsafe{&*(pv(rsdp_pa) as *const Rsdp2)};
+ if &r.v1.sig!=b"RSD PTR "{return Err("RSDP missing")}
+ let(use_xsdt,root_pa)=(r.v1.revision>=2&&r.length>=36&&sum(pv(rsdp_pa) as *const u8,r.length as usize)==0,r.xsdt);
+ let root_pa=if use_xsdt{root_pa}else{r.v1.rsdt as u64};
+ let root=unsafe{header(pv(root_pa))}.ok_or("invalid ACPI root")?;
+ let es=if use_xsdt{8}else{4};
+ let count=(root.length as usize-core::mem::size_of::<SdtHeader>())/es;
+ let base=(pv(root_pa) as usize+core::mem::size_of::<SdtHeader>())as*const u8;
+ let mut madt:u64=0;
+ for i in 0..count{
+  let raw=unsafe{if es==8{base.add(i*es).cast::<u64>().read_unaligned()}else{base.add(i*4).cast::<u32>().read_unaligned() as u64}};
+  match unsafe{header(pv(raw))}{Some(h)=>{if &h.signature==b"APIC"{madt=raw;break}},None=>{}}
+ }
+ if madt==0{return Err("MADT missing")}
+ let h=unsafe{header(pv(madt))}.ok_or("invalid MADT")?;
+ let mut p=madt as usize+core::mem::size_of::<SdtHeader>()+8;
+ let end=madt as usize+h.length as usize;
+ let mut n=0usize;
+ while p+2<=end&&n<MAX_MADT_CPUS{
+  let vp=pv(p as u64) as usize;
+  let typ=unsafe{*(vp as *const u8)};
+  let len=unsafe{*((vp+1) as *const u8)}as usize;
+  if len<2||p+len>end{break}
+  match typ{
+   0 if len>=8=>{
+    let apic_id=unsafe{*((vp+3) as *const u8)} as u32;
+    let flags=unsafe{core::ptr::read_unaligned((vp+4) as *const u32)};
+    out[n]=CpuEntry{apic_id,enabled:flags&1!=0};n+=1;
+   }
+   9 if len>=16=>{
+    let apic_id=unsafe{core::ptr::read_unaligned((vp+4) as *const u32)};
+    let flags=unsafe{core::ptr::read_unaligned((vp+8) as *const u32)};
+    out[n]=CpuEntry{apic_id,enabled:flags&1!=0};n+=1;
+   }
+   _=>{},
+  }
+  p+=len;
+ }
+ Ok(n)
+}
 --------------------------------------------------------------------------------
 END FILE: kernel/acpi.rs
 
@@ -6354,8 +6671,8 @@ END FILE: kernel/arch/mod.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/apic.rs
-SIZE: 7194 bytes
-SHA-256: 477deaeb4269142ca88f8885063e431267ad62b9c00edab40fb0edad29842998
+SIZE: 9194 bytes
+SHA-256: 6c34fdd6684a286d2ae63b0bb2e0bb9799538efe5c07378c5eaf2ae3f73ad656
 ================================================================================
 //! xAPIC and first IOAPIC support for the bootstrap processor.
 use crate::acpi::InterruptInfo;
@@ -6580,6 +6897,73 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
 pub fn eoi() {
     unsafe { write(0xb0,0) }
 }
+
+/* Reads the caller's Local APIC ID (xAPIC ID register, top byte). */
+pub fn apic_id() -> u32 {
+    unsafe { read(0x20) >> 24 }
+}
+
+const ICR_LOW: u64 = 0x300;
+const ICR_HIGH: u64 = 0x310;
+/* Delivery-status bit: set while an IPI is in flight. */
+const ICR_PENDING: u32 = 1 << 12;
+
+/* Spins until no IPI is in flight, bounded so a dead APIC cannot hang
+   the boot forever. Returns false on timeout. */
+fn wait_icr_idle(mut spins: u64) -> bool {
+    while unsafe { read(ICR_LOW) } & ICR_PENDING != 0 {
+        core::hint::spin_loop();
+        if spins == 0 {
+            return false;
+        }
+        spins -= 1;
+    }
+    true
+}
+
+fn send_ipi(dest: u32, low: u32) -> bool {
+    if !wait_icr_idle(20_000_000) {
+        return false;
+    }
+    unsafe {
+        write(ICR_HIGH, dest << 24);
+        write(ICR_LOW, low);
+    }
+    wait_icr_idle(20_000_000)
+}
+
+/* Asserts INIT to one AP (level-triggered, level high). */
+pub fn send_init(dest: u32) -> bool {
+    send_ipi(dest, 0x0000_c500)
+}
+
+/* Deasserts a previously asserted INIT (level-triggered, level low). */
+pub fn send_init_deassert(dest: u32) -> bool {
+    send_ipi(dest, 0x0000_8500)
+}
+
+/* Sends a startup IPI naming the vector page (vector = page >> 12).
+   Encoded exactly like Linux does: delivery mode STARTUP with no
+   level/trigger bits, which QEMU and real hardware both accept. */
+pub fn send_sipi(dest: u32, vector: u8) -> bool {
+    send_ipi(dest, 0x0000_0600 | vector as u32)
+}
+
+/* Enables a secondary CPU's Local APIC for the parked state: the
+   spurious vector is installed so stray vectors have somewhere to go
+   and every LVT entry is masked so the parked CPU takes no interrupts
+   (it runs with IF clear until the scheduler owns it). */
+pub unsafe fn ap_enable() {
+    unsafe {
+        write(0xf0, SPURIOUS_VECTOR as u32 | (1 << 8));
+        write(0x320, 1 << 16);
+        write(0x350, 1 << 16);
+        write(0x360, 1 << 16);
+        write(0x370, 1 << 16);
+        write(0x330, 1 << 16);
+        write(0xb0, 0);
+    }
+}
 --------------------------------------------------------------------------------
 END FILE: kernel/arch/x86_64/apic.rs
 
@@ -6603,15 +6987,24 @@ END FILE: kernel/arch/x86_64/cpu.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/descriptors.rs
-SIZE: 1553 bytes
-SHA-256: fdaa0d6060a38ad5e1b98b613a5e92110ef43b59bf041db2cfbada028be400d4
+SIZE: 2460 bytes
+SHA-256: 4f0b57e568ea36e8bff4be5958bd378acd869b22b0285963711baef131216981
 ================================================================================
 #[repr(C,packed)]struct Ptr{limit:u16,base:u64}
 #[repr(C,packed)]#[derive(Clone,Copy)]pub struct Tss{r0:u32,pub rsp:[u64;3],r1:u64,pub ist:[u64;7],r2:u64,r3:u16,pub iomap:u16}
 impl Tss{pub const fn new()->Self{Self{r0:0,rsp:[0;3],r1:0,ist:[0;7],r2:0,r3:0,iomap:core::mem::size_of::<Self>()as u16}}}
 pub const KCODE:u16=0x08;pub const KDATA:u16=0x10;pub const UDATA:u16=0x1b;pub const UCODE:u16=0x23;pub const TSS:u16=0x28;
 static mut GDT:[u64;7]=[0;7];pub static mut BOOT_TSS:Tss=Tss::new();
-pub unsafe fn init(rsp0:u64,ist1:u64,ist2:u64){unsafe{BOOT_TSS.rsp[0]=rsp0;BOOT_TSS.ist[0]=ist1;BOOT_TSS.ist[1]=ist2;GDT[1]=0x00af9a000000ffff;GDT[2]=0x00cf92000000ffff;GDT[3]=0x00cff2000000ffff;GDT[4]=0x00affa000000ffff;let b=core::ptr::addr_of!(BOOT_TSS)as u64;let l=(core::mem::size_of::<Tss>()-1)as u64;GDT[5]=(l&0xffff)|((b&0xffffff)<<16)|(0x89<<40)|((l&0xf0000)<<32)|((b&0xff000000)<<32);GDT[6]=b>>32;let p=Ptr{limit:(core::mem::size_of::<[u64;7]>()-1)as u16,base:core::ptr::addr_of!(GDT)as u64};core::arch::asm!("lgdt [{}]",in(reg)&p,options(readonly,nostack));
+/* Fills a 7-slot GDT with the same layout the bootstrap CPU uses, pointing
+   its TSS descriptor at the given task-state segment. Shared by the BSP
+   and by every application processor so all CPUs run the same selectors. */
+pub unsafe fn fill_gdt(gdt:*mut [u64;7],tss_addr:u64){unsafe{let g=&mut *gdt;g[1]=0x00af9a000000ffff;g[2]=0x00cf92000000ffff;g[3]=0x00cff2000000ffff;g[4]=0x00affa000000ffff;let l=(core::mem::size_of::<Tss>()-1)as u64;g[5]=(l&0xffff)|((tss_addr&0xffffff)<<16)|(0x89<<40)|((l&0xf0000)<<32)|((tss_addr&0xff000000)<<32);g[6]=tss_addr>>32;}}
+/* Loads a GDT built by fill_gdt and refreshes the data segments. The
+   caller must already run with CS == KCODE (the trampoline far jump
+   establishes it), so no far return is needed here. */
+pub unsafe fn load_gdt(gdt_addr:u64){unsafe{let p=Ptr{limit:(core::mem::size_of::<[u64;7]>()-1)as u16,base:gdt_addr};core::arch::asm!("lgdt [{}]",in(reg)&p,options(readonly,nostack));core::arch::asm!("mov ds, ax","mov es, ax","mov ss, ax",in("ax")KDATA,options(nostack));}}
+pub unsafe fn load_tr(){unsafe{core::arch::asm!("ltr ax",in("ax")TSS,options(nostack))}}
+pub unsafe fn init(rsp0:u64,ist1:u64,ist2:u64){unsafe{BOOT_TSS.rsp[0]=rsp0;BOOT_TSS.ist[0]=ist1;BOOT_TSS.ist[1]=ist2;fill_gdt(core::ptr::addr_of_mut!(GDT),core::ptr::addr_of!(BOOT_TSS) as u64);let p=Ptr{limit:(core::mem::size_of::<[u64;7]>()-1)as u16,base:core::ptr::addr_of!(GDT)as u64};core::arch::asm!("lgdt [{}]",in(reg)&p,options(readonly,nostack));
 /* Firmware selectors must not survive the GDT replacement: reload CS through a far return and refresh the data segments, otherwise the first interrupt return reloads a stale selector and #GPs. */
 core::arch::asm!("push {cs}","lea {tmp},[rip + 2f]","push {tmp}","retfq","2:","mov ds, ax","mov es, ax","mov ss, ax",cs=in(reg)KCODE as u64,tmp=out(reg)_,in("ax")KDATA);
 core::arch::asm!("ltr ax",in("ax")TSS,options(nostack));}}
@@ -6622,13 +7015,12 @@ END FILE: kernel/arch/x86_64/descriptors.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/idt.rs
-SIZE: 2731 bytes
-SHA-256: cd7b5fbacb06b4173b91b7924f948ec0a049f7cb558db00d7af707579f767300
+SIZE: 3657 bytes
+SHA-256: 31d6f40e2ee9dc08f9989d668da805f1b4ed9820b8aa1324ef5f6c6d304a8bdd
 ================================================================================
 #[repr(C,packed)]#[derive(Clone,Copy)]struct Gate{lo:u16,sel:u16,ist:u8,attr:u8,mid:u16,hi:u32,zero:u32}
 impl Gate{const fn missing()->Self{Self{lo:0,sel:0,ist:0,attr:0,mid:0,hi:0,zero:0}}fn set(&mut self,f:usize,ist:u8){self.lo=f as u16;self.sel=super::descriptors::KCODE;self.ist=ist&7;self.attr=0x8e;self.mid=(f>>16)as u16;self.hi=(f>>32)as u32;self.zero=0;}}
-#[repr(C,packed)]struct Ptr{limit:u16,base:u64}static mut IDT:[Gate;256]=[Gate::missing();256];
-unsafe extern "sysv64"{fn apic_timer_entry();fn isr_default();fn isr_page_fault();fn isr_double_fault();fn isr_general_protection();fn isr_invalid_tss();fn isr_segment_not_present();fn isr_stack_segment();fn isr_alignment_check();}
+#[repr(C,packed)]struct Ptr{limit:u16,base:u64}static mut IDT:[Gate;256]=[Gate::missing();256];unsafe extern "sysv64"{fn apic_timer_entry();fn isr_default();fn isr_page_fault();fn isr_double_fault();fn isr_general_protection();fn isr_invalid_tss();fn isr_segment_not_present();fn isr_stack_segment();fn isr_alignment_check();}
 pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(i)).set(isr_default as usize,0)}(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(8)).set(isr_double_fault as usize,1);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(10)).set(isr_invalid_tss as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(11)).set(isr_segment_not_present as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(12)).set(isr_stack_segment as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(13)).set(isr_general_protection as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(14)).set(isr_page_fault as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(17)).set(isr_alignment_check as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(super::apic::TIMER_VECTOR as usize)).set(apic_timer_entry as usize,2);let p=Ptr{limit:(core::mem::size_of::<[Gate;256]>()-1)as u16,base:core::ptr::addr_of!(IDT)as u64};core::arch::asm!("lidt [{}]",in(reg)&p,options(readonly,nostack));}}
 #[unsafe(no_mangle)]pub extern "sysv64" fn exception_rust(vector:u64,error:u64,rip:u64,cs:u64){
  let cr2:u64;unsafe{core::arch::asm!("mov {}, cr2",out(reg)cr2,options(nostack,preserves_flags));}
@@ -6642,10 +7034,32 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
  if cs&3==3 && crate::task::has_current_process() {
    crate::task::exit_fault(vector,error,rip,cr2)
  }
- /* The bytes of the faulting instruction, so the place can be found. */
- let code=unsafe{core::slice::from_raw_parts(rip as *const u8,8)};
- crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} code={:02x?}",vector,error,rip,cs,cr2,code);
+ /* Spurious LAPIC interrupts (notably around INIT/SIPI) carry no work:
+    acknowledge nothing, halt nothing, just resume. */
+ if vector==super::apic::SPURIOUS_VECTOR as u64 {
+   return;
+ }
+ /* The bytes of the faulting instruction, so the place can be found.
+    The RIP itself may point at unmapped memory (fetch fault), in which
+    case reading it would raise a nested fault and hide the true RIP. */
+ let code: &[u8] = if crate::arch::x86_64::phys::virt_to_phys(rip & !0xfff) != 0 {
+   unsafe { core::slice::from_raw_parts(rip as *const u8, 8) }
+ } else {
+   &[]
+ };
+ let apic=unsafe{crate::arch::x86_64::apic::apic_id()};
+ crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} apic={:#x} code={:02x?}",vector,error,rip,cs,cr2,apic,code);
  crate::arch::halt()
+}
+
+/* Reloads the shared table on another CPU. The handlers are written for
+   any CPU to run: faults print diagnostics and halt, so a parked AP can
+   safely point at the same IDT once its own GDT/TSS are live. */
+pub unsafe fn reload(){
+ unsafe{
+  let p=Ptr{limit:(core::mem::size_of::<[Gate;256]>()-1)as u16,base:core::ptr::addr_of!(IDT) as u64};
+  core::arch::asm!("lidt [{}]",in(reg)&p,options(readonly,nostack));
+ }
 }
 --------------------------------------------------------------------------------
 END FILE: kernel/arch/x86_64/idt.rs
@@ -10124,8 +10538,8 @@ END FILE: kernel/inotify.rs
 
 ================================================================================
 FILE: kernel/lib.rs
-SIZE: 10913 bytes
-SHA-256: c975b5a4beb12a7b5cc89a9c468f4dd02b44ad5efb1586606034c19e6217f7d4
+SIZE: 11476 bytes
+SHA-256: 94de4f88214ea56f7a42329c4af6f3d3b021907accb596a828d84015b34e3f72
 ================================================================================
 #![no_std]
 #![feature(naked_functions)]
@@ -10133,6 +10547,7 @@ SHA-256: c975b5a4beb12a7b5cc89a9c468f4dd02b44ad5efb1586606034c19e6217f7d4
 pub mod arch;
 pub mod boot;
 pub mod acpi;
+pub mod smp;
 pub mod console;
 pub mod driver;
 pub mod elf;
@@ -10172,6 +10587,7 @@ static mut IRQ_STACK: Stack = Stack([0; 131072]);
 
 static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
+static mut BOOT_RSDP:u64=0;
 static mut BOOT_INITRD:(u64,u64)=(0,0);
 
 #[unsafe(no_mangle)]
@@ -10185,7 +10601,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let pages=match memory::init(regions){Ok(n)=>n,Err(e)=>{println!("memory init failed: {}",e);arch::halt()}};
     let features=match unsafe { arch::x86_64::cpu::init() }{Ok(v)=>v,Err(e)=>{println!("CPU init failed: {}",e);arch::halt()}};
     let irq_info=match unsafe { acpi::interrupt_info(bi.rsdp) }{Ok(v)=>v,Err(e)=>{println!("ACPI interrupt discovery failed: {}",e);arch::halt()}};
-    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_INITRD=(bi.initrd_base,bi.initrd_size); }
+    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); }
     if !features.page_1g { println!("kernel requires 1 GiB pages for the direct map"); arch::halt(); }
     /* Clone the firmware root into a kernel-owned PML4 (firmware tables are
        mapped read-only), install the direct map, then copy the image to
@@ -10223,6 +10639,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     let ist=unsafe { core::ptr::addr_of!(DOUBLE_FAULT_STACK.0) as u64 + 65536 };
     let irq_stack=unsafe { core::ptr::addr_of!(IRQ_STACK.0) as u64 + 65536 };
     let irq_info=match unsafe { core::ptr::addr_of_mut!(BOOT_IRQ).read() }{Some(v)=>v,None=>{println!("boot hand-off data lost");arch::halt()}};
+    let rsdp=unsafe { core::ptr::addr_of!(BOOT_RSDP).read() };
     unsafe { arch::x86_64::descriptors::init(rsp0,ist,irq_stack); arch::x86_64::idt::init(); arch::x86_64::apic::init(irq_info).unwrap_or_else(|e|{println!("APIC init failed: {}",e);arch::halt()}); arch::x86_64::syscall::init(rsp0); }
     let pages=unsafe { BOOT_PAGES };
     println!("Slop/MNU 0.27.0: high-half kernel, BootInfo accepted, {} free pages",pages);
@@ -10233,7 +10650,14 @@ extern "sysv64" fn kmain_high_continue()->!{
     println!("interrupts: local APIC timer and EOI passed tick={}",first_tick);
     calibrate_clock();
     println!("cpu: syscall={} nx={} 1g={} smep={} smap={} wp=1",features.syscall,features.nx,features.page_1g,features.smep,features.smap);
-    driver::init(); task::init(rsp0);
+ /* Symmetric multiprocessing: enumerate and park the APs before any
+    device or scheduler activity, so the UP self-tests below still run
+    on a single active CPU. A missing or broken AP set degrades to a
+    normal single-CPU boot instead of halting. */
+ let _online_cpus=crate::smp::bringup(rsdp);
+ if let Err(e)=crate::smp::self_test(){println!("smp self-test failed: {}",e);arch::halt();}
+ println!("resources: smp self-test passed");
+ driver::init(); task::init(rsp0);
     if !fd::resource_self_test(){println!("fd resource-accounting self-test failed");arch::halt()}
     println!("resources: fd accounting self-test passed");
     if !vm::resource_self_test(){println!("mmap ledger self-test failed");arch::halt()}
@@ -15912,6 +16336,537 @@ pub fn restore_frame()->Result<(),i64>{
 }
 --------------------------------------------------------------------------------
 END FILE: kernel/signal.rs
+
+================================================================================
+FILE: kernel/smp.rs
+SIZE: 21279 bytes
+SHA-256: b4609af8e953313f1f61fb5949708f53e231be62fd067221cd66888e6e0bb561
+================================================================================
+//! Symmetric multiprocessing bring-up: parked APs with per-CPU state.
+//!
+//! MS82 scope: enumerate Local APICs from the MADT, start every enabled
+//! application processor with INIT-SIPI-SIPI, give each its own kernel
+//! stack, GDT, TSS and IDT mapping plus a per-CPU data slot, and park
+//! it. The BSP verifies every AP reached 64-bit kernel code on its own
+//! stack by checking a per-CPU attestation, then continues with the
+//! available CPU set when a deadline expires instead of hanging.
+//! Scheduling on APs, IPIs and TLB shootdown belong to later milestones.
+use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+
+use crate::arch::x86_64::paging::PhysAccess;
+
+/// Upper bound for tracked CPUs; keeps every per-CPU table static.
+pub const MAX_CPUS: usize = 64;
+/// Physical address of the AP trampoline (identity-mapped, one page).
+pub const TRAMPOLINE_ADDR: u64 = 0x7000;
+/// SIPI vector naming the trampoline page.
+pub const TRAMPOLINE_VECTOR: u8 = (TRAMPOLINE_ADDR >> 12) as u8;
+/// Per-CPU stack in bytes: one frame is plenty for bring-up plus the
+/// parked loop (no interrupts or syscalls run on APs yet). MS83 gives
+/// APs full scheduler stacks.
+pub const AP_STACK_SIZE: usize = 4096;
+
+/// Per-CPU states, also the attestation protocol.
+pub const CPU_ABSENT: u32 = 0;
+pub const CPU_PRESENT: u32 = 1;
+pub const CPU_STARTED: u32 = 2;
+pub const CPU_READY: u32 = 3;
+
+/// Attestation magic written by each CPU that completes bring-up.
+const ATTEST_MAGIC: u64 = 0x5c0ffee00ff17811;
+
+static CPU_STATE: [AtomicU32; MAX_CPUS] = [const { AtomicU32::new(CPU_ABSENT) }; MAX_CPUS];
+static CPU_STACK_TOP: [AtomicU64; MAX_CPUS] = [const { AtomicU64::new(0) }; MAX_CPUS];
+static CPU_PROBE_RSP: [AtomicU64; MAX_CPUS] = [const { AtomicU64::new(0) }; MAX_CPUS];
+static CPU_MAGIC: [AtomicU64; MAX_CPUS] = [const { AtomicU64::new(0) }; MAX_CPUS];
+static CPU_COUNTER: [AtomicU64; MAX_CPUS] = [const { AtomicU64::new(0) }; MAX_CPUS];
+static mut CPU_GDT: [[u64; 7]; MAX_CPUS] = [[0; 7]; MAX_CPUS];
+static mut CPU_TSS: [crate::arch::x86_64::descriptors::Tss; MAX_CPUS] =
+    [const { crate::arch::x86_64::descriptors::Tss::new() }; MAX_CPUS];
+
+/// Flat tables the trampoline indexes by CPU number.
+static mut TRAMP_IDS: [u32; MAX_CPUS] = [0xFFFF_FFFF; MAX_CPUS];
+static mut TRAMP_STACKS: [u64; MAX_CPUS] = [0; MAX_CPUS];
+
+/// Number of MADT entries accepted (enabled or not).
+static CPU_COUNT: AtomicU32 = AtomicU32::new(0);
+/// Number of CPUs that completed bring-up, BSP included.
+static CPU_ONLINE: AtomicU32 = AtomicU32::new(0);
+/// BSP's slot index.
+static BSP_SLOT: AtomicU32 = AtomicU32::new(0);
+
+/// How long the BSP waits for one AP to report ready. Bounded so a dead
+/// AP can never hang the boot; completion is observed through the
+/// per-CPU state, never inferred from elapsed time alone.
+fn wait_cycles() -> u64 {
+    let hz = crate::time::tsc_hz();
+    if hz == 0 {
+        return 50_000_000;
+    }
+    hz.saturating_mul(2)
+}
+
+/// Microsecond delay from the time-stamp counter for the INIT/SIPI
+/// protocol timings.
+fn udelay(us: u64) {
+    let hz = crate::time::tsc_hz();
+    if hz == 0 {
+        for _ in 0..us.saturating_mul(5000) {
+            core::hint::spin_loop();
+        }
+        return;
+    }
+    let start = crate::arch::x86_64::tsc::rdtsc();
+    let delta = hz.saturating_mul(us).saturating_add(999_999) / 1_000_000;
+    let deadline = start.saturating_add(delta.max(1));
+    while crate::arch::x86_64::tsc::rdtsc() < deadline {
+        core::hint::spin_loop();
+    }
+}
+
+unsafe extern "C" {
+    static trampoline_start: u8;
+    static trampoline_end: u8;
+}
+
+fn trampoline_size() -> usize {
+    unsafe { (&raw const trampoline_end as usize) - (&raw const trampoline_start as usize) }
+}
+
+/// Moves a page-table page currently living at physical `pa` to a fresh
+/// frame, rewriting every table reference to it. The SIPI trampoline must
+/// sit at the fixed low address 0x7000, but our own early tables may
+/// occupy that frame; zeroing it in place would silently unmap live
+/// kernel text (the first call into the wiped range then takes a fetch
+/// fault through a stale TLB gap).
+fn relocate_table_at(pa: u64) -> Result<(), &'static str> {
+    use crate::arch::x86_64::paging::{ADDR, PRESENT, PageTableRoot};
+    use crate::arch::x86_64::phys::Identity;
+    let root = PageTableRoot::current();
+    let acc = Identity;
+    let pml4t = unsafe { acc.table(root.pml4) };
+    for i in 0..512 {
+        let e = pml4t[i];
+        if e & PRESENT == 0 || e & (1 << 7) != 0 {
+            continue;
+        }
+        if e & ADDR == pa {
+            move_table(&root, &acc, &mut pml4t[i], pa)?;
+            continue;
+        }
+        let pdpt = unsafe { acc.table(e & ADDR) };
+        for j in 0..512 {
+            let e2 = pdpt[j];
+            if e2 & PRESENT == 0 || e2 & (1 << 7) != 0 {
+                continue;
+            }
+            if e2 & ADDR == pa {
+                move_table(&root, &acc, &mut pdpt[j], pa)?;
+                continue;
+            }
+            let pd = unsafe { acc.table(e2 & ADDR) };
+            for k in 0..512 {
+                let e3 = pd[k];
+                if e3 & PRESENT == 0 || e3 & (1 << 7) != 0 {
+                    continue;
+                }
+                if e3 & ADDR == pa {
+                    move_table(&root, &acc, &mut pd[k], pa)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Copies the table at `pa` to a fresh frame and repoints `entry` at the
+/// copy, then reloads CR3 so no stale TLB entry can reference the old
+/// frame. The old and new contents are identical, so the reload is safe
+/// even if a timer tick fires midway.
+fn move_table(
+    root: &crate::arch::x86_64::paging::PageTableRoot,
+    acc: &crate::arch::x86_64::phys::Identity,
+    entry: &mut u64,
+    pa: u64,
+) -> Result<(), &'static str> {
+    use crate::arch::x86_64::paging::ADDR;
+    use crate::arch::x86_64::phys::phys_to_virt;
+    let old = *entry;
+    let new = crate::memory::alloc_frame().ok_or("no frame to relocate table")?;
+    if new == pa {
+        return Err("allocator returned the trampoline frame");
+    }
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            phys_to_virt(pa) as *const u8,
+            phys_to_virt(new) as *mut u8,
+            4096,
+        );
+    }
+    *entry = (new & ADDR) | (old & !ADDR);
+    unsafe { root.activate() };
+    crate::println!("smp: relocated table {:#x} -> {:#x}", pa, new);
+    Ok(())
+}
+
+/// Identity-maps one page for the trampoline and copies the blob there.
+/// Returns the physical address on success; the mapping stays (the APs
+/// keep executing from it while parked, and removing it would need the
+/// TLB shootdown that arrives with a later milestone).
+fn install_trampoline() -> Result<u64, &'static str> {
+    let size = trampoline_size();
+    if size == 0 || size > 0x1000 {
+        return Err("trampoline image is empty or too large");
+    }
+    // The AP starts with paging OFF: after SIPI it fetches PHYSICAL
+    // (vector << 12). The blob hardcodes base 0x7000 everywhere, so the
+    // page must physically sit at 0x7000 (the conventional SMP spot,
+    // free conventional memory under OVMF/QEMU). An allocated high frame
+    // would only be visible through paging the AP does not have yet.
+    // Our own early page tables may live in that frame; move any table
+    // out of the way first (zeroing it in place unmaps live text).
+    relocate_table_at(TRAMPOLINE_ADDR)?;
+    let frame = TRAMPOLINE_ADDR;
+    let root = crate::arch::x86_64::paging::PageTableRoot::current();
+    root.map_page(
+        &crate::arch::x86_64::phys::Identity,
+        TRAMPOLINE_ADDR,
+        frame,
+        crate::arch::x86_64::paging::PRESENT | crate::arch::x86_64::paging::WRITABLE,
+    )
+    .map_err(|_| "trampoline identity map failed")?;
+    unsafe {
+        let dst = crate::arch::x86_64::phys::phys_to_virt(frame) as *mut u8;
+        core::ptr::write_bytes(dst, 0, 0x1000);
+        core::ptr::copy_nonoverlapping(
+            &raw const trampoline_start as *const u8,
+            dst,
+            size,
+        );
+        core::sync::atomic::fence(Ordering::SeqCst);
+    }
+    Ok(frame)
+}
+
+/// Runs on every application processor once the trampoline jumps high.
+/// Establishes this CPU's GDT/TSS/IDT view and APIC, attests, parks.
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
+    if slot >= MAX_CPUS {
+        unsafe { crate::arch::halt() }
+    }
+    CPU_STATE[slot].store(CPU_STARTED, Ordering::Release);
+    unsafe {
+        let tss = &raw mut CPU_TSS[slot];
+        let top = CPU_STACK_TOP[slot].load(Ordering::Relaxed);
+        (*tss).rsp[0] = top;
+        (*tss).ist[0] = top.wrapping_sub(8192);
+        (*tss).ist[1] = top.wrapping_sub(16384);
+        crate::arch::x86_64::descriptors::fill_gdt(
+            &raw mut CPU_GDT[slot] as *mut [u64; 7],
+            tss as u64,
+        );
+        crate::arch::x86_64::descriptors::load_gdt(
+            &raw const CPU_GDT[slot] as *const [u64; 7] as u64,
+        );
+        crate::arch::x86_64::descriptors::load_tr();
+        crate::arch::x86_64::idt::reload();
+        crate::arch::x86_64::apic::ap_enable();
+    }
+    // Attest: the stack pointer must lie inside this CPU's own stack.
+    let rsp: u64;
+    unsafe { core::arch::asm!("mov {}, rsp", out(reg) rsp, options(nostack, preserves_flags)) };
+    let top = CPU_STACK_TOP[slot].load(Ordering::Relaxed);
+    let in_range = top != 0 && rsp <= top && rsp > top.wrapping_sub(AP_STACK_SIZE as u64);
+    CPU_PROBE_RSP[slot].store(if in_range { rsp } else { 0 }, Ordering::Relaxed);
+    CPU_MAGIC[slot].store(ATTEST_MAGIC, Ordering::Relaxed);
+    CPU_COUNTER[slot].fetch_add(1, Ordering::Relaxed);
+    let _ = apic_id;
+    // Release: the BSP's waiter observes READY only after every field above.
+    CPU_STATE[slot].store(CPU_READY, Ordering::Release);
+    unsafe { crate::arch::halt() }
+}
+
+/// Waits for one AP's attestation with a TSC deadline. Returns true only
+/// when the AP itself reported ready; a timeout leaves the slot parked.
+fn wait_ready(slot: usize, deadline: u64) -> bool {
+    loop {
+        if CPU_STATE[slot].load(Ordering::Acquire) == CPU_READY {
+            return true;
+        }
+        if crate::arch::x86_64::tsc::rdtsc() >= deadline {
+            return false;
+        }
+        core::hint::spin_loop();
+    }
+}
+
+/// Sends INIT-SIPI-SIPI to one AP. The mailbox was filled beforehand.
+fn start_ap(apic_id: u32) -> bool {
+    if !crate::arch::x86_64::apic::send_init(apic_id) {
+        return false;
+    }
+    udelay(10_000);
+    if !crate::arch::x86_64::apic::send_init_deassert(apic_id) {
+        return false;
+    }
+    udelay(10_000);
+    if !crate::arch::x86_64::apic::send_sipi(apic_id, TRAMPOLINE_VECTOR) {
+        return false;
+    }
+    udelay(200);
+    if !crate::arch::x86_64::apic::send_sipi(apic_id, TRAMPOLINE_VECTOR) {
+        return false;
+    }
+    true
+}
+
+/// Virtual address of this CPU's Local APIC MMIO window.
+fn apic_lapic_virt() -> u64 {
+    let base = unsafe { crate::arch::x86_64::msr::rdmsr(crate::arch::x86_64::msr::IA32_APIC_BASE) };
+    crate::arch::x86_64::phys::phys_to_virt(base & 0xffff_f000)
+}
+
+/// Starts every enabled AP and collects attestations. Never fails the
+/// boot: with zero working APs this is a normal single-CPU boot.
+pub fn bringup(rsdp: u64) -> u32 {
+    crate::println!("smp: bringup entry");
+    let mut entries = [crate::acpi::CpuEntry { apic_id: 0, enabled: false }; crate::acpi::MAX_MADT_CPUS];
+    let count = match crate::acpi::cpu_list(rsdp, &mut entries) {
+        Ok(n) => n,
+        Err(e) => {
+            crate::println!("smp: no MADT CPU list ({}); single CPU", e);
+            CPU_ONLINE.store(1, Ordering::Relaxed);
+            return 1;
+        }
+    };
+    crate::println!("smp: MADT lists {} CPU entries", count);
+    let bsp_apic = crate::arch::x86_64::apic::apic_id();
+    // Find the BSP; every other enabled entry is an AP to start.
+    let mut bsp_slot = 0usize;
+    let mut found_bsp = false;
+    for (i, e) in entries[..count].iter().enumerate() {
+        if e.apic_id == bsp_apic {
+            bsp_slot = i;
+            found_bsp = true;
+        }
+    }
+    crate::println!("smp: BSP apic id {:#x}", bsp_apic);
+    if !found_bsp {
+        crate::println!("smp: BSP not in MADT; single CPU");
+        CPU_ONLINE.store(1, Ordering::Relaxed);
+        return 1;
+    }
+    BSP_SLOT.store(bsp_slot as u32, Ordering::Relaxed);
+    let mut ap_slots = [0usize; MAX_CPUS];
+    let mut ap_count = 0usize;
+    for (i, e) in entries[..count].iter().enumerate() {
+        if i != bsp_slot && e.enabled && ap_count < MAX_CPUS {
+            ap_slots[ap_count] = i;
+            ap_count += 1;
+        }
+    }
+    CPU_COUNT.store(count as u32, Ordering::Relaxed);
+    // Record the BSP's own slot so the self-test covers it too.
+    unsafe {
+        let mut rsp: u64;
+        core::arch::asm!("mov {}, rsp", out(reg)rsp, options(nostack, preserves_flags));
+        CPU_PROBE_RSP[bsp_slot].store(rsp, Ordering::Relaxed);
+    }
+    CPU_MAGIC[bsp_slot].store(ATTEST_MAGIC, Ordering::Relaxed);
+    CPU_COUNTER[bsp_slot].fetch_add(1, Ordering::Relaxed);
+    CPU_STATE[bsp_slot].store(CPU_READY, Ordering::Release);
+    unsafe {
+        let ids = &raw mut TRAMP_IDS as *mut [u32; MAX_CPUS];
+        (*ids)[bsp_slot] = bsp_apic;
+    }
+    if ap_count == 0 {
+        crate::println!("smp: single CPU (apic {:#x})", bsp_apic);
+        CPU_ONLINE.store(1, Ordering::Relaxed);
+        return 1;
+    }
+    let tramp_frame = match install_trampoline() {
+        Ok(f) => f,
+        Err(e) => {
+            crate::println!("smp: trampoline unavailable ({}); single CPU", e);
+            CPU_ONLINE.store(1, Ordering::Relaxed);
+            return 1;
+        }
+    };
+    crate::println!("smp: trampoline installed frame={:#x}", tramp_frame);
+    {
+        let root = crate::arch::x86_64::paging::PageTableRoot::current();
+        let back = root.translate(&crate::arch::x86_64::phys::Identity, TRAMPOLINE_ADDR);
+        match back {
+            Some(pa) => {
+                let src = unsafe { &raw const trampoline_start as *const u8 };
+                let first = unsafe { core::ptr::read_unaligned(src as *const u64) };
+                let dstb = unsafe {
+                    core::ptr::read_unaligned(
+                        crate::arch::x86_64::phys::phys_to_virt(pa) as *const u64,
+                    )
+                };
+                crate::println!("smp: trampoline check root={:#x} pa={:#x} src={:#x} first={:#x} dst={:#x}", root.pml4, pa, src as u64, first, dstb);
+            }
+            None => crate::println!("smp: trampoline check root={:#x} pa=unmapped", root.pml4),
+        }
+    }
+    let root = crate::arch::x86_64::paging::PageTableRoot::current();
+    let cr3 = root.pml4;
+    let lapic_virt = apic_lapic_virt();
+    crate::println!("smp: cr3={:#x} lapic={:#x} ap_count={}", cr3, lapic_virt, ap_count);
+    // Per-AP stacks, GDT/TSS entries and the trampoline mailbox, all
+    // before the first SIPI so no AP ever observes a half-built CPU.
+    for k in 0..ap_count {
+        let slot = ap_slots[k];
+        crate::println!("smp: AP {} slot {} apic {:#x}", k, slot, entries[slot].apic_id);
+        // One frame is plenty for bring-up plus the parked loop (no
+        // interrupts and no syscalls run on APs yet). A single frame
+        // needs no physical contiguity, unlike a multi-frame stack.
+        // MS83 gives APs full scheduler stacks.
+        let frame = match crate::memory::alloc_frame() {
+            Some(f) => f,
+            None => {
+                crate::println!("smp: no stack frame for AP {}", k);
+                continue;
+            }
+        };
+        unsafe {
+            crate::arch::x86_64::phys::Identity.table(frame).fill(0);
+        }
+        let top = crate::arch::x86_64::phys::phys_to_virt(frame) + 4096;
+        crate::println!("smp: AP {} stack frame={:#x} top={:#x}", k, frame, top);
+        CPU_STACK_TOP[slot].store(top, Ordering::Relaxed);
+        CPU_STATE[slot].store(CPU_PRESENT, Ordering::Release);
+        unsafe {
+            let ids = &raw mut TRAMP_IDS as *mut [u32; MAX_CPUS];
+            let stacks = &raw mut TRAMP_STACKS as *mut [u64; MAX_CPUS];
+            (*ids)[slot] = entries[slot].apic_id;
+            (*stacks)[slot] = top;
+                // Mailbox lives in the trampoline page; address it through
+                // the direct map (same physical frame).
+                // NOTE: the mailbox sits at page offset 0x300 (0x7300);
+                // writing at page offset 0x00 would clobber the AP's
+                // real-mode entry code.
+                let mb_base = crate::arch::x86_64::phys::phys_to_virt(tramp_frame) + 0x300;
+                let w = |off: usize, v: u64| unsafe {
+                    core::ptr::write_volatile((mb_base + off as u64) as *mut u64, v)
+                };
+            w(0x00, cr3);
+            w(0x08, ap_main as usize as u64);
+            w(0x10, lapic_virt);
+            w(0x18, &raw const TRAMP_IDS as *const [u32; MAX_CPUS] as u64);
+            w(0x20, &raw const TRAMP_STACKS as *const [u64; MAX_CPUS] as u64);
+        }
+        core::sync::atomic::fence(Ordering::SeqCst);
+        if !start_ap(entries[slot].apic_id) {
+            crate::println!("smp: AP {} (apic {:#x}) IPI failed", k, entries[slot].apic_id);
+            CPU_STATE[slot].store(CPU_ABSENT, Ordering::Release);
+        }
+    }
+    // Attest every started AP with a deadline; missing ones stay absent.
+    let wait = wait_cycles();
+    let mut online = 1u32;
+    for k in 0..ap_count {
+        let slot = ap_slots[k];
+        if CPU_STATE[slot].load(Ordering::Acquire) == CPU_ABSENT {
+            continue;
+        }
+        let deadline = crate::arch::x86_64::tsc::rdtsc().saturating_add(wait);
+        if wait_ready(slot, deadline) {
+            online += 1;
+        } else {
+            crate::println!(
+                "smp: AP {} (apic {:#x}) timed out; trampoline stage={:#x}; continuing without it",
+                k,
+                entries[slot].apic_id,
+                trampoline_stage(tramp_frame)
+            );
+            CPU_STATE[slot].store(CPU_ABSENT, Ordering::Release);
+        }
+    }
+    CPU_ONLINE.store(online, Ordering::Relaxed);
+    report();
+    online
+}
+
+/// Trampoline progress marker written by the AP itself (mailbox+0x28):
+/// 0x11111111 real mode, 0x22222222 protected mode, 0x33333333 long
+/// mode, 0x44444444 APIC ID matched. Lets a timeout say *where* the AP
+/// stopped instead of just that it never attested.
+fn trampoline_stage(frame: u64) -> u32 {
+    unsafe {
+        let p = crate::arch::x86_64::phys::phys_to_virt(frame + 0x328) as *const u32;
+        core::ptr::read_volatile(p)
+    }
+}
+/// Human-readable attestation of every CPU that reported ready.
+fn report() {
+    let online = CPU_ONLINE.load(Ordering::Relaxed);
+    for slot in 0..MAX_CPUS {
+        if CPU_STATE[slot].load(Ordering::Acquire) != CPU_READY {
+            continue;
+        }
+        crate::println!(
+            "smp: cpu{} apic={:#x} stack_top={:#x} rsp={:#x} ticks={}",
+            slot,
+            apic_id_of(slot),
+            CPU_STACK_TOP[slot].load(Ordering::Relaxed),
+            CPU_PROBE_RSP[slot].load(Ordering::Relaxed),
+            CPU_COUNTER[slot].load(Ordering::Relaxed),
+        );
+    }
+    crate::println!("smp: {} CPUs online", online);
+}
+
+fn apic_id_of(slot: usize) -> u32 {
+    unsafe { core::ptr::read_volatile(&raw const TRAMP_IDS[slot]) }
+}
+
+/// Self-test: every READY slot must show the attestation magic, exactly
+/// one counter tick, and (for APs) a stack probe inside its own stack
+/// range. Runs on the BSP after bringup; failures halt the boot loudly
+/// rather than limping on with half-initialized CPUs.
+pub fn self_test() -> Result<u32, &'static str> {
+    let mut ok = 0u32;
+    for slot in 0..MAX_CPUS {
+        if CPU_STATE[slot].load(Ordering::Acquire) != CPU_READY {
+            continue;
+        }
+        if CPU_MAGIC[slot].load(Ordering::Relaxed) != ATTEST_MAGIC {
+            return Err("smp self-test: attestation magic mismatch");
+        }
+        if CPU_COUNTER[slot].load(Ordering::Relaxed) != 1 {
+            return Err("smp self-test: attestation counter != 1");
+        }
+        if slot as u32 == BSP_SLOT.load(Ordering::Relaxed) {
+            // The BSP attests with its live stack pointer instead.
+            if CPU_PROBE_RSP[slot].load(Ordering::Relaxed) == 0 {
+                return Err("smp self-test: BSP stack probe missing");
+            }
+        } else {
+            let rsp = CPU_PROBE_RSP[slot].load(Ordering::Relaxed);
+            let top = CPU_STACK_TOP[slot].load(Ordering::Relaxed);
+            if top == 0 || rsp == 0 || rsp > top || rsp <= top.wrapping_sub(AP_STACK_SIZE as u64) {
+                return Err("smp self-test: AP stack probe outside its stack");
+            }
+            if apic_id_of(slot) == 0xFFFF_FFFF {
+                return Err("smp self-test: AP without table entry");
+            }
+        }
+        ok += 1;
+    }
+    if ok != CPU_ONLINE.load(Ordering::Relaxed) {
+        return Err("smp self-test: online count disagrees with attestations");
+    }
+    if ok == 0 {
+        return Err("smp self-test: no CPU attested");
+    }
+    crate::println!("smp: self-test passed ({} attested)", ok);
+    Ok(ok)
+}
+--------------------------------------------------------------------------------
+END FILE: kernel/smp.rs
 
 ================================================================================
 FILE: kernel/socket.rs
@@ -23515,8 +24470,8 @@ END FILE: tools/build-test-elf.sh
 
 ================================================================================
 FILE: tools/build-uefi.sh
-SIZE: 1242 bytes
-SHA-256: 758640c7771df664a1874967d9fc3e28b3ffe42bf7a3d63680bee367e6879d67
+SIZE: 1293 bytes
+SHA-256: 4a8807ec1b27409ddc30ba47a4d8da807a3e83c1a4a4e54463b2173d0783e536
 ================================================================================
 #!/bin/sh
 set -eu
@@ -23530,13 +24485,13 @@ cargo +nightly build -Zbuild-std=core,compiler_builtins -Zbuild-std-features=com
 KLIB=$(find target/x86_64-pc-windows-msvc/release -maxdepth 1 -type f \( -name '*slop_mnu_kernel*.lib' -o -name '*slop_mnu_kernel*.a' \) | head -n 1)
 test -n "$KLIB"
 clang -target x86_64-pc-win32-coff -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -c loader/main.c -o build/loader.obj
-for src in loader/entry.S arch/x86_64/exceptions.S arch/x86_64/syscall.S arch/x86_64/user.S arch/x86_64/irq.S arch/x86_64/context.S; do
+for src in loader/entry.S arch/x86_64/exceptions.S arch/x86_64/syscall.S arch/x86_64/user.S arch/x86_64/irq.S arch/x86_64/context.S arch/x86_64/trampoline.S; do
   obj=build/$(basename "$src" .S)-coff.obj
   clang -target x86_64-pc-win32-coff -ffreestanding -mno-red-zone -c "$src" -o "$obj"
 done
 lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64 \
   /out:build/efi/EFI/BOOT/BOOTX64.EFI \
-  build/loader.obj build/entry-coff.obj build/exceptions-coff.obj build/syscall-coff.obj build/user-coff.obj build/irq-coff.obj build/context-coff.obj \
+  build/loader.obj build/entry-coff.obj build/exceptions-coff.obj build/syscall-coff.obj build/user-coff.obj build/irq-coff.obj build/context-coff.obj build/trampoline-coff.obj \
   build/initramfs.obj "$KLIB"
 printf 'created build/efi/EFI/BOOT/BOOTX64.EFI\n'
 --------------------------------------------------------------------------------
@@ -24006,8 +24961,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 8411 bytes
-SHA-256: c14faac4761dc780372712aee68a0e9e09b8abfd368c97e266d0434c2bb239d0
+SIZE: 8680 bytes
+SHA-256: 4675b7bc0b9baaec18493de1cea3307f7ad502dd235af25a22ba617e29ea1b7b
 ================================================================================
 #!/bin/sh
 set -eu
@@ -24045,6 +25000,8 @@ required={
  'vdso/vdso.ld':['ENTRY(__vdso_clock_gettime)'],
  'tools/build-vdso.sh':['vdso/vdso.S','vdso/vdso.ld','--hash-style=both','__vdso_clock_gettime'],
  'kernel/sync.rs':['IrqSpinLock','irq_save','irq_restore'],
+'kernel/smp.rs':['ap_main','TRAMPOLINE_ADDR','CPU_READY','wait_ready','send_sipi','send_init','fill_gdt','load_tr','cpu_list','smp: single CPU','smp: self-test passed'],
+'arch/x86_64/trampoline.S':['trampoline_start','trampoline_end','TRAMP_BASE','ljmp','lgdt','hlt'],
  'kernel/task.rs':['fpu_area','fpu_save_regs','fpu_restore_regs','CURRENT_FPU','Stopped','stop_current','cont_pending','store_sigchld','sch_code','wake_parent_for_wait','struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','reap_child_opts','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
  'kernel/arch/x86_64/msr.rs':['IA32_FS_BASE','IA32_KERNEL_GS_BASE'],
  'kernel/signal.rs':['prepare_delivery','build_frame','restore_frame','UContext','SigInfo','MachineContext','REG_RIP','frame_size','default_stops','default_terminates','stop_current','fpregs','CLD_STOPPED','CLD_CONTINUED','CLD_EXITED','CLD_KILLED'],

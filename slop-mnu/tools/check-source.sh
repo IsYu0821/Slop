@@ -34,6 +34,8 @@ required={
  'vdso/vdso.ld':['ENTRY(__vdso_clock_gettime)'],
  'tools/build-vdso.sh':['vdso/vdso.S','vdso/vdso.ld','--hash-style=both','__vdso_clock_gettime'],
  'kernel/sync.rs':['IrqSpinLock','irq_save','irq_restore'],
+'kernel/smp.rs':['ap_main','TRAMPOLINE_ADDR','CPU_READY','wait_ready','send_sipi','send_init','fill_gdt','load_tr','cpu_list','smp: single CPU','smp: self-test passed'],
+'arch/x86_64/trampoline.S':['trampoline_start','trampoline_end','TRAMP_BASE','ljmp','lgdt','hlt'],
  'kernel/task.rs':['fpu_area','fpu_save_regs','fpu_restore_regs','CURRENT_FPU','Stopped','stop_current','cont_pending','store_sigchld','sch_code','wake_parent_for_wait','struct Scheduler','spawn_kernel','yield_now','scheduler_self_test','wake_sleepers','apply_arch_state','IA32_FS_BASE','wake_pending','reap_child','reap_child_opts','fork_process','UserFrame','account_tick','signal_task','current_tgid','take_slot'],
  'kernel/arch/x86_64/msr.rs':['IA32_FS_BASE','IA32_KERNEL_GS_BASE'],
  'kernel/signal.rs':['prepare_delivery','build_frame','restore_frame','UContext','SigInfo','MachineContext','REG_RIP','frame_size','default_stops','default_terminates','stop_current','fpregs','CLD_STOPPED','CLD_CONTINUED','CLD_EXITED','CLD_KILLED'],
