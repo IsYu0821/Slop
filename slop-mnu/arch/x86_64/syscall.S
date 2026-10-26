@@ -4,9 +4,12 @@
 .type syscall_entry,@function
 #endif
 syscall_entry:
-    /* SYSCALL leaves user RIP in RCX and RFLAGS in R11; it does not switch RSP. */
-    mov %rsp, SYSCALL_USER_RSP(%rip)
-    mov SYSCALL_KERNEL_RSP(%rip), %rsp
+    /* SYSCALL leaves user RIP in RCX and RFLAGS in R11; it does not switch RSP.
+       GS_BASE is pinned to the per-CPU block by boot (userspace never owns
+       GS here: no ARCH_SET_GS), so no swapgs is needed and %gs always
+       addresses the running CPU's state, in any ring. */
+    mov %rsp, %gs:16
+    mov %gs:8, %rsp
     /* Linux guarantees every user register except RAX, RCX and R11 survives a syscall. */
     push %r11
     push %rcx
@@ -26,13 +29,13 @@ syscall_entry:
     /* Frame: +0 r15 +8 r14 +16 r13 +24 r12 +32 rbp +40 rbx +48 r10 +56 r9
        +64 r8 +72 rdx +80 rsi +88 rdi +96 rax(nr) +104 rcx +112 r11.
        Linux ABI: rax=nr, rdi,rsi,rdx,r10,r8,r9=args. SysV call has arg7 on stack. */
-    mov %rsp, SYSCALL_FRAME(%rip)
+    mov %rsp, %gs:24
     /* The kernel uses XMM registers, so the user SSE file is parked in the
        running task's FPU area on entry and restored on exit. The area is
        per-task, so a task blocked inside a syscall keeps its registers while
        another task runs. FXSAVE is avoided because it traps on several TCG
        builds; the sixteen registers are moved directly. */
-    mov CURRENT_FPU(%rip), %r11
+    mov %gs:0, %r11
     test %r11, %r11
     jz .Lfpu_saved
     movups %xmm0,0(%r11)
@@ -59,20 +62,20 @@ syscall_entry:
     mov 48(%rsp), %r8
     mov 64(%rsp), %r9
     push 56(%rsp)
-    movb $0, SIGRET_VALID(%rip)
+    movb $0, %gs:72
     call syscall_dispatch_raw
     add $8, %rsp
     /* The dispatcher result travels back to the user in RAX. The saved RAX
        slot keeps the syscall number, so an interrupted syscall can be
        restarted with the same number. The result is parked in a scratch
        cell because the signal check below is a call. */
-    mov %rax, SYSCALL_RESULT(%rip)
-    cmpb $0, EXEC_PENDING(%rip)
+    mov %rax, %gs:32
+    cmpb $0, %gs:73
     je .Lcheck_signal
     /* An execve redirects the return to the new image. */
-    mov EXEC_RIP(%rip), %rdx
+    mov %gs:40, %rdx
     mov %rdx, 104(%rsp)
-    movb $0, EXEC_PENDING(%rip)
+    movb $0, %gs:73
 .Lcheck_signal:
     /* A queued signal is delivered before the process returns to user mode.
        The kernel builds the published rt_sigframe on the user stack and
@@ -89,14 +92,14 @@ syscall_entry:
     add $8, %rsp
     /* The syscall result travels back to the user in RAX. A signal handler
        that returned through rt_sigreturn has its own value. */
-    mov SYSCALL_RESULT(%rip), %rax
-    cmpb $0, SIGRET_VALID(%rip)
+    mov %gs:32, %rax
+    cmpb $0, %gs:72
     je .Lno_sigret
-    mov SIGRET_VALUE(%rip), %rax
+    mov %gs:48, %rax
 .Lno_sigret:
     /* The FPU area may have been updated by rt_sigreturn, so the exit
        restores whatever the running task now owns. */
-    mov CURRENT_FPU(%rip), %r11
+    mov %gs:0, %r11
     test %r11, %r11
     jz .Lfpu_restored
     movups 0(%r11),%xmm0
@@ -123,7 +126,7 @@ syscall_entry:
     mov 104(%rsp), %rdx
     shr $47, %rdx
     jne .Lbad_pre
-    mov SYSCALL_USER_RSP(%rip), %rdx
+    mov %gs:16, %rdx
     shr $47, %rdx
     jne .Lbad_pre
     pop %r15
@@ -144,19 +147,19 @@ syscall_entry:
     pop %r11
     /* IRETQ frame, pushed in reverse pop order: SS, RSP, RFLAGS, CS, RIP. */
     push USER_SS(%rip)
-    push SYSCALL_USER_RSP(%rip)
+    push %gs:16
     push %r11
     push USER_CS(%rip)
     push %rcx
     iretq
 .Lbad_pre:
     mov 104(%rsp), %rcx
-    mov SYSCALL_USER_RSP(%rip), %rdx
+    mov %gs:16, %rdx
     jmp .Lbad
 .Lbad:
     mov %rcx, %rdi
     mov %rdx, %rsi
-    mov SYSCALL_KERNEL_RSP(%rip), %rsp
+    mov %gs:8, %rsp
     and $-16, %rsp
     call bad_sysret
 #ifdef __ELF__

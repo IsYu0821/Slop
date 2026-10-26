@@ -213,6 +213,14 @@ pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
     }
     CPU_STATE[slot].store(CPU_STARTED, Ordering::Release);
     unsafe {
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_KERNEL_GS_BASE,
+            per_cpu_ptr(slot) as u64,
+        );
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_GS_BASE,
+            per_cpu_ptr(slot) as u64,
+        );
         let tss = &raw mut CPU_TSS[slot];
         let top = CPU_STACK_TOP[slot].load(Ordering::Relaxed);
         (*tss).rsp[0] = top;
@@ -314,6 +322,20 @@ pub fn bringup(rsdp: u64) -> u32 {
         return 1;
     }
     BSP_SLOT.store(bsp_slot as u32, Ordering::Relaxed);
+    /* Pin both GS bases at this CPU's per-CPU block: the kernel never
+       hands GS to userspace (no ARCH_SET_GS), so no swapgs dance is
+       needed and %gs always addresses per-CPU state. MSRs are per-CPU,
+       so parked APs keep their own blocks without cross-CPU clobbering. */
+    unsafe {
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_KERNEL_GS_BASE,
+            per_cpu_ptr(bsp_slot) as u64,
+        );
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_GS_BASE,
+            per_cpu_ptr(bsp_slot) as u64,
+        )
+    };
     let mut ap_slots = [0usize; MAX_CPUS];
     let mut ap_count = 0usize;
     for (i, e) in entries[..count].iter().enumerate() {
@@ -520,4 +542,64 @@ pub fn self_test() -> Result<u32, &'static str> {
     }
     crate::println!("smp: self-test passed ({} attested)", ok);
     Ok(ok)
+}
+
+/// Per-CPU data block, addressed through GS in kernel mode during syscalls.
+/// Layout must match the offsets hard-coded in arch/x86_64/syscall.S.
+#[repr(C)]
+pub struct PerCpuData {
+    pub current_fpu: u64,
+    pub syscall_kernel_rsp: u64,
+    pub syscall_user_rsp: u64,
+    pub syscall_frame: u64,
+    pub syscall_result: u64,
+    pub exec_rip: u64,
+    pub sigret_value: u64,
+    pub user_cs: u64,
+    pub user_ss: u64,
+    pub sigret_valid: u8,
+    pub exec_pending: u8,
+    pub _pad: [u8; 6],
+}
+
+impl PerCpuData {
+    pub const fn zero() -> Self {
+        Self {
+            current_fpu: 0,
+            syscall_kernel_rsp: 0,
+            syscall_user_rsp: 0,
+            syscall_frame: 0,
+            syscall_result: 0,
+            exec_rip: 0,
+            sigret_value: 0,
+            user_cs: 0,
+            user_ss: 0,
+            sigret_valid: 0,
+            exec_pending: 0,
+            _pad: [0; 6],
+        }
+    }
+}
+
+static mut PER_CPU: [PerCpuData; MAX_CPUS] = [const { PerCpuData::zero() }; MAX_CPUS];
+
+pub fn per_cpu_ptr(slot: usize) -> *mut PerCpuData {
+    if slot >= MAX_CPUS {
+        return core::ptr::null_mut();
+    }
+    unsafe { &raw mut PER_CPU[slot] }
+}
+
+/// Index of the running CPU in the MADT table (0..MAX_CPUS).
+pub fn current_cpu() -> usize {
+    let id = crate::arch::x86_64::apic::apic_id();
+    for i in 0..MAX_CPUS {
+        if CPU_STATE[i].load(core::sync::atomic::Ordering::Acquire) == CPU_READY {
+            let stored = unsafe { core::ptr::read_volatile(&raw const TRAMP_IDS[i]) };
+            if stored == id {
+                return i;
+            }
+        }
+    }
+    BSP_SLOT.load(core::sync::atomic::Ordering::Relaxed) as usize
 }

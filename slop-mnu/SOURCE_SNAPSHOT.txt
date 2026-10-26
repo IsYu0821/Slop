@@ -1,20 +1,20 @@
 SLOP/MNU - COMPLETE SOURCE SNAPSHOT
-Version: 0.82.0
+Version: 0.83.0
 SLOP: Synthetic Low-quality Operating Platform
 MNU: Maybe Not Unix
 Encoding: UTF-8
 
 FILE MANIFEST
-d4fc6fbb27741862a1c500c7dbaeb64952558ce81d1ba284bf4c6279e05be514     48234  CHANGELOG.md
-b4e38e5489208d5867a630eebbb762f4ef58e39e9aa6d65a556829521c221330       160  Cargo.lock
-fe1530988d38b7be08f6e043968103b6e7edde30aec65ef46eb7842eeba480de       231  Cargo.toml
+761250b3fd54c5e71d4bb506b1a32183e83ec6ea09389ca4516162e0a4288727     49439  CHANGELOG.md
+0792c15cb52c46eb04132506f8d8deb7b83b979a3c0d6c9813cdd022eab58182       160  Cargo.lock
+0f21e7442310867c9c9f9b77dfd74f1b1aff7e1c07a69e63d4866880bfce49a2       231  Cargo.toml
 f2c177cb41ca9d040940e8f7102a4c694f8d251d7a4b93dbfcf0f8aa008cbe28       563  LICENSE
 5ec1b971fcb3cfaa579eb59f6897f078f907c24caeccfbb815f7153e90849d10      7079  README.md
 a11b08b9fdde34f92ad25c335b73e8442ded9f26530cb9e491b4066ccc99ec70      2884  arch/x86_64/context.S
 9ff8356010f6fe858f0cd0cdd28c1fa7c7d7ff8e764f4f5f6fbea2570a44e59e       292  arch/x86_64/entry.S
 900fea1e0624f552c6a6c7f3b633f55f0b744ddca4dae8e586348d8bcf2a2eab      3114  arch/x86_64/exceptions.S
-6ca59c435f4ba76dc2686a26427febaf86710e86f3af370f4f1fa9fbbdd11d9f      2354  arch/x86_64/irq.S
-7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8      5224  arch/x86_64/syscall.S
+a66c381f524b26615ca70e8ad6fa1af8eb6c851e69fb979d3f2204a65e55b518      4086  arch/x86_64/irq.S
+26e54861b83d37d1aabfccad760affdadd6b32076cf1600cf6d45949f3e22d94      5191  arch/x86_64/syscall.S
 4c1b869591cf0070cfeaf5d1f6d21c83ccf76b8bb23f088abc49e8f98729ad7f      4184  arch/x86_64/trampoline.S
 953cac857dd5e2c2520472f13243b5757d528c16488d2f0d15a73791895b24fd      1073  arch/x86_64/user.S
 725aeb5896fe5519fb8df21ec6a302e39eb6ec1cbf2da024ea4bfb3ac32bcf25      1452  docs/architecture.md
@@ -99,6 +99,7 @@ ce0b5591528b85a6509cf40d20ea09cf5ebf044044d5b46b6ac537f570d5fbfd      4012  docs
 52258368b8949864cd4585c17b13293ea2d660ba111552ec10761b61d0a4bfe7      3181  docs/milestone81.md
 83af263aead92eaea01f3e94709e5618bfa9ebda74c20e25d4ca8d15fdbea74c      3991  docs/milestone82.md
 8ae12d7cb5ee381d0949800f1eee0edc2ba199ef32adb73759221df236faf10b      1111  docs/milestone9.md
+24db52bdfa9be6442456645b0e5d0be9f6dbe1d646c339c63fd4105f448641bd      3868  docs/milestone92.md
 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d       234  docs/naming.md
 9753bdf80120895110556cf23ea56ba60d5b31b3f0e0cf208950872c6100a4ee      5966  docs/priority-status.md
 e695c21b68f2db9af27b1492b2c9282aab01e6ffcda748ea2db7e5cdfc082956     14586  docs/roadmap-next.md
@@ -106,10 +107,10 @@ c6d965bf3d7d732ed8a6bab7071bf49cb50595f41acb6bd4814799bbf32246b1      2330  docs
 c88fbe9ecefdcf78df8794f816995b61722cda884eae07f31541b1771b7c1cb0       746  docs/security-model.md
 4e19331bbfd20a977357cb44a3fe3e4eab3aa1d74b8b884225486ce717896c18      5386  kernel/acpi.rs
 6e8463960e55a8bb3a5f808d4d2f9b92a9f0c50586d6066fe9c91f722dc5ab1c       133  kernel/arch/mod.rs
-6c34fdd6684a286d2ae63b0bb2e0bb9799538efe5c07378c5eaf2ae3f73ad656      9194  kernel/arch/x86_64/apic.rs
+4a04935754dad8cb41cbc001315a6681683396f72c047b125876abe3cf626b1b     10020  kernel/arch/x86_64/apic.rs
 ec61ae4e24df6daf896d08e8a49fc16ef680bc80f6deb4ffc43203a9aa5bc1e2      1418  kernel/arch/x86_64/cpu.rs
 4f0b57e568ea36e8bff4be5958bd378acd869b22b0285963711baef131216981      2460  kernel/arch/x86_64/descriptors.rs
-31d6f40e2ee9dc08f9989d668da805f1b4ed9820b8aa1324ef5f6c6d304a8bdd      3657  kernel/arch/x86_64/idt.rs
+637fc070a5bf7a37272720554a23419e32b5d65fb2b6804758fd17c1fa7c6942      4037  kernel/arch/x86_64/idt.rs
 9d154a57ec79035c60cebcbedd3d08a95c6a94b22d8467e328078d3e00cc3e94       357  kernel/arch/x86_64/mod.rs
 02d81d7cc273d83e4d4bcee9ca51578603327a83f511df689c6a0ba5bee7bd05       668  kernel/arch/x86_64/msr.rs
 22b4c52392350e43db8e027efdd438de866e306322b47f7e2685e753d64f5a94      5596  kernel/arch/x86_64/paging.rs
@@ -118,7 +119,7 @@ ba91f2d2b359947914e478790fff0789bd104d57dbd2c6020a40c703637cc34b      1740  kern
 a30d80dbf963c9619aa514b5df762557fa4f3aed1e27a140c9ba5e80e6c47f0b       979  kernel/arch/x86_64/port.rs
 c39f29e91e828d4ffbb32a7687c51b5e59a243a59269995d6a06b35061171ece       359  kernel/arch/x86_64/qemu.rs
 0f96cdc50da5d590c7ffbec53779d2c810e9a70d0d575a5e36254560fd82bbac      1432  kernel/arch/x86_64/rtc.rs
-6d21e4cb94e6b50fc7eeba53403d435924769652921e3192b5dc9029fb44f7f6      5752  kernel/arch/x86_64/syscall.rs
+e5de018e86d5f7f70bf80785d7acee6e1e1fcf6e4e5b4a95ffe2dc10f409473e      5502  kernel/arch/x86_64/syscall.rs
 6f1c5a4a997407f748d0dd6065d9b3f247142652e95e50d49d39e5e3dbce0e6d      1000  kernel/arch/x86_64/tsc.rs
 129bf9d8b9f08a05994289df573d5cc986ade78f25f435609eda49d3c566110b       845  kernel/arch/x86_64/user.rs
 d0583010843849c7ec7a87dc60165b3b3188a35e978398f6e938c7e52c543964      2781  kernel/boot.rs
@@ -134,12 +135,13 @@ cfb042a535fc7e5c42c5e80117071b25f8b7b1136adcb6dc792a5c9f7cf2e450      1395  kern
 34384129aeb59712cf08ff8cce15570dcdceeb1ac6ea26da0222f722194016a5      2150  kernel/exec.rs
 a637d4158e0dcdaacce1cb839b9711fb0af0b1b10fe94d58c7c1015837b6b431      8513  kernel/exec_runtime.rs
 7b593f8abcdedee01f5617c5a914ae4ba42973d2029743888463fc6dabe7ae84     45226  kernel/ext2.rs
+944dd99bdec8885e4a0b471e903b0de18e270257e221359decae6d61eb4f235c     16055  kernel/ext4.rs
 783bb09b7e621d688cff2a1cfd6e4fa0b1ac9f989ca148dc3aa62e9df97178ed     24953  kernel/fd.rs
 8c018122cf98cb5bad0cf60a075b3090cc6b1c8a144a774f7083fe89d406944c      2024  kernel/flock.rs
 48da63bb5cf3127b576d9b726c9ce7fedfbf08183f7efc3a6a15e35ca10f74fe      3483  kernel/futex.rs
 b63d64d36cfc35c8a102be74597203ee0ed26193d427f5558881ed621455a058      6419  kernel/inotify.rs
-94de4f88214ea56f7a42329c4af6f3d3b021907accb596a828d84015b34e3f72     11476  kernel/lib.rs
-bc3159baed92eed254d38deed920ba2d05a42bb94ae40da3e120e91708e8f7ed    176749  kernel/linux_abi/mod.rs
+e3ddef8b7ab8a04c3fadcbdb61f504f735571c90f5392a29c95e12ebda36c2b2     11490  kernel/lib.rs
+6b9b88775e24a80f04a180d9a3664366b60bfe76b0f0d52c1467a7ac96ded855    177087  kernel/linux_abi/mod.rs
 ccc5f8af0ab871179379a7a27f64194caa6e3c0b6d6017f8a9019f56483d03d4      6888  kernel/linux_abi/nr.rs
 2e2cae8adb4dd9be4f509ca5a3db7e409f60549196e839356cebd1b777bd8acf      3275  kernel/linux_abi/stack.rs
 4913b43acf1e2eda62aeaae93b0c9370f5cc4a2e88ea990ac986d65f755279e8      1261  kernel/linux_abi/types.rs
@@ -150,15 +152,15 @@ d9355ad15979f7c9d08e0e687143c29b6bd52ddda47ac53044b0e40c65b68a37     32790  kern
 baa15d12d9d78332a8bcb56281fd73092057572cbed242149c1a166f815de439     32446  kernel/process.rs
 4350b413ae7c29b90923b525cd8a8a991c252cbb411b942c9208b99a47c7ccca      5265  kernel/record_lock.rs
 77541ba69c5a5219244540ea5c6e3140f63180fe32d8c4fc5eb816f1cf8c373e      2354  kernel/robust.rs
-6ed0e02059609fe1b03c577e22d6b4af29235855b7164e2665718d18857d8d56     19582  kernel/signal.rs
-b4609af8e953313f1f61fb5949708f53e231be62fd067221cd66888e6e0bb561     21279  kernel/smp.rs
+1480166e7231a285c2adeea4c65c52ebaaeb5e38b43647b790eda6c5780da95d     19811  kernel/signal.rs
+84b3b08187ec20a471db49fbeefb171b815f4adeaff25f745fdb091eaca41d95     23856  kernel/smp.rs
 7a6cbd9728202e30e22c852806639a9d46f950a3d081e2b304e0eb1c88adb4a0     15878  kernel/socket.rs
 345bb6a0f31af523cf6e2199f39fff409e6b9c5a46819f873eee878a2a6db3cc      2005  kernel/sync.rs
-e597b60c1488f947cde1fc5a75a0fa9fd91337525c679aaec6c07efcdd651bee     39811  kernel/task.rs
+07d67125173b5110191e276572a333e5cd1fd164b6ae907e03767231417e9483     40295  kernel/task.rs
 9506214a8275d77d81a191a41226bd4096863577446e50c6b5846c4fd5e01a05      4281  kernel/time.rs
 7dbc80feecef43d9b2c1773c108e42f9f15501ef776f99ec2d16e81d29af45ce      1846  kernel/usercopy.rs
 90e42f177f67f98462878cc5731c5a791b481264f06f3eb9f3db75ead71e9883      6780  kernel/vdso.rs
-054fcef6348025adf2ecbf676a8352be078e2e3b9d533c3a7ebb0ccf262c1245     74144  kernel/vfs.rs
+cfd40c01415ab29816810b271595ae5dcaba81d0c467cae0d2fb4b4906491da4     75807  kernel/vfs.rs
 4d0c7b3116d37c43edc0e2cf7d9128064b7ab60651eb41b94fd6279e33be9fcc      8000  kernel/vm.rs
 52330746b50d237793e9513c16950a4c5fc1e0dbed69d30f41284fc3523f9a7a      1126  kernel/wait_queue.rs
 be8a5f3290b6dc4700424b8e42ade0d690d530979aca36436d09350aac051c5c       100  libc/errno.c
@@ -191,7 +193,7 @@ daedb13bf90925963a44bbfa615d85e16f35d267e831c209f6eae5f205eeff6d       285  link
 a3c9df31097f06dd9657477d085363b0b74be4ec19bb4af8f53443ffc4079791       359  targets/x86_64-slop-mnu.json
 b7a001d0fa55206d8f21a32e2796a2860cb7ffa2c3cfa8fd25c0a3d04a15b512      1205  tests/bbtest-mini.sh
 bb02a8d3e422701b2eb3778d3e8ddb62400922b7477bd04b65e04215f64c91b1      6814  tests/bbtest.sh
-07ade36227366b831945ec12f2d05c09907353a8dd4930f76f5fbf5292a5f991    106467  tests/differential.c
+478c1fd48c5808eaf5fe882dd33e58c4c9afb15b4ed60cbd4017190432fbacfd    112637  tests/differential.c
 d084a7fc86500191b6d9aa8f311b6f6d91da4906ef6c1360e17975896c8327d4      3650  tests/heap.c
 9bba815d502feb80c7d5fb18c41ac31984fd9da2ef460a0bc5ea97eb8cf8c7f9      2774  tests/hello-c.c
 2bac86c95eaabf6a3396f9e4d2ce5b9747d91aadba61a7993be50a616a338aa6      3564  tests/hello-file.c
@@ -204,6 +206,7 @@ f74397ba719aff6f5f6fc46af081c3683a6dd9693ac581b6dd8c914cd6b84b3f      3626  test
 f14a8f1c89f60460b6fdfc05ef63c0167c0578425f20c7d88254fbeaf02f139a       171  tests/nopie-helper.c
 c9d90f83334313526b05eb85ee96acb04896d99a9e7c76d29a9e95aae7d92f92      2887  tools/acceptance-test.sh
 c0c06363e78f522c99048a53a72807846aa1199f824e559f8856ea3489a61625       975  tools/build-ext2.sh
+c23880458a72c93203e5c1cd2ae36f20769dcfccfc6a217a3a396ba539167408      2053  tools/build-ext4.sh
 d0ca4ece563b103066f3e0eff06445de44a827061366f066ad6ffa25330d0778      2740  tools/build-initramfs.py
 709cbf94a77ecc14571a16d8ce5049f09e45c3b1a159087d59ace4e9588d51e6      1522  tools/build-libc-test.sh
 96022cf77b8dd848bb172c214baee090048096d0e7559945d587fcca32242bef       544  tools/build-test-elf.sh
@@ -212,9 +215,10 @@ dd1be0b03a5b26fd083efb420533ecbd26ef1c2504841b7020c0ebbfe19f55f0      1508  tool
 6bfb4e0a5e508b8e5b13482be819541e743dd2cacfc66481561218fa4e2748c4      5213  tools/busybox-test.sh
 5d7e8fe6d459e76bdcd1b26a3150eeb12d493327351226224cdc22176c4e2cc3      7602  tools/check-abi.py
 3815734c4bbe66f1c7e4b20829c4dbd9d72b275d9b91c8b8cc44a12f22b62188      1635  tools/check-source.ps1
-4675b7bc0b9baaec18493de1cea3307f7ad502dd235af25a22ba617e29ea1b7b      8680  tools/check-source.sh
+1e81657554a2e24a79f0720052b35fb3779c137dd606e96ef03e09a92f2c1ee2      8755  tools/check-source.sh
 2feb496a40ee466d6f1c4517b8abb2ac9f713dde735c1b95c950e9f2286c50df       446  tools/check-toolchain.sh
-ca6fc41c855c270485b00afc78acf9d756b4f161b467e9752490fe92e922d71d      7005  tools/differential-test.sh
+b32d23f26f57d15a1ee6b84f1c70b5c89c8c2299538bd2ca5e914fc8d450ff87      7361  tools/differential-test.sh
+eecdf04e1efbe3b7230c94e80d4f34f8c8e7565c205fab6a73a0f0747b2104e1      5330  tools/ext4-test.sh
 970ef781532fe5a5cef2ec1682d4c6709b60682cf4b25b8ba5c0e5973ed8b89d      2672  tools/heap-test.sh
 4b846a7388218638fc158b76b346280c1a7684cbe23e6c07bfb044476828e3ab       824  tools/link.sh
 701520ee5079cda10bbbc4047b42cc226e2667932822f271efa59c8d214cced6      3145  tools/make-snapshot.py
@@ -223,13 +227,20 @@ a83c0c3b15ce96faef287b793206b0fcb36b3dc6af5692105908cb3a78f91ead      1311  tool
 9e6344da7b9b1e9db04b0021e300566916cd6a256279286edcb4422f8bfbb15c      4284  vdso/vdso.S
 3f4fdce8562d2da30117b36145ad18c8f8dfc0b6dae5ff4428448ab19140668c       716  vdso/vdso.ld
 
-TOTAL FILES: 217
+TOTAL FILES: 221
 
 ================================================================================
 FILE: CHANGELOG.md
-SIZE: 48234 bytes
-SHA-256: d4fc6fbb27741862a1c500c7dbaeb64952558ce81d1ba284bf4c6279e05be514
+SIZE: 49439 bytes
+SHA-256: 761250b3fd54c5e71d4bb506b1a32183e83ec6ea09389ca4516162e0a4288727
 ================================================================================
+## 0.83.0 - 2026-10-26
+- ext4 read-only mount: superblock feature detection (EXTENTS required, 64BIT refused), recursive extent-tree block mapping with holes as zeros, directory and both symlink forms, served through a new `MountKind::Ext4` with `0x200000`-based inodes disjoint from ext2; every mutating op returns EROFS and `mountinfo` reports the `ext4` fstype.
+- New `DIFF_EXT4_OK` differential battery (seed tree built by `tools/build-ext4.sh`, native-vs-guest byte comparison, guest-side EROFS assertions) plus standalone `tools/ext4-test.sh`, which also proves read-only operation via clean `e2fsck` and unchanged free counts.
+- `MKNODAT` syscall wired through to `vfs::mknod`, covered by the `*at` battery on tmpfs (fifo + regular + EEXIST + EBADF).
+- Per-CPU syscall-state groundwork for SMP: GS base pinned per CPU (no userspace GS use, so no swapgs dance), `%gs`-relative syscall frame/FPU/result slots, per-CPU Rust accessors; APs keep their own blocks without cross-CPU clobbering. No scheduling change yet.
+- Verified with all quality gates green: check-source, heap, acceptance, differential (e2fsck clean), busybox 115/115, ext4-test PASS, 2 vCPU boot with both CPUs online and attested.
+
 ## 0.82.0 - 2026-10-26
 - SMP bring-up: MADT enumeration (type 0/9, enabled only), per-AP stacks and CPU state, INIT/SIPI start into a parked halt loop, and atomic attestations (state machine, magic, stack probe, single tick) with a TSC deadline instead of sleeps; missing APs stay absent and the boot continues.
 - Real-mode trampoline at physical 0x7000 (the AP starts with paging off): 16-bit entry, protected-mode transition, mailbox handoff (PML4/entry/LAPIC/ID/stack tables), long-mode entry, APIC-ID scan, per-CPU stack switch and high-half `ap_main` with per-CPU GDT/TSS/IDT and LAPIC enable, plus RAM stage markers for diagnostics.
@@ -747,7 +758,7 @@ END FILE: CHANGELOG.md
 ================================================================================
 FILE: Cargo.lock
 SIZE: 160 bytes
-SHA-256: b4e38e5489208d5867a630eebbb762f4ef58e39e9aa6d65a556829521c221330
+SHA-256: 0792c15cb52c46eb04132506f8d8deb7b83b979a3c0d6c9813cdd022eab58182
 ================================================================================
 # This file is automatically @generated by Cargo.
 # It is not intended for manual editing.
@@ -755,18 +766,18 @@ version = 4
 
 [[package]]
 name = "slop-mnu-kernel"
-version = "0.82.0"
+version = "0.83.0"
 --------------------------------------------------------------------------------
 END FILE: Cargo.lock
 
 ================================================================================
 FILE: Cargo.toml
 SIZE: 231 bytes
-SHA-256: fe1530988d38b7be08f6e043968103b6e7edde30aec65ef46eb7842eeba480de
+SHA-256: 0f21e7442310867c9c9f9b77dfd74f1b1aff7e1c07a69e63d4866880bfce49a2
 ================================================================================
 [package]
 name = "slop-mnu-kernel"
-version = "0.82.0"
+version = "0.83.0"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -1172,8 +1183,8 @@ END FILE: arch/x86_64/exceptions.S
 
 ================================================================================
 FILE: arch/x86_64/irq.S
-SIZE: 2354 bytes
-SHA-256: 6ca59c435f4ba76dc2686a26427febaf86710e86f3af370f4f1fa9fbbdd11d9f
+SIZE: 4086 bytes
+SHA-256: a66c381f524b26615ca70e8ad6fa1af8eb6c851e69fb979d3f2204a65e55b518
 ================================================================================
 .text
 .global apic_timer_entry
@@ -1266,13 +1277,95 @@ apic_timer_entry:
 #ifdef __ELF__
 .size apic_timer_entry,.-apic_timer_entry
 #endif
+
+.text
+.global apic_resched_entry
+#ifdef __ELF__
+.type apic_resched_entry,@function
+#endif
+apic_resched_entry:
+    cld
+    /* A reschedule IPI can preempt kernel code with live SSE state, so the
+       register file is saved around the handler exactly like the timer. */
+    sub $256, %rsp
+    movups %xmm0,0(%rsp)
+    movups %xmm1,16(%rsp)
+    movups %xmm2,32(%rsp)
+    movups %xmm3,48(%rsp)
+    movups %xmm4,64(%rsp)
+    movups %xmm5,80(%rsp)
+    movups %xmm6,96(%rsp)
+    movups %xmm7,112(%rsp)
+    movups %xmm8,128(%rsp)
+    movups %xmm9,144(%rsp)
+    movups %xmm10,160(%rsp)
+    movups %xmm11,176(%rsp)
+    movups %xmm12,192(%rsp)
+    movups %xmm13,208(%rsp)
+    movups %xmm14,224(%rsp)
+    movups %xmm15,240(%rsp)
+    push %rax
+    push %rcx
+    push %rdx
+    push %rsi
+    push %rdi
+    push %r8
+    push %r9
+    push %r10
+    push %r11
+    push %rbx
+    push %rbp
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    mov %rsp, %r15
+    and $-16, %rsp
+    call apic_resched_rust
+    mov %r15, %rsp
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %rbp
+    pop %rbx
+    pop %r11
+    pop %r10
+    pop %r9
+    pop %r8
+    pop %rdi
+    pop %rsi
+    pop %rdx
+    pop %rcx
+    pop %rax
+    movups 0(%rsp),%xmm0
+    movups 16(%rsp),%xmm1
+    movups 32(%rsp),%xmm2
+    movups 48(%rsp),%xmm3
+    movups 64(%rsp),%xmm4
+    movups 80(%rsp),%xmm5
+    movups 96(%rsp),%xmm6
+    movups 112(%rsp),%xmm7
+    movups 128(%rsp),%xmm8
+    movups 144(%rsp),%xmm9
+    movups 160(%rsp),%xmm10
+    movups 176(%rsp),%xmm11
+    movups 192(%rsp),%xmm12
+    movups 208(%rsp),%xmm13
+    movups 224(%rsp),%xmm14
+    movups 240(%rsp),%xmm15
+    add $256, %rsp
+    iretq
+#ifdef __ELF__
+.size apic_resched_entry,.-apic_resched_entry
+#endif
 --------------------------------------------------------------------------------
 END FILE: arch/x86_64/irq.S
 
 ================================================================================
 FILE: arch/x86_64/syscall.S
-SIZE: 5224 bytes
-SHA-256: 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8
+SIZE: 5191 bytes
+SHA-256: 26e54861b83d37d1aabfccad760affdadd6b32076cf1600cf6d45949f3e22d94
 ================================================================================
 .text
 .global syscall_entry
@@ -1280,9 +1373,12 @@ SHA-256: 7f2bc6943e4e8bc84c14ed039b915f7f4496d7881dec94f7402beabba5f552b8
 .type syscall_entry,@function
 #endif
 syscall_entry:
-    /* SYSCALL leaves user RIP in RCX and RFLAGS in R11; it does not switch RSP. */
-    mov %rsp, SYSCALL_USER_RSP(%rip)
-    mov SYSCALL_KERNEL_RSP(%rip), %rsp
+    /* SYSCALL leaves user RIP in RCX and RFLAGS in R11; it does not switch RSP.
+       GS_BASE is pinned to the per-CPU block by boot (userspace never owns
+       GS here: no ARCH_SET_GS), so no swapgs is needed and %gs always
+       addresses the running CPU's state, in any ring. */
+    mov %rsp, %gs:16
+    mov %gs:8, %rsp
     /* Linux guarantees every user register except RAX, RCX and R11 survives a syscall. */
     push %r11
     push %rcx
@@ -1302,13 +1398,13 @@ syscall_entry:
     /* Frame: +0 r15 +8 r14 +16 r13 +24 r12 +32 rbp +40 rbx +48 r10 +56 r9
        +64 r8 +72 rdx +80 rsi +88 rdi +96 rax(nr) +104 rcx +112 r11.
        Linux ABI: rax=nr, rdi,rsi,rdx,r10,r8,r9=args. SysV call has arg7 on stack. */
-    mov %rsp, SYSCALL_FRAME(%rip)
+    mov %rsp, %gs:24
     /* The kernel uses XMM registers, so the user SSE file is parked in the
        running task's FPU area on entry and restored on exit. The area is
        per-task, so a task blocked inside a syscall keeps its registers while
        another task runs. FXSAVE is avoided because it traps on several TCG
        builds; the sixteen registers are moved directly. */
-    mov CURRENT_FPU(%rip), %r11
+    mov %gs:0, %r11
     test %r11, %r11
     jz .Lfpu_saved
     movups %xmm0,0(%r11)
@@ -1335,20 +1431,20 @@ syscall_entry:
     mov 48(%rsp), %r8
     mov 64(%rsp), %r9
     push 56(%rsp)
-    movb $0, SIGRET_VALID(%rip)
+    movb $0, %gs:72
     call syscall_dispatch_raw
     add $8, %rsp
     /* The dispatcher result travels back to the user in RAX. The saved RAX
        slot keeps the syscall number, so an interrupted syscall can be
        restarted with the same number. The result is parked in a scratch
        cell because the signal check below is a call. */
-    mov %rax, SYSCALL_RESULT(%rip)
-    cmpb $0, EXEC_PENDING(%rip)
+    mov %rax, %gs:32
+    cmpb $0, %gs:73
     je .Lcheck_signal
     /* An execve redirects the return to the new image. */
-    mov EXEC_RIP(%rip), %rdx
+    mov %gs:40, %rdx
     mov %rdx, 104(%rsp)
-    movb $0, EXEC_PENDING(%rip)
+    movb $0, %gs:73
 .Lcheck_signal:
     /* A queued signal is delivered before the process returns to user mode.
        The kernel builds the published rt_sigframe on the user stack and
@@ -1365,14 +1461,14 @@ syscall_entry:
     add $8, %rsp
     /* The syscall result travels back to the user in RAX. A signal handler
        that returned through rt_sigreturn has its own value. */
-    mov SYSCALL_RESULT(%rip), %rax
-    cmpb $0, SIGRET_VALID(%rip)
+    mov %gs:32, %rax
+    cmpb $0, %gs:72
     je .Lno_sigret
-    mov SIGRET_VALUE(%rip), %rax
+    mov %gs:48, %rax
 .Lno_sigret:
     /* The FPU area may have been updated by rt_sigreturn, so the exit
        restores whatever the running task now owns. */
-    mov CURRENT_FPU(%rip), %r11
+    mov %gs:0, %r11
     test %r11, %r11
     jz .Lfpu_restored
     movups 0(%r11),%xmm0
@@ -1399,7 +1495,7 @@ syscall_entry:
     mov 104(%rsp), %rdx
     shr $47, %rdx
     jne .Lbad_pre
-    mov SYSCALL_USER_RSP(%rip), %rdx
+    mov %gs:16, %rdx
     shr $47, %rdx
     jne .Lbad_pre
     pop %r15
@@ -1420,19 +1516,19 @@ syscall_entry:
     pop %r11
     /* IRETQ frame, pushed in reverse pop order: SS, RSP, RFLAGS, CS, RIP. */
     push USER_SS(%rip)
-    push SYSCALL_USER_RSP(%rip)
+    push %gs:16
     push %r11
     push USER_CS(%rip)
     push %rcx
     iretq
 .Lbad_pre:
     mov 104(%rsp), %rcx
-    mov SYSCALL_USER_RSP(%rip), %rdx
+    mov %gs:16, %rdx
     jmp .Lbad
 .Lbad:
     mov %rcx, %rdi
     mov %rdx, %rsi
-    mov SYSCALL_KERNEL_RSP(%rip), %rsp
+    mov %gs:8, %rsp
     and $-16, %rsp
     call bad_sysret
 #ifdef __ELF__
@@ -6088,6 +6184,91 @@ This does not yet recover from machine-checks or stale firmware mappings, and th
 END FILE: docs/milestone9.md
 
 ================================================================================
+FILE: docs/milestone92.md
+SIZE: 3868 bytes
+SHA-256: 24db52bdfa9be6442456645b0e5d0be9f6dbe1d646c339c63fd4105f448641bd
+================================================================================
+# Milestone 92: ext4 read-only mount
+
+## Goal
+
+Read a real ext4 filesystem without disturbing the working system:
+detect the on-disk format from the superblock, walk extent trees
+instead of indirect blocks, and serve files, directories and both
+symlink forms through the existing VFS. Every mutating operation on
+an ext4 mount fails loudly with EROFS instead of silently corrupting
+a journaled filesystem the kernel does not yet replay.
+
+## On-disk contract fixed first
+
+- Same 0xEF53 magic as ext2; ext4 is selected when the incompatible
+  feature word carries EXTENTS (0x40) and no 64BIT (0x80) bit.
+  Anything else (64bit, unknown incompat bits) refuses to mount
+  rather than misread.
+- Inodes are the 128-byte ext2-compatible prefix (256-byte on-disk
+  records); when `i_flags & EXTENTS` is set, `i_block` holds an
+  extent tree (header magic 0xF30A, index nodes, leaf extents) and
+  not indirect block numbers.
+- Directories use `dir_entry_2`, byte-identical in layout to the
+  ext2 reader, so name lookup and `readdir` share the record walk.
+- Fast symlinks (target inline in `i_block`, size < 60) and
+  block-backed symlinks (extent-mapped) both resolve, including
+  open-through and `lstat`-vs-`stat` distinctions.
+
+## Implementation
+
+- `kernel/ext4.rs` (new): superblock probe, group-descriptor and
+  inode table walking for arbitrary inode sizes, a recursive extent
+  mapper (depth-bounded, holes read back as zeros, uninitialized
+  extents read as zeros, `ee_start_hi` must be zero), and a read-only
+  surface mirroring ext2: `lookup`, `read`, `readdir`, `is_dir`,
+  `readlink_into`, `file_size`. No write path exists at all.
+- VFS routing (`kernel/vfs.rs`): new `MountKind::Ext4` plus an
+  `ext4` fstype for explicit mounts; the legacy `/mnt` mount
+  auto-detects ext2 vs ext4 from the superblock. Inode numbers live
+  at `0x200000+inum`, disjoint from ext2's `0x100000` range, with
+  `is_ext4_ino` guards so ext4 inodes can never take the ext2 write
+  path (`is_ext2_inode` now excludes them; `write_off` and the
+  ino-based `truncate` return EROFS).
+- All mutating VFS operations on Ext4 mounts (`create`, `unlink`,
+  `mkdir`, `rmdir`, `rename`, `chmod`, `truncate`, `mknod`,
+  `symlink`, `link`, write) fail with EROFS; `mountinfo` reports
+  the `ext4` fstype.
+- `tools/build-ext4.sh` (new): builds a 32 MiB, 4 KiB-block ext4
+  image with a fixed feature set (extents on; 64bit, metadata_csum,
+  dir_index, huge_file, flex_bg, uninit_bg off) and a seed tree
+  (`hello.txt`, `sub/nested.txt`, fast + long symlinks, a 100 KiB
+  multi-extent file), and records pristine free counts.
+
+## Tests added
+
+- `DIFF_EXT4_OK` battery in `tests/differential.c`: reads every
+  seed file byte-for-byte, checks sizes and file types, lists the
+  subdirectory, resolves both symlink forms (including open-through
+  and `lstat`-vs-`stat`), and — guest-only — asserts EROFS on
+  create/mkdir/unlink/rmdir/truncate/write.
+- The battery runs natively against a seed-tree copy and in the
+  guest against the image; image flavor is probed at runtime, so
+  the ext2 battery prints `DIFF_EXT2_SKIP` on ext4 images (and vice
+  versa) instead of failing.
+- `tools/ext4-test.sh` (new): builds the image, runs the native and
+  guest batteries (guest requires `DIFF_EXT4_OK` + `DIFF_EXT2_SKIP`
+  + `DIFF_DONE`), then proves read-only operation with `e2fsck -n`
+  clean and bit-identical free counts against the pristine record.
+
+## Verification
+
+- `ext4 test: PASS` (e2fsck clean, free counts unchanged
+  blocks=7111 inodes=238); native `DIFF_EXT2_OK` + `DIFF_EXT4_OK`.
+- Full gate suite green with the ext4 code in the tree:
+  check-source, heap, acceptance, differential (e2fsck clean, free
+  counts exact, platter bytes verified), busybox 115/115.
+- 1/2/4/8 vCPU boots unchanged (SMP bring-up untouched by this
+  milestone); writes are uniformly EROFS (MS93 owns read-write).
+--------------------------------------------------------------------------------
+END FILE: docs/milestone92.md
+
+================================================================================
 FILE: docs/naming.md
 SIZE: 234 bytes
 SHA-256: 161643c6a5bf1517593cbba6bf3f35b1f2848c4b7270f7e283b49eede4f07a4d
@@ -6671,14 +6852,16 @@ END FILE: kernel/arch/mod.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/apic.rs
-SIZE: 9194 bytes
-SHA-256: 6c34fdd6684a286d2ae63b0bb2e0bb9799538efe5c07378c5eaf2ae3f73ad656
+SIZE: 10020 bytes
+SHA-256: 4a04935754dad8cb41cbc001315a6681683396f72c047b125876abe3cf626b1b
 ================================================================================
 //! xAPIC and first IOAPIC support for the bootstrap processor.
 use crate::acpi::InterruptInfo;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TIMER_VECTOR: u8 = 0x40;
+/* Cross-CPU reschedule request (MS83): fixed-delivery IPI, no LVT entry. */
+pub const RESCHED_VECTOR: u8 = 0x41;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
 
 static mut LAPIC: u64 = 0;
@@ -6949,6 +7132,26 @@ pub fn send_sipi(dest: u32, vector: u8) -> bool {
     send_ipi(dest, 0x0000_0600 | vector as u32)
 }
 
+/* Sends a fixed-delivery IPI for the given vector to one APIC ID.
+   Used for cross-CPU reschedule requests (MS83); shorthand and
+   trigger bits stay clear, destination is physical. */
+pub fn send_fixed_ipi(dest: u32, vector: u8) -> bool {
+    send_ipi(dest, 0x0000_0000 | vector as u32)
+}
+
+/* Requests a reschedule on one AP. Harmless when the target is idle:
+   the flag is still global (only the BSP runs tasks), so it just
+   marks a reschedule pending for the next yield point. */
+pub fn send_resched_ipi(dest: u32) -> bool {
+    send_fixed_ipi(dest, RESCHED_VECTOR)
+}
+
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn apic_resched_rust() {
+    crate::task::request_resched();
+    unsafe { write(0xb0, 0) }
+}
+
 /* Enables a secondary CPU's Local APIC for the parked state: the
    spurious vector is installed so stray vectors have somewhere to go
    and every LVT entry is masked so the parked CPU takes no interrupts
@@ -7015,13 +7218,13 @@ END FILE: kernel/arch/x86_64/descriptors.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/idt.rs
-SIZE: 3657 bytes
-SHA-256: 31d6f40e2ee9dc08f9989d668da805f1b4ed9820b8aa1324ef5f6c6d304a8bdd
+SIZE: 4037 bytes
+SHA-256: 637fc070a5bf7a37272720554a23419e32b5d65fb2b6804758fd17c1fa7c6942
 ================================================================================
 #[repr(C,packed)]#[derive(Clone,Copy)]struct Gate{lo:u16,sel:u16,ist:u8,attr:u8,mid:u16,hi:u32,zero:u32}
 impl Gate{const fn missing()->Self{Self{lo:0,sel:0,ist:0,attr:0,mid:0,hi:0,zero:0}}fn set(&mut self,f:usize,ist:u8){self.lo=f as u16;self.sel=super::descriptors::KCODE;self.ist=ist&7;self.attr=0x8e;self.mid=(f>>16)as u16;self.hi=(f>>32)as u32;self.zero=0;}}
-#[repr(C,packed)]struct Ptr{limit:u16,base:u64}static mut IDT:[Gate;256]=[Gate::missing();256];unsafe extern "sysv64"{fn apic_timer_entry();fn isr_default();fn isr_page_fault();fn isr_double_fault();fn isr_general_protection();fn isr_invalid_tss();fn isr_segment_not_present();fn isr_stack_segment();fn isr_alignment_check();}
-pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(i)).set(isr_default as usize,0)}(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(8)).set(isr_double_fault as usize,1);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(10)).set(isr_invalid_tss as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(11)).set(isr_segment_not_present as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(12)).set(isr_stack_segment as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(13)).set(isr_general_protection as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(14)).set(isr_page_fault as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(17)).set(isr_alignment_check as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(super::apic::TIMER_VECTOR as usize)).set(apic_timer_entry as usize,2);let p=Ptr{limit:(core::mem::size_of::<[Gate;256]>()-1)as u16,base:core::ptr::addr_of!(IDT)as u64};core::arch::asm!("lidt [{}]",in(reg)&p,options(readonly,nostack));}}
+#[repr(C,packed)]struct Ptr{limit:u16,base:u64}static mut IDT:[Gate;256]=[Gate::missing();256];unsafe extern "sysv64"{fn apic_timer_entry();fn apic_resched_entry();fn isr_default();fn isr_page_fault();fn isr_double_fault();fn isr_general_protection();fn isr_invalid_tss();fn isr_segment_not_present();fn isr_stack_segment();fn isr_alignment_check();}
+pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(i)).set(isr_default as usize,0)}(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(8)).set(isr_double_fault as usize,1);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(10)).set(isr_invalid_tss as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(11)).set(isr_segment_not_present as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(12)).set(isr_stack_segment as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(13)).set(isr_general_protection as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(14)).set(isr_page_fault as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(17)).set(isr_alignment_check as usize,0);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(super::apic::TIMER_VECTOR as usize)).set(apic_timer_entry as usize,2);(*core::ptr::addr_of_mut!(IDT).cast::<Gate>().add(super::apic::RESCHED_VECTOR as usize)).set(apic_resched_entry as usize,2);let p=Ptr{limit:(core::mem::size_of::<[Gate;256]>()-1)as u16,base:core::ptr::addr_of!(IDT)as u64};core::arch::asm!("lidt [{}]",in(reg)&p,options(readonly,nostack));}}
 #[unsafe(no_mangle)]pub extern "sysv64" fn exception_rust(vector:u64,error:u64,rip:u64,cs:u64){
  let cr2:u64;unsafe{core::arch::asm!("mov {}, cr2",out(reg)cr2,options(nostack,preserves_flags));}
  /* Demand paging and COW also fault while the kernel is copying to or from
@@ -7048,7 +7251,9 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
    &[]
  };
  let apic=unsafe{crate::arch::x86_64::apic::apic_id()};
- crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} apic={:#x} code={:02x?}",vector,error,rip,cs,cr2,apic,code);
+ let gs_base=unsafe{crate::arch::x86_64::msr::rdmsr(crate::arch::x86_64::msr::IA32_GS_BASE)};
+ let kgs_base=unsafe{crate::arch::x86_64::msr::rdmsr(crate::arch::x86_64::msr::IA32_KERNEL_GS_BASE)};
+ crate::println!("kernel exception {} error={:#x} rip={:#x} cs={:#x} cr2={:#x} apic={:#x} gs={:#x} kgs={:#x} code={:02x?}",vector,error,rip,cs,cr2,apic,gs_base,kgs_base,code);
  crate::arch::halt()
 }
 
@@ -7360,25 +7565,20 @@ END FILE: kernel/arch/x86_64/rtc.rs
 
 ================================================================================
 FILE: kernel/arch/x86_64/syscall.rs
-SIZE: 5752 bytes
-SHA-256: 6d21e4cb94e6b50fc7eeba53403d435924769652921e3192b5dc9029fb44f7f6
+SIZE: 5502 bytes
+SHA-256: e5de018e86d5f7f70bf80785d7acee6e1e1fcf6e4e5b4a95ffe2dc10f409473e
 ================================================================================
 use crate::linux_abi;
 use super::{descriptors,msr};
+fn pc()->*mut crate::smp::PerCpuData{crate::smp::per_cpu_ptr(crate::smp::current_cpu())}
 
 unsafe extern "C" { fn syscall_entry(); }
-#[unsafe(no_mangle)] pub static mut SYSCALL_KERNEL_RSP:u64=0;
-#[unsafe(no_mangle)] pub static mut SYSCALL_USER_RSP:u64=0;
 /* Entry point of the saved user register frame, published for fork. */
-#[unsafe(no_mangle)] pub static mut SYSCALL_FRAME:u64=0;
 /* Scratch cell for the dispatcher result between the dispatcher call and the
    user-mode return. */
-#[unsafe(no_mangle)] pub static mut SYSCALL_RESULT:u64=0;
 /* The value rt_sigreturn restores into the user register file. It is
    published separately because the dispatcher writes the scratch cell above
    after the syscall returns. */
-#[unsafe(no_mangle)] pub static mut SIGRET_VALUE:u64=0;
-#[unsafe(no_mangle)] pub static mut SIGRET_VALID:u8=0;
 /* User selectors used by the IRETQ return path of the syscall entry. */
 #[unsafe(no_mangle)] pub static USER_CS:u64=descriptors::UCODE as u64;
 #[unsafe(no_mangle)] pub static USER_SS:u64=descriptors::UDATA as u64;
@@ -7391,7 +7591,7 @@ pub struct UserFrame{pub r15:u64,pub r14:u64,pub r13:u64,pub r12:u64,pub rbp:u64
 
 pub unsafe fn init(kernel_stack_top:u64){
  unsafe{
-  SYSCALL_KERNEL_RSP=kernel_stack_top;
+  (*pc()).syscall_kernel_rsp=kernel_stack_top;
   let mut efer=msr::rdmsr(msr::IA32_EFER);efer|=1|(1<<11);msr::wrmsr(msr::IA32_EFER,efer);
   let star=((descriptors::UCODE as u64-16)<<48)|((descriptors::KCODE as u64)<<32);
   msr::wrmsr(msr::IA32_STAR,star);msr::wrmsr(msr::IA32_LSTAR,syscall_entry as usize as u64);
@@ -7407,10 +7607,8 @@ pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a
 }
 #[unsafe(no_mangle)]pub extern "sysv64" fn bad_sysret(rip:u64,rsp:u64)->!{crate::println!("rejected SYSRET rip={:#x} rsp={:#x}",rip,rsp);crate::arch::halt()}
 
-pub unsafe fn set_kernel_stack(value:u64){unsafe{SYSCALL_KERNEL_RSP=value}}
-#[unsafe(no_mangle)]pub static mut EXEC_PENDING:u8=0;
-#[unsafe(no_mangle)]pub static mut EXEC_RIP:u64=0;
-pub unsafe fn commit_exec_return(rip:u64,rsp:u64){unsafe{EXEC_RIP=rip;SYSCALL_USER_RSP=rsp;EXEC_PENDING=1;}}
+pub unsafe fn set_kernel_stack(value:u64){unsafe{(*pc()).syscall_kernel_rsp=value}}
+pub unsafe fn commit_exec_return(rip:u64,rsp:u64){unsafe{let p=pc();(*p).exec_rip=rip;(*p).syscall_user_rsp=rsp;(*p).exec_pending=1;}}
 /* Offsets of the on-stack user register frame saved by syscall_entry. */
 const F_R15:usize=0;const F_R14:usize=1;const F_R13:usize=2;const F_R12:usize=3;const F_RBP:usize=4;const F_RBX:usize=5;
 const F_R10:usize=6;const F_R9:usize=7;const F_R8:usize=8;const F_RDX:usize=9;const F_RSI:usize=10;const F_RDI:usize=11;
@@ -7435,12 +7633,12 @@ pub extern "sysv64" fn signal_pending_check(frame:*mut u64)->u64{
 /* Copies the in-flight syscall frame into a resume snapshot whose RAX is 0,
     the value fork must return in the child. Callers run in syscall context. */
 pub fn capture_fork_frame()->Option<UserFrame>{
- let f=unsafe{SYSCALL_FRAME as *const u64};if f.is_null(){return None}
+ let f=unsafe{(*pc()).syscall_frame as *const u64};if f.is_null(){return None}
  unsafe{
   Some(UserFrame{
    r15:*f.add(0),r14:*f.add(1),r13:*f.add(2),r12:*f.add(3),rbp:*f.add(4),rbx:*f.add(5),
    r10:*f.add(6),r9:*f.add(7),r8:*f.add(8),rdx:*f.add(9),rsi:*f.add(10),rdi:*f.add(11),
-   rax:0,rip:*f.add(13),rflags:*f.add(14),rsp:SYSCALL_USER_RSP,
+   rax:0,rip:*f.add(13),rflags:*f.add(14),rsp:unsafe{(*pc()).syscall_user_rsp},
   })
  }
 }
@@ -7459,7 +7657,7 @@ pub fn capture_user_frame(frame:*mut u64)->Option<UserFrame>{
   Some(UserFrame{
    r15:*f.add(0),r14:*f.add(1),r13:*f.add(2),r12:*f.add(3),rbp:*f.add(4),rbx:*f.add(5),
    r10:*f.add(6),r9:*f.add(7),r8:*f.add(8),rdx:*f.add(9),rsi:*f.add(10),rdi:*f.add(11),
-   rax:*f.add(12),rip:*f.add(13),rflags:*f.add(14),rsp:SYSCALL_USER_RSP,
+   rax:*f.add(12),rip:*f.add(13),rflags:*f.add(14),rsp:unsafe{(*pc()).syscall_user_rsp},
   })
  }
 }
@@ -7472,15 +7670,15 @@ pub fn set_return_context(frame:*mut u64,ctx:&UserFrame)->bool{
   *f.add(4)=ctx.rbp;*f.add(5)=ctx.rbx;*f.add(6)=ctx.r10;*f.add(7)=ctx.r9;
   *f.add(8)=ctx.r8;*f.add(9)=ctx.rdx;*f.add(10)=ctx.rsi;*f.add(11)=ctx.rdi;
   *f.add(12)=ctx.rax;*f.add(13)=ctx.rip;*f.add(14)=ctx.rflags;
-  SYSCALL_USER_RSP=ctx.rsp;
+  unsafe{(*pc()).syscall_user_rsp=ctx.rsp;}
  }
  true
 }
 
 /* Per-task user RSP accessors used by the scheduler when switching between
    threads that share the global syscall frame slot. */
-pub unsafe fn read_user_rsp()->u64{unsafe{SYSCALL_USER_RSP}}
-pub unsafe fn write_user_rsp(v:u64){unsafe{SYSCALL_USER_RSP=v}}
+pub unsafe fn read_user_rsp()->u64{unsafe{(*pc()).syscall_user_rsp}}
+pub unsafe fn write_user_rsp(v:u64){unsafe{(*pc()).syscall_user_rsp=v}}
 --------------------------------------------------------------------------------
 END FILE: kernel/arch/x86_64/syscall.rs
 
@@ -9899,6 +10097,526 @@ pub fn chmod(inum:u32,mode:u32)->Result<(),i64>{
 END FILE: kernel/ext2.rs
 
 ================================================================================
+FILE: kernel/ext4.rs
+SIZE: 16055 bytes
+SHA-256: 944dd99bdec8885e4a0b471e903b0de18e270257e221359decae6d61eb4f235c
+================================================================================
+//! Minimal read-only ext4 filesystem on the first virtio-blk device.
+//!
+//! Shares the 0xEF53 superblock magic with ext2 but stores file data in
+//! extent trees (`i_flags & EXTENTS`) instead of indirect block lists.
+//! Only 32-bit filesystems without the 64bit feature are accepted; anything
+//! else fails loudly at probe time instead of being misread. Directories
+//! use the same `dir_entry_2` layout as ext2, and fast symlinks (target
+//! inline in `i_block`) work like on ext2. There is no write path yet:
+//! every mutating VFS operation on an ext4 mount fails with EROFS.
+use crate::{errno, vfs};
+const EXT4_MAGIC: u16 = 0xEF53;
+/* Incompatible feature bits we understand (low 32 bits of s_feature_incompat). */
+const INCOMPAT_EXTENTS: u32 = 0x40;
+const INCOMPAT_64BIT: u32 = 0x80;
+/* Inode flags. */
+const EXTENTS_FL: u32 = 0x0008_0000;
+/* Extent tree magic. */
+const EXT_MAGIC: u16 = 0xF30A;
+/* vfs::Inode numbers for on-disk ext4 inodes (disjoint from ext2's 0x100000). */
+pub const INO_BASE: u64 = 0x200000;
+pub const INO_END: u64 = 0x300000;
+pub fn is_ext4_ino(ino: u64) -> bool {
+    ino >= INO_BASE && ino < INO_END
+}
+pub fn ready() -> bool {
+    crate::driver::virtio_blk::ready()
+}
+fn read_bytes(off: u64, dst: &mut [u8]) -> Result<(), i64> {
+    let cap = crate::driver::virtio_blk::capacity() * 512;
+    if off as usize + dst.len() > cap as usize {
+        return Err(errno::EINVAL);
+    }
+    let mut done = 0usize;
+    while done < dst.len() {
+        let sec = (off as usize + done) / 512;
+        let soff = (off as usize + done) % 512;
+        let n = core::cmp::min(dst.len() - done, 512 - soff);
+        let mut frame = [0u8; 512];
+        if crate::driver::virtio_blk::read_sector(sec as u64, &mut frame).is_err() {
+            return Err(errno::EIO);
+        }
+        dst[done..done + n].copy_from_slice(&frame[soff..soff + n]);
+        done += n;
+    }
+    Ok(())
+}
+fn read_block(block: u64, blksize: usize, buf: &mut [u8]) -> Result<(), i64> {
+    if buf.len() < blksize {
+        return Err(errno::EINVAL);
+    }
+    let off = block * blksize as u64;
+    read_bytes(off, &mut buf[..blksize])
+}
+#[repr(C)]
+struct Super {
+    s_inodes_count: u32,      // 0
+    s_blocks_count_lo: u32,   // 4
+    _r0: u32,                 // 8
+    _r1: u32,                 // 12
+    _r2: u32,                 // 16
+    s_first_data_block: u32,  // 20
+    s_log_block_size: u32,    // 24
+    _r3: u32,                 // 28
+    s_blocks_per_group: u32,  // 32
+    _r4: u32,                 // 36
+    s_inodes_per_group: u32,  // 40
+    _r5: u32,                 // 44
+    _r6: u32,                 // 48
+    _mnt_count: u16,          // 52
+    _max_mnt_count: u16,      // 54
+    s_magic: u16,             // 56
+    _r7: [u8; 30],            // 58..88
+    s_inode_size: u16,        // 88
+    _block_group_nr: u16,     // 90
+    s_feature_compat: u32,    // 92
+    s_feature_incompat: u32,  // 96
+}
+pub fn superblock() -> Result<Super, i64> {
+    let mut buf = [0u8; 1024];
+    read_bytes(1024, &mut buf)?;
+    let sb: Super = unsafe { core::ptr::read(buf.as_ptr() as *const Super) };
+    if sb.s_magic != EXT4_MAGIC {
+        return Err(errno::EINVAL);
+    }
+    Ok(sb)
+}
+/// True when the attached image is an ext4 filesystem we can read:
+/// same magic as ext2, extents present, 64bit absent.
+pub fn probe() -> bool {
+    if !ready() {
+        return false;
+    }
+    match superblock() {
+        Ok(sb) => {
+            (sb.s_feature_incompat & INCOMPAT_EXTENTS) != 0
+                && (sb.s_feature_incompat & INCOMPAT_64BIT) == 0
+        }
+        Err(_) => false,
+    }
+}
+fn block_size(sb: &Super) -> usize {
+    1024usize << (sb.s_log_block_size as usize)
+}
+fn groups_count(sb: &Super) -> usize {
+    (sb.s_blocks_count_lo as usize + sb.s_blocks_per_group as usize - 1)
+        / sb.s_blocks_per_group as usize
+}
+fn group_desc_block(sb: &Super) -> u64 {
+    if block_size(sb) == 1024 {
+        2
+    } else {
+        1
+    }
+}
+#[repr(C)]
+struct GroupDesc {
+    bg_block_bitmap_lo: u32,
+    bg_inode_bitmap_lo: u32,
+    bg_inode_table_lo: u32,
+    bg_free_blocks_count_lo: u16,
+    bg_free_inodes_count_lo: u16,
+    bg_used_dirs_count_lo: u16,
+    bg_pad: u16,
+    _r: [u8; 12],
+}
+fn read_group_desc(sb: &Super, g: usize) -> Result<GroupDesc, i64> {
+    if g >= groups_count(sb) {
+        return Err(errno::EINVAL);
+    }
+    let bs = block_size(sb);
+    let mut buf = [0u8; 4096];
+    read_block(group_desc_block(sb), bs, &mut buf)?;
+    let off = g * 32;
+    let gd: GroupDesc = unsafe { core::ptr::read(buf[off..].as_ptr() as *const GroupDesc) };
+    Ok(gd)
+}
+#[repr(C)]
+struct Inode {
+    i_mode: u16,
+    i_uid: u16,
+    i_size_lo: u32,
+    i_atime: u32,
+    i_ctime: u32,
+    i_mtime: u32,
+    i_dtime: u32,
+    i_gid: u16,
+    i_links_count: u16,
+    i_blocks_lo: u32,
+    i_flags: u32,
+    i_osd1: u32,
+    i_block: [u32; 15],
+    i_generation: u32,
+    i_file_acl_lo: u32,
+    i_size_high: u32,
+    i_obso_faddr: u32,
+    i_osd2: [u8; 12],
+}
+fn read_inode(sb: &Super, inum: u32) -> Result<Inode, i64> {
+    if inum == 0 {
+        return Err(errno::EINVAL);
+    }
+    let g = ((inum - 1) as usize) / sb.s_inodes_per_group as usize;
+    let idx = (inum - 1) as usize % sb.s_inodes_per_group as usize;
+    let gd = read_group_desc(sb, g)?;
+    let bs = block_size(sb);
+    let inode_size = sb.s_inode_size as usize;
+    if inode_size < 128 || inode_size > 1024 {
+        return Err(errno::EINVAL);
+    }
+    let table_block = gd.bg_inode_table_lo as u64;
+    let byte_off = idx * inode_size;
+    let block = table_block + (byte_off / bs) as u64;
+    let off = byte_off % bs;
+    let mut buf = [0u8; 4096];
+    read_block(block, bs, &mut buf)?;
+    if off + 128 > bs {
+        return Err(errno::EINVAL);
+    }
+    let inode: Inode = unsafe { core::ptr::read(buf[off..].as_ptr() as *const Inode) };
+    Ok(inode)
+}
+fn inode_len(inode: &Inode) -> u64 {
+    (inode.i_size_lo as u64) | ((inode.i_size_high as u64) << 32)
+}
+fn is_extents(inode: &Inode) -> bool {
+    (inode.i_flags & EXTENTS_FL) != 0
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ExtentHeader {
+    eh_magic: u16,
+    eh_entries: u16,
+    eh_max: u16,
+    eh_depth: u16,
+    eh_generation: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ExtentIdx {
+    ei_block: u32,
+    ei_leaf_lo: u32,
+    ei_leaf_hi: u16,
+    ei_unused: u16,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Extent {
+    ee_block: u32,
+    ee_len: u16,
+    ee_start_hi: u16,
+    ee_start_lo: u32,
+}
+fn read_header(bytes: &[u8]) -> Result<ExtentHeader, i64> {
+    if bytes.len() < 12 {
+        return Err(errno::EINVAL);
+    }
+    let h: ExtentHeader =
+        unsafe { core::ptr::read(bytes.as_ptr() as *const ExtentHeader) };
+    if h.eh_magic != EXT_MAGIC {
+        return Err(errno::EINVAL);
+    }
+    Ok(h)
+}
+/// Maps a file logical block to a filesystem physical block through the
+/// extent tree rooted at `node` (the inode's `i_block` for depth 0, or a
+/// full filesystem block for deeper levels). Returns 0 for holes.
+fn extent_lookup(
+    sb: &Super,
+    node: &[u8],
+    lb: u32,
+    depth_left: usize,
+) -> Result<u64, i64> {
+    if depth_left > 8 {
+        return Err(errno::EINVAL);
+    }
+    let bs = block_size(sb);
+    let h = read_header(node)?;
+    let used = 12 + (h.eh_entries as usize) * 12;
+    if used > node.len() || used > bs {
+        return Err(errno::EINVAL);
+    }
+    if h.eh_depth == 0 {
+        for i in 0..h.eh_entries as usize {
+            let off = 12 + i * 12;
+            let e: Extent =
+                unsafe { core::ptr::read(node[off..].as_ptr() as *const Extent) };
+            if e.ee_start_hi != 0 {
+                return Err(errno::EINVAL);
+            }
+            let len = (e.ee_len & 0x7FFF) as u32;
+            if len == 0 {
+                continue;
+            }
+            if lb >= e.ee_block && lb < e.ee_block.wrapping_add(len) {
+                if (e.ee_len & 0x8000) != 0 {
+                    return Ok(0);
+                }
+                return Ok(e.ee_start_lo as u64 + (lb - e.ee_block) as u64);
+            }
+        }
+        return Ok(0);
+    }
+    for i in 0..h.eh_entries as usize {
+        let off = 12 + i * 12;
+        let x: ExtentIdx =
+            unsafe { core::ptr::read(node[off..].as_ptr() as *const ExtentIdx) };
+        if x.ei_leaf_hi != 0 {
+            return Err(errno::EINVAL);
+        }
+        let next_is_last = i + 1 == h.eh_entries as usize;
+        if lb >= x.ei_block && (next_is_last || lb < unsafe {
+            core::ptr::read(node[off + 12..].as_ptr() as *const ExtentIdx).ei_block
+        }) {
+            let bs = block_size(sb);
+            let mut buf = [0u8; 4096];
+            read_block(x.ei_leaf_lo as u64, bs, &mut buf)?;
+            return extent_lookup(sb, &buf[..bs], lb, depth_left + 1);
+        }
+    }
+    Ok(0)
+}
+fn read_file_block(sb: &Super, inode: &Inode, block_index: u32) -> Result<u64, i64> {
+    if !is_extents(inode) {
+        return Err(errno::EINVAL);
+    }
+    let raw: &[u8] = unsafe {
+        core::slice::from_raw_parts(
+            (&inode.i_block as *const [u32; 15]).cast::<u8>(),
+            60,
+        )
+    };
+    extent_lookup(sb, raw, block_index, 0)
+}
+fn make_vfs_inode(path: &str, inum: u32, inode: &Inode, sb: &Super) -> vfs::Inode {
+    let _ = sb;
+    let mode = inode.i_mode as u32;
+    let size = inode_len(inode);
+    let mut name = [0u8; 127 + 1];
+    let b = path.as_bytes();
+    let nl = b.len().min(127);
+    name[..nl].copy_from_slice(&b[..nl]);
+    vfs::Inode {
+        ino: (inum as u64) + INO_BASE,
+        mode: if mode & 0o170000 == 0 {
+            vfs::S_IFREG | (mode & 0o777)
+        } else {
+            mode
+        },
+        size,
+        capacity: size,
+        indirect: 0,
+        dindirect: 0,
+        data: core::ptr::null_mut(),
+        rdev: inum as u64,
+        pages: [0; 8],
+        npages: 0,
+        name,
+        name_len: nl,
+    }
+}
+pub fn lookup(path: &str) -> Result<vfs::Inode, i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let sb = superblock()?;
+    if (sb.s_feature_incompat & INCOMPAT_EXTENTS) == 0
+        || (sb.s_feature_incompat & INCOMPAT_64BIT) != 0
+    {
+        return Err(errno::EINVAL);
+    }
+    let mut inum = 2u32;
+    let mut inode = read_inode(&sb, inum)?;
+    let trimmed = path.trim_start_matches('/').trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Ok(make_vfs_inode("/mnt", inum, &inode, &sb));
+    }
+    for comp in trimmed.split('/') {
+        if comp.is_empty() || comp == "." {
+            continue;
+        }
+        if comp == ".." {
+            inum = 2;
+            inode = read_inode(&sb, inum)?;
+            continue;
+        }
+        let size = inode_len(&inode) as usize;
+        let mut off = 0usize;
+        let mut found = None;
+        let bs = block_size(&sb);
+        while off < size {
+            let blk = read_file_block(&sb, &inode, (off / bs) as u32)?;
+            if blk == 0 {
+                break;
+            }
+            let mut block = [0u8; 4096];
+            read_block(blk, bs, &mut block)?;
+            let boff = off % bs;
+            let ino = u32::from_le_bytes(block[boff..boff + 4].try_into().unwrap());
+            let rec_len =
+                u16::from_le_bytes(block[boff + 4..boff + 6].try_into().unwrap()) as usize;
+            let name_len = block[boff + 6] as usize;
+            if rec_len == 0 || boff + rec_len > bs {
+                break;
+            }
+            if ino != 0
+                && name_len == comp.len()
+                && &block[boff + 8..boff + 8 + name_len] == comp.as_bytes()
+            {
+                found = Some(ino);
+                break;
+            }
+            off += rec_len;
+        }
+        let ino = found.ok_or(errno::ENOENT)?;
+        inode = read_inode(&sb, ino)?;
+        inum = ino;
+    }
+    let n = make_vfs_inode(path, inum, &inode, &sb);
+    Ok(n)
+}
+pub fn read(inode_rdev: u32, off: u64, dst: &mut [u8]) -> Result<usize, i64> {
+    let sb = superblock()?;
+    let inode = read_inode(&sb, inode_rdev)?;
+    if !is_extents(&inode) {
+        return Err(errno::EINVAL);
+    }
+    let size = inode_len(&inode) as usize;
+    if off as usize >= size {
+        return Ok(0);
+    }
+    let bs = block_size(&sb);
+    let mut done = 0usize;
+    while done < dst.len() && off as usize + done < size {
+        let poff = off as usize + done;
+        let blk = read_file_block(&sb, &inode, (poff / bs) as u32)?;
+        let po = poff % bs;
+        let n = core::cmp::min(dst.len() - done, core::cmp::min(bs - po, size - poff));
+        if n == 0 {
+            break;
+        }
+        if blk == 0 {
+            dst[done..done + n].fill(0);
+            done += n;
+            continue;
+        }
+        let mut block = [0u8; 4096];
+        read_block(blk, bs, &mut block)?;
+        dst[done..done + n].copy_from_slice(&block[po..po + n]);
+        done += n;
+    }
+    Ok(done)
+}
+pub fn is_dir(path: &str) -> bool {
+    if path == "/mnt" {
+        return true;
+    }
+    if let Ok(inode) = lookup(path) {
+        inode.mode & 0o040000 != 0
+    } else {
+        false
+    }
+}
+pub fn readdir(path: &str, mut cb: impl FnMut(u64, u32, &str)) -> Result<usize, i64> {
+    let inum = if path == "/" || path.is_empty() {
+        2
+    } else {
+        let t = path.trim_start_matches('/').trim_end_matches('/');
+        if t.is_empty() {
+            2
+        } else {
+            lookup(t)?.rdev as u32
+        }
+    };
+    let sb = superblock()?;
+    let inode = read_inode(&sb, inum)?;
+    let size = inode_len(&inode) as usize;
+    let mut off = 0usize;
+    let mut count = 0;
+    let bs = block_size(&sb);
+    while off < size {
+        let blk = read_file_block(&sb, &inode, (off / bs) as u32)?;
+        if blk == 0 {
+            break;
+        }
+        let mut block = [0u8; 4096];
+        read_block(blk, bs, &mut block)?;
+        let mut boff = off % bs;
+        if boff != 0 {
+            let rec_len =
+                u16::from_le_bytes(block[boff..boff + 2].try_into().unwrap()) as usize;
+            if rec_len == 0 {
+                break;
+            }
+            off += rec_len;
+            continue;
+        }
+        while boff < bs && off < size {
+            let ino = u32::from_le_bytes(block[boff..boff + 4].try_into().unwrap());
+            let rec_len =
+                u16::from_le_bytes(block[boff + 4..boff + 6].try_into().unwrap()) as usize;
+            let name_len = block[boff + 6] as usize;
+            let ftype = block[boff + 7] as u32;
+            if rec_len == 0 || boff + rec_len > bs {
+                break;
+            }
+            if ino != 0 && name_len > 0 && boff + 8 + name_len <= bs {
+                if let Ok(name) =
+                    core::str::from_utf8(&block[boff + 8..boff + 8 + name_len])
+                {
+                    cb(ino as u64, ftype, name);
+                    count += 1;
+                }
+            }
+            boff += rec_len;
+            off += rec_len;
+        }
+    }
+    Ok(count)
+}
+/// Reads a symlink target: fast symlinks store it inline in `i_block`,
+/// longer ones in data blocks (extent-mapped, like regular files).
+pub fn readlink_into(inum: u32, out: &mut [u8]) -> Result<usize, i64> {
+    let sb = superblock()?;
+    let inode = read_inode(&sb, inum)?;
+    let size = inode_len(&inode) as usize;
+    if size == 0 || size > out.len() {
+        return Err(errno::EINVAL);
+    }
+    if !is_extents(&inode) && size < 60 {
+        let raw: &[u8] = unsafe {
+            core::slice::from_raw_parts(
+                (&inode.i_block as *const [u32; 15]).cast::<u8>(),
+                60,
+            )
+        };
+        out[..size].copy_from_slice(&raw[..size]);
+        return Ok(size);
+    }
+    let mut tmp = [0u8; 4096];
+    let want = core::cmp::min(size, tmp.len());
+    let n = read(inum, 0, &mut tmp[..want])?;
+    if n < size {
+        return Err(errno::EIO);
+    }
+    out[..size].copy_from_slice(&tmp[..size]);
+    Ok(size)
+}
+pub fn file_size(inum: u32) -> Option<u64> {
+    let sb = superblock().ok()?;
+    let inode = read_inode(&sb, inum).ok()?;
+    Some(inode_len(&inode))
+}
+--------------------------------------------------------------------------------
+END FILE: kernel/ext4.rs
+
+================================================================================
 FILE: kernel/fd.rs
 SIZE: 24953 bytes
 SHA-256: 783bb09b7e621d688cff2a1cfd6e4fa0b1ac9f989ca148dc3aa62e9df97178ed
@@ -10538,8 +11256,8 @@ END FILE: kernel/inotify.rs
 
 ================================================================================
 FILE: kernel/lib.rs
-SIZE: 11476 bytes
-SHA-256: 94de4f88214ea56f7a42329c4af6f3d3b021907accb596a828d84015b34e3f72
+SIZE: 11490 bytes
+SHA-256: e3ddef8b7ab8a04c3fadcbdb61f504f735571c90f5392a29c95e12ebda36c2b2
 ================================================================================
 #![no_std]
 #![feature(naked_functions)]
@@ -10567,6 +11285,7 @@ pub mod time;
 pub mod vfs;
 pub mod device;
 pub mod ext2;
+pub mod ext4;
 pub mod inotify;
 pub mod fd;
 pub mod flock;
@@ -10753,8 +11472,8 @@ END FILE: kernel/lib.rs
 
 ================================================================================
 FILE: kernel/linux_abi/mod.rs
-SIZE: 176749 bytes
-SHA-256: bc3159baed92eed254d38deed920ba2d05a42bb94ae40da3e120e91708e8f7ed
+SIZE: 177087 bytes
+SHA-256: 6b9b88775e24a80f04a180d9a3664366b60bfe76b0f0d52c1467a7ac96ded855
 ================================================================================
 pub mod nr; pub mod stack; pub mod types;
 use crate::errno; use core::mem::size_of; use types::*;
@@ -10902,7 +11621,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
     nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
     nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
-    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>sys_mknodat(a[0] as i64,a[1],a[2] as u32,a[3]),
     nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
     nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
     nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
@@ -12163,6 +12882,11 @@ fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
  let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_mknodat(dirfd:i64,path_ptr:u64,mode:u32,rdev:u64)->i64{
+ let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mknod(path,mode,rdev){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_rmdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -15976,8 +16700,8 @@ END FILE: kernel/robust.rs
 
 ================================================================================
 FILE: kernel/signal.rs
-SIZE: 19582 bytes
-SHA-256: 6ed0e02059609fe1b03c577e22d6b4af29235855b7164e2665718d18857d8d56
+SIZE: 19811 bytes
+SHA-256: 1480166e7231a285c2adeea4c65c52ebaaeb5e38b43647b790eda6c5780da95d
 ================================================================================
 //! Linux signal ABI: kill, rt_sigaction, rt_sigprocmask and rt_sigreturn.
 //!
@@ -16221,7 +16945,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  uc.uc_mcontext.gregs[REG_RCX]=0;uc.uc_mcontext.gregs[REG_RSP]=snap.rsp;uc.uc_mcontext.gregs[REG_RIP]=snap.rip;
  /* The machine context reports the result of the interrupted syscall, the
     way Linux fills the ucontext of a handler. */
- uc.uc_mcontext.gregs[REG_RAX]=unsafe{syscall::SYSCALL_RESULT} as i64 as u64;
+ uc.uc_mcontext.gregs[REG_RAX]=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_result} as i64 as u64;
  uc.uc_mcontext.gregs[REG_EFL]=snap.rflags;
  uc.uc_mcontext.gregs[REG_CSGSFS]=(cs&0xffff)|((ss&0xffff)<<16);
  uc.uc_mcontext.gregs[REG_OLDMASK]=saved_mask;
@@ -16277,7 +17001,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  task::with_current_process(|p|p.sigmask=mask);
  /* A handler installed with SA_RESTART restarts the interrupted syscall;
     every other handler leaves the syscall with EINTR. */
- task::with_current_process(|p|{p.sig_restart=action.flags&SA_RESTART!=0;p.sig_syscall=snap.rax;p.sig_result=unsafe{syscall::SYSCALL_RESULT} as i64;});
+ task::with_current_process(|p|{p.sig_restart=action.flags&SA_RESTART!=0;p.sig_syscall=snap.rax;p.sig_result=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_result} as i64;});
  /* The signal leaves the pending set when it is delivered: Linux removes it
     before the handler runs, so the handler does not see it again. */
  pop(sig as i64);
@@ -16296,7 +17020,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
    enters the kernel with the stack pointer pointing just above the frame, so
    the frame starts one word below. */
 pub fn restore_frame()->Result<(),i64>{
- let sp=unsafe{syscall::SYSCALL_USER_RSP};
+ let sp=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_user_rsp};
  if sp<0x2000{return Err(crate::errno::EFAULT)}
  let base=sp-8;
  let uc_addr=base+8;
@@ -16328,10 +17052,10 @@ pub fn restore_frame()->Result<(),i64>{
   area.copy_from_slice(&uc.fpstate[160..160+256]);
   task::write_current_fpu(&area);
  }
- if !syscall::set_return_context(unsafe{syscall::SYSCALL_FRAME as *mut u64},&frame){return Err(crate::errno::EFAULT)}
+ if !syscall::set_return_context(unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_frame as *mut u64},&frame){return Err(crate::errno::EFAULT)}
  /* The return path takes the user-mode result from this cell, so the
     restored value has to be published here. */
- unsafe{syscall::SIGRET_VALUE=rax;syscall::SIGRET_VALID=1;}
+ unsafe{let p=crate::smp::per_cpu_ptr(crate::smp::current_cpu());(*p).sigret_value=rax;(*p).sigret_valid=1;}
  Ok(())
 }
 --------------------------------------------------------------------------------
@@ -16339,8 +17063,8 @@ END FILE: kernel/signal.rs
 
 ================================================================================
 FILE: kernel/smp.rs
-SIZE: 21279 bytes
-SHA-256: b4609af8e953313f1f61fb5949708f53e231be62fd067221cd66888e6e0bb561
+SIZE: 23856 bytes
+SHA-256: 84b3b08187ec20a471db49fbeefb171b815f4adeaff25f745fdb091eaca41d95
 ================================================================================
 //! Symmetric multiprocessing bring-up: parked APs with per-CPU state.
 //!
@@ -16557,6 +17281,14 @@ pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
     }
     CPU_STATE[slot].store(CPU_STARTED, Ordering::Release);
     unsafe {
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_KERNEL_GS_BASE,
+            per_cpu_ptr(slot) as u64,
+        );
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_GS_BASE,
+            per_cpu_ptr(slot) as u64,
+        );
         let tss = &raw mut CPU_TSS[slot];
         let top = CPU_STACK_TOP[slot].load(Ordering::Relaxed);
         (*tss).rsp[0] = top;
@@ -16658,6 +17390,20 @@ pub fn bringup(rsdp: u64) -> u32 {
         return 1;
     }
     BSP_SLOT.store(bsp_slot as u32, Ordering::Relaxed);
+    /* Pin both GS bases at this CPU's per-CPU block: the kernel never
+       hands GS to userspace (no ARCH_SET_GS), so no swapgs dance is
+       needed and %gs always addresses per-CPU state. MSRs are per-CPU,
+       so parked APs keep their own blocks without cross-CPU clobbering. */
+    unsafe {
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_KERNEL_GS_BASE,
+            per_cpu_ptr(bsp_slot) as u64,
+        );
+        crate::arch::x86_64::msr::wrmsr(
+            crate::arch::x86_64::msr::IA32_GS_BASE,
+            per_cpu_ptr(bsp_slot) as u64,
+        )
+    };
     let mut ap_slots = [0usize; MAX_CPUS];
     let mut ap_count = 0usize;
     for (i, e) in entries[..count].iter().enumerate() {
@@ -16864,6 +17610,66 @@ pub fn self_test() -> Result<u32, &'static str> {
     }
     crate::println!("smp: self-test passed ({} attested)", ok);
     Ok(ok)
+}
+
+/// Per-CPU data block, addressed through GS in kernel mode during syscalls.
+/// Layout must match the offsets hard-coded in arch/x86_64/syscall.S.
+#[repr(C)]
+pub struct PerCpuData {
+    pub current_fpu: u64,
+    pub syscall_kernel_rsp: u64,
+    pub syscall_user_rsp: u64,
+    pub syscall_frame: u64,
+    pub syscall_result: u64,
+    pub exec_rip: u64,
+    pub sigret_value: u64,
+    pub user_cs: u64,
+    pub user_ss: u64,
+    pub sigret_valid: u8,
+    pub exec_pending: u8,
+    pub _pad: [u8; 6],
+}
+
+impl PerCpuData {
+    pub const fn zero() -> Self {
+        Self {
+            current_fpu: 0,
+            syscall_kernel_rsp: 0,
+            syscall_user_rsp: 0,
+            syscall_frame: 0,
+            syscall_result: 0,
+            exec_rip: 0,
+            sigret_value: 0,
+            user_cs: 0,
+            user_ss: 0,
+            sigret_valid: 0,
+            exec_pending: 0,
+            _pad: [0; 6],
+        }
+    }
+}
+
+static mut PER_CPU: [PerCpuData; MAX_CPUS] = [const { PerCpuData::zero() }; MAX_CPUS];
+
+pub fn per_cpu_ptr(slot: usize) -> *mut PerCpuData {
+    if slot >= MAX_CPUS {
+        return core::ptr::null_mut();
+    }
+    unsafe { &raw mut PER_CPU[slot] }
+}
+
+/// Index of the running CPU in the MADT table (0..MAX_CPUS).
+pub fn current_cpu() -> usize {
+    let id = crate::arch::x86_64::apic::apic_id();
+    for i in 0..MAX_CPUS {
+        if CPU_STATE[i].load(core::sync::atomic::Ordering::Acquire) == CPU_READY {
+            let stored = unsafe { core::ptr::read_volatile(&raw const TRAMP_IDS[i]) };
+            if stored == id {
+                return i;
+            }
+        }
+    }
+    BSP_SLOT.load(core::sync::atomic::Ordering::Relaxed) as usize
 }
 --------------------------------------------------------------------------------
 END FILE: kernel/smp.rs
@@ -17315,8 +18121,8 @@ END FILE: kernel/sync.rs
 
 ================================================================================
 FILE: kernel/task.rs
-SIZE: 39811 bytes
-SHA-256: e597b60c1488f947cde1fc5a75a0fa9fd91337525c679aaec6c07efcdd651bee
+SIZE: 40295 bytes
+SHA-256: 07d67125173b5110191e276572a333e5cd1fd164b6ae907e03767231417e9483
 ================================================================================
 //! Single-CPU round-robin scheduler, task lifecycle and process ownership.
 use core::sync::atomic::{AtomicBool,AtomicU32,AtomicU64,Ordering};
@@ -17357,7 +18163,7 @@ fn fpu_area(slot:usize)->u64{unsafe{core::ptr::addr_of!(FPU_AREAS[slot])as u64}}
 unsafe extern "sysv64"{fn fpu_save_regs(area:*mut u8);fn fpu_restore_regs(area:*const u8);}
 fn fpu_save(addr:u64){let _=addr;}
 unsafe fn task_restore_fpu(area:u64){unsafe{fpu_restore_regs(area as *const u8)}}
-pub fn init(bootstrap_stack_top:u64){uts_init();fpu_save(fpu_area(0));let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{fpu:fpu_area(0),pid:1,tgid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0};unsafe{CURRENT_FPU=fpu_area(0)};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
+pub fn init(bootstrap_stack_top:u64){uts_init();fpu_save(fpu_area(0));let mut s=SCHED.lock();let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;s.tasks[0]=Task{fpu:fpu_area(0),pid:1,tgid:1,ppid:0,pgid:1,sid:1,state:State::Running,rsp:0,kernel_stack_top:bootstrap_stack_top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0};unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).current_fpu=fpu_area(0)};crate::println!("task: scheduler bootstrap pid=1 capacity={}",MAX_TASKS);}
 /* The identifier of the running task. The scheduler is the single source of
    truth: a cached copy could name a task that ran in between, and a signal
    aimed at the wrong thread would be lost. */
@@ -17446,6 +18252,10 @@ pub fn on_timer_tick(user:bool,delta_ns:u64){NEED_RESCHED.store(true,Ordering::R
 fn account_tick(user:bool,delta_ns:u64){
  let(slot,pid)={let s=SCHED.lock();(s.current,s.tasks[s.current].pid)};{let mut procs=PROCS.lock();if let Some(p)=procs[slot].as_mut(){if user{if p.utime_ns<u64::MAX{p.utime_ns=p.utime_ns.saturating_add(delta_ns)}}else if p.stime_ns<u64::MAX{p.stime_ns=p.stime_ns.saturating_add(delta_ns)}}}crate::posix_timer::cpu_tick(pid,user);}
 pub fn take_need_resched()->bool{NEED_RESCHED.swap(false,Ordering::AcqRel)}
+/* Marks a reschedule pending (called from the reschedule-IPI handler).
+   The next yield point observes it; the flag is global for now because
+   only the BSP runs tasks (MS83 makes it per-CPU). */
+pub fn request_resched(){NEED_RESCHED.store(true,Ordering::Release)}
 /* A wake that lands before the target blocks is latched in wake_pending, so a
    register-then-block waiter can never lose it. */
 pub fn sleep_until(tick:u64){let mut s=SCHED.lock();let current=s.current;if s.tasks[current].wake_pending{s.tasks[current].wake_pending=false;return}s.tasks[current].wake_tick=tick;s.tasks[current].state=State::Sleeping;drop(s);schedule(true)}
@@ -17787,7 +18597,7 @@ fn schedule(blocked:bool){let(old_ptr,next,old_fpu,next_fpu)= {let mut s=SCHED.l
  /* The user RSP is process-wide state in the syscall path; park the outgoing
     task's copy so a resuming thread restores its own. */
  if s.tasks[old].state!=State::Unused{s.tasks[old].user_rsp=unsafe{crate::arch::x86_64::syscall::read_user_rsp()};}
- let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{if s.tasks[old].state==State::Runnable{s.tasks[old].state=State::Running;}else if s.tasks[old].state==State::Running{}else{return}s.tasks[next].state=State::Running;if s.current!=next{s.current=next;unsafe{CURRENT_FPU=s.tasks[next].fpu};}else{unsafe{CURRENT_FPU=s.tasks[next].fpu};}return}s.tasks[next].state=State::Running;s.current=next;unsafe{CURRENT_FPU=s.tasks[next].fpu};(&mut s.tasks[old].rsp as*mut u64,s.tasks[next],s.tasks[old].fpu,s.tasks[next].fpu)};PID.store(next.pid,Ordering::Relaxed);unsafe{crate::arch::x86_64::syscall::write_user_rsp(next.user_rsp);apply_arch_state(next);switch_context(old_ptr,next.rsp,old_fpu,next_fpu)}}
+ let mut next=old;for step in 1..=MAX_TASKS{let i=(old+step)%MAX_TASKS;if s.tasks[i].state==State::Runnable{next=i;break}}if next==old{if s.tasks[old].state==State::Runnable{s.tasks[old].state=State::Running;}else if s.tasks[old].state==State::Running{}else{return}s.tasks[next].state=State::Running;if s.current!=next{s.current=next;unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).current_fpu=s.tasks[next].fpu};}else{unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).current_fpu=s.tasks[next].fpu};}return}s.tasks[next].state=State::Running;s.current=next;unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).current_fpu=s.tasks[next].fpu};(&mut s.tasks[old].rsp as*mut u64,s.tasks[next],s.tasks[old].fpu,s.tasks[next].fpu)};PID.store(next.pid,Ordering::Relaxed);unsafe{crate::arch::x86_64::syscall::write_user_rsp(next.user_rsp);apply_arch_state(next);switch_context(old_ptr,next.rsp,old_fpu,next_fpu)}}
 
 pub fn set_current_fs_base(value:u64){let mut s=SCHED.lock();let current=s.current;s.tasks[current].fs_base=value;drop(s);unsafe{crate::arch::x86_64::msr::wrmsr(crate::arch::x86_64::msr::IA32_FS_BASE,value)}}
 pub fn fs_base()->u64{let s=SCHED.lock();s.tasks[s.current].fs_base}
@@ -18091,8 +18901,8 @@ END FILE: kernel/vdso.rs
 
 ================================================================================
 FILE: kernel/vfs.rs
-SIZE: 74144 bytes
-SHA-256: 054fcef6348025adf2ecbf676a8352be078e2e3b9d533c3a7ebb0ccf262c1245
+SIZE: 75807 bytes
+SHA-256: cfd40c01415ab29816810b271595ae5dcaba81d0c467cae0d2fb4b4906491da4
 ================================================================================
 //! Allocation-free initramfs VFS with read/write support.
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
@@ -18116,7 +18926,7 @@ static INITRAMFS_SPAN:SpinLock<(u64,u64)>=SpinLock::new((0,0));
 fn in_initramfs(addr:u64)->bool{let(a,b)=*INITRAMFS_SPAN.lock();a!=0&&addr>=a&&addr<b}
 const MAX_MOUNTS:usize=16;
 const TMPFS_INO_TAG:u64=0x1000_0000_0000_0000;
-#[derive(Clone,Copy,PartialEq,Eq)]enum MountKind{Tmpfs,Ext2}
+#[derive(Clone,Copy,PartialEq,Eq)]enum MountKind{Tmpfs,Ext2,Ext4}
 #[derive(Clone,Copy)]struct MountEntry{used:bool,ns:u64,kind:MountKind,fs_id:usize,target:[u8;128],tlen:usize}
 const EMPTY_MOUNT:MountEntry=MountEntry{used:false,ns:0,kind:MountKind::Tmpfs,fs_id:0,target:[0;128],tlen:0};
 #[derive(Clone,Copy)]struct TmpfsStore{used:bool,len:usize,nodes:[Inode;MAX_NODES],linked:[bool;MAX_NODES]}
@@ -18144,9 +18954,12 @@ fn route_path(path:&str,ns:u64)->PathRoute{
   route.rlen=relative.len().min(127);route.relative[..route.rlen].copy_from_slice(&relative.as_bytes()[..route.rlen]);
   return route
  }
- /* Keep the legacy virtio-ext2 mount visible unless an explicit mount shadows it. */
+ /* Keep the legacy virtio disk mount visible unless an explicit mount shadows it.
+    The image can be ext2 or ext4 (same 0xEF53 magic); ext4 wins when the
+    superblock carries the extents incompat flag. */
  if crate::ext2::ready()&&path_has_prefix(path,"/mnt"){
-  route.kind=Some(MountKind::Ext2);route.target[..4].copy_from_slice(b"/mnt");route.tlen=4;
+  let kind=if crate::ext4::probe(){MountKind::Ext4}else{MountKind::Ext2};
+  route.kind=Some(kind);route.target[..4].copy_from_slice(b"/mnt");route.tlen=4;
   let suffix=&path[4..];let relative=if suffix.is_empty(){"/"}else{suffix};
   route.rlen=relative.len().min(127);route.relative[..route.rlen].copy_from_slice(&relative.as_bytes()[..route.rlen]);
   return route
@@ -18159,10 +18972,11 @@ pub fn mount_filesystem(source:&str,target:&str,fstype:&str,flags:u64,ns:u64)->R
  let _=source;let _=flags;
  if !target.starts_with('/')||target=="/"||target.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if target.len()>127{return Err(errno::ENAMETOOLONG)}
- let kind=match fstype{"tmpfs"=>MountKind::Tmpfs,"ext2"=>MountKind::Ext2,_=>return Err(errno::ENODEV)};
+ let kind=match fstype{"tmpfs"=>MountKind::Tmpfs,"ext2"=>MountKind::Ext2,"ext4"=>MountKind::Ext4,_=>return Err(errno::ENODEV)};
  let point=lookup_in_namespace(target,ns)?;
  if point.mode&0o170000!=S_IFDIR{return Err(errno::ENOTDIR)}
  if kind==MountKind::Ext2&&!crate::ext2::ready(){return Err(errno::ENODEV)}
+ if kind==MountKind::Ext4&&!crate::ext4::probe(){return Err(errno::ENODEV)}
  let mut registry=MOUNT_REGISTRY.lock();
  if registry.entries.iter().any(|e|e.used&&e.ns==ns&&core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(target)){return Err(errno::EBUSY)}
  let entry_slot=registry.entries.iter().position(|e|!e.used).ok_or(errno::ENOMEM)?;
@@ -18536,7 +19350,7 @@ pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 }
 pub fn create(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   /* The parent directory must exist, like on Linux. */
   if let Some(parent)=path.rfind('/').map(|i|&path[..i]).filter(|p|!p.is_empty()){
    if lookup(parent).map(|n|n.mode&0o170000!=S_IFDIR).unwrap_or(true){return Err(errno::ENOENT)}
@@ -18559,7 +19373,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
 }
 pub fn unlink(path:&str)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
@@ -18572,7 +19386,7 @@ pub fn unlink(path:&str)->Result<()>{
 }
 pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
@@ -18594,6 +19408,7 @@ pub fn readdir(path:&str,mut cb:impl FnMut(u64,u32,&str))->Result<usize>{
   match route.kind{
    Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_readdir(route.fs_id,rel,cb)},
    Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::readdir(rel,cb)},
+   Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::readdir(rel,cb)},
    None=>{}
   }
   if path=="/proc"{
@@ -18656,7 +19471,7 @@ pub fn is_dir(path:&str)->bool{
 pub fn rmdir(path:&str)->Result<()>{
   if path=="/"{return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR==0{return Err(errno::ENOTDIR)}
@@ -18675,7 +19490,7 @@ pub fn rename(old:&str,new:&str)->Result<()>{
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
  if let Some(kind)=old_route.kind{match kind{
-  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},
+  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},MountKind::Ext4=>return Err(errno::EROFS),
    MountKind::Tmpfs=>{
     let old_rel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;
     let new_rel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;
@@ -18716,7 +19531,7 @@ pub fn rename(old:&str,new:&str)->Result<()>{
 }
 pub fn chmod_path(path:&str,mode:u32)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;let ty=node.mode&0o170000;node.mode=ty|(mode&0o7777);return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::chmod(ino as u32,mode&0o7777)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;let ty=node.mode&0o170000;node.mode=ty|(mode&0o7777);return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::chmod(ino as u32,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  let ty=m.nodes[idx].mode&0o170000;
@@ -18733,7 +19548,7 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
   let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
   if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
@@ -18747,10 +19562,11 @@ pub fn truncate_path(path:&str,size:u64)->Result<()>{
    tag range and the small ROOT ids. */
 pub fn is_ext2_ino(ino:u64)->bool{ino>=0x100000&&ino<0x200000}
 fn is_ext2_inode(n:&Inode)->bool{
- (n.mode&0o170000==S_IFREG||n.mode&0o170000==S_IFDIR)&&n.npages==0&&n.data.is_null()&&n.rdev!=0&&tmpfs_fs_id(n.ino).is_none()&&is_ext2_ino(n.ino)
+ (n.mode&0o170000==S_IFREG||n.mode&0o170000==S_IFDIR)&&n.npages==0&&n.data.is_null()&&n.rdev!=0&&tmpfs_fs_id(n.ino).is_none()&&is_ext2_ino(n.ino)&&!crate::ext4::is_ext4_ino(n.ino)
 }
 pub fn truncate_ino(ino:u64,size:u64)->Result<()>{
   if is_ext2_ino(ino){return crate::ext2::truncate((ino-0x100000) as u32,size)}
+ if crate::ext4::is_ext4_ino(ino){return Err(errno::EROFS)}
   if let Some(fs_id)=tmpfs_fs_id(ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==ino).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(ino){free_beyond(node,keep)}node.size=size;return Ok(())}
   let mut m=ROOT.lock();
   let idx=m.nodes[..m.len].iter().position(|n|n.ino==ino).ok_or(errno::ENOENT)?;
@@ -18927,7 +19743,7 @@ fn proc_fill(subject:ProcSubject,file:&str)->usize{
   "mounts"=>{
    append(buf,&mut off,b"rootfs / rootfs rw 0 0\n");
    let ns=current_mount_ns();let reg=MOUNT_REGISTRY.lock();
-   for e in &reg.entries{if !e.used||e.ns!=ns{continue}let (src,fs)=match e.kind{MountKind::Ext2=>(b"vda".as_slice(),b"ext2".as_slice()),_=>(b"tmpfs".as_slice(),b"tmpfs".as_slice())};append(buf,&mut off,src);append(buf,&mut off,b" ");append(buf,&mut off,&e.target[..e.tlen]);append(buf,&mut off,b" ");append(buf,&mut off,fs);append(buf,&mut off,b" rw 0 0\n");}
+   for e in &reg.entries{if !e.used||e.ns!=ns{continue}let (src,fs)=match e.kind{MountKind::Ext2=>(b"vda".as_slice(),b"ext2".as_slice()),MountKind::Ext4=>(b"vda".as_slice(),b"ext4".as_slice()),_=>(b"tmpfs".as_slice(),b"tmpfs".as_slice())};append(buf,&mut off,src);append(buf,&mut off,b" ");append(buf,&mut off,&e.target[..e.tlen]);append(buf,&mut off,b" ");append(buf,&mut off,fs);append(buf,&mut off,b" rw 0 0\n");}
   }
   _=>{}
  }
@@ -18964,7 +19780,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   if target.len()>4095{return Err(errno::ENAMETOOLONG)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
@@ -18982,7 +19798,7 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
   if !old.starts_with('/')||!new.starts_with('/')||new.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
-  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::link_path(orel,nrel)?;return lookup(new)},None=>{}}
+  match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::link_path(orel,nrel)?;return lookup(new)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
  /* Linux links the target of a symlink, so resolve first (before taking
     the root lock, which lookup also needs). */
  let mut rout=[0u8;128];
@@ -19133,6 +19949,9 @@ pub fn readlink_content(node:&Inode,out:&mut[u8])->Result<usize>{
  if node.data.is_null()&&crate::ext2::ready()&&is_ext2_ino(node.ino)&&tmpfs_fs_id(node.ino).is_none(){
   return crate::ext2::readlink_into(node.rdev as u32,out);
  }
+ if node.data.is_null()&&crate::ext4::probe()&&crate::ext4::is_ext4_ino(node.ino)&&tmpfs_fs_id(node.ino).is_none(){
+  return crate::ext4::readlink_into(node.rdev as u32,out);
+ }
  out[..n].copy_from_slice(unsafe{core::slice::from_raw_parts(node.data,n)});
  Ok(n)
 }
@@ -19142,6 +19961,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
   match route.kind{
    Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_lookup(route.fs_id,rel,path)},
    Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return visible_inode(crate::ext2::lookup(rel)?,path)},
+   Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return visible_inode(crate::ext4::lookup(rel)?,path)},
    None=>{}
   }
   if path=="/"{let mut name=[0u8;NAME_MAX+1];name[0]=b'/';return Ok(Inode{ino:1,mode:S_IFDIR|0o755,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:1})}
@@ -19161,6 +19981,7 @@ pub fn lookup_in_namespace(path:&str,ns:u64)->Result<Inode>{
 pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){ if off>=inode.size{return Ok(0)}; let n=core::cmp::min(dst.len(),(inode.size-off)as usize); dst[..n].copy_from_slice(unsafe{core::slice::from_raw_parts(inode.data.add(off as usize),n)}); return Ok(n) }
  if inode.rdev>0 && inode.mode&0o020000==0 && inode.mode&0o060000==0 && inode.npages==0 {
+  if crate::ext4::is_ext4_ino(inode.ino){return crate::ext4::read(inode.rdev as u32,off,dst)}
   return crate::ext2::read(inode.rdev as u32,off,dst)
  }
  if let Some(fs_id)=tmpfs_fs_id(inode.ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;return read_inode_data(node,off,dst)}
@@ -19180,6 +20001,7 @@ pub fn inode_by_ino(ino:u64)->Option<Inode>{
    snapshots whose size field goes stale after another description writes. */
 pub fn inode_size(ino:u64)->Option<u64>{
  if is_ext2_ino(ino){return crate::ext2::file_size((ino-0x100000) as u32)}
+ if crate::ext4::is_ext4_ino(ino){return crate::ext4::file_size((ino-0x200000) as u32)}
  if let Some(fs_id)=tmpfs_fs_id(ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==ino)?;return Some(node.size)}
  let m=ROOT.lock();
  let node=m.nodes[..m.len].iter().find(|n|n.ino==ino)?;
@@ -19188,6 +20010,7 @@ pub fn inode_size(ino:u64)->Option<u64>{
 pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){return Err(errno::EROFS)}
  if is_ext2_inode(&inode){return crate::ext2::write_file(inode.rdev as u32,off,src)}
+ if crate::ext4::is_ext4_ino(inode.ino){return Err(errno::EROFS)}
  if let Some(fs_id)=tmpfs_fs_id(inode.ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;let wrote=tmpfs_write_inode(node,off,src)?;drop(registry);if wrote>0{if let Ok(path)=core::str::from_utf8(&inode.name[..inode.name_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}return Ok(wrote)}
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
@@ -19221,7 +20044,7 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,mode,rdev,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,mode,rdev,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
@@ -21082,8 +21905,8 @@ END FILE: tests/bbtest.sh
 
 ================================================================================
 FILE: tests/differential.c
-SIZE: 106467 bytes
-SHA-256: 07ade36227366b831945ec12f2d05c09907353a8dd4930f76f5fbf5292a5f991
+SIZE: 112637 bytes
+SHA-256: 478c1fd48c5808eaf5fe882dd33e58c4c9afb15b4ed60cbd4017190432fbacfd
 ================================================================================
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -22972,11 +23795,20 @@ int main(int argc, char **argv) {
        filesystem allows, linkat/symlinkat/readlinkat/renameat. ext2
        stays read-only for link/symlink/rename, so those run on the
        root/tmpfs side, like real software hitting different mounts. */
+    /* Probe the guest image flavor once: the ext4 seed tree lives at
+       /mnt/xdiag4, which never exists on the ext2 image. The read-only
+       ext4 mount cannot host scratch dirs, so those move to tmpfs. */
+    int guest_ext4 = 0;
+    if (getenv("SLOP_MNU_DIFF")) {
+        int pf = open("/mnt/xdiag4/hello.txt", O_RDONLY);
+        if (pf >= 0) { guest_ext4 = 1; close(pf); }
+    }
     {
         char base[128], sub[128], f1[128], g1[128];
         char base2[128], lnk[128], hlnk[128], h2[128];
         const char *envbase = getenv("SLOP_MNU_DIFF");
-        if (envbase) snprintf(base, sizeof base, "/mnt/atdiag");
+        if (envbase && !guest_ext4) snprintf(base, sizeof base, "/mnt/atdiag");
+        else if (envbase) snprintf(base, sizeof base, "/atdiag4");
         else snprintf(base, sizeof base, "/tmp/atdiag-%d", (int)getpid());
         if (envbase) snprintf(base2, sizeof base2, "/atfs2");
         else snprintf(base2, sizeof base2, "/tmp/atfs-%d", (int)getpid());
@@ -23013,6 +23845,25 @@ int main(int argc, char **argv) {
         close(reg);
         if (mkdirat(dfd, "sub", 0700) != 0) return fail("at mkdirat");
         if (mkdirat(dfd, "sub", 0700) != -1 || errno != EEXIST) return fail("at mkdirat eexist");
+        /* Device-node creation stays read-only on the disk mounts, so the
+           positive mknodat coverage runs on the tmpfs side (base2). */
+        int dfd2 = open(base2, O_RDONLY | O_DIRECTORY);
+        if (dfd2 < 0) return fail("at open base2 dirfd");
+        if (mknodat(dfd2, "fifo1", S_IFIFO | 0600, 0) != 0) return fail("at mknodat tmpfs fifo");
+        {
+            struct stat fst;
+            if (fstatat(dfd2, "fifo1", &fst, 0) != 0 || !S_ISFIFO(fst.st_mode)) return fail("at mknodat fifo stat");
+        }
+        if (mknodat(dfd2, "fifo1", S_IFIFO | 0600, 0) != -1 || errno != EEXIST) return fail("at mknodat eexist");
+        if (mknodat(dfd2, "plain", S_IFREG | 0644, 0) != 0) return fail("at mknodat reg");
+        {
+            struct stat pst;
+            if (fstatat(dfd2, "plain", &pst, 0) != 0 || !S_ISREG(pst.st_mode) || pst.st_size != 0) return fail("at mknodat reg stat");
+        }
+        if (mknodat(-5, "x", S_IFIFO | 0600, 0) != -1 || errno != EBADF) return fail("at mknodat badfd");
+        if (unlinkat(dfd2, "fifo1", 0) != 0) return fail("at mknodat fifo unlink");
+        if (unlinkat(dfd2, "plain", 0) != 0) return fail("at mknodat reg unlink");
+        close(dfd2);
         int sfd = openat(dfd, "sub", O_RDONLY | O_DIRECTORY);
         if (sfd < 0) return fail("at open subdir");
         int fdot = openat(sfd, "../f.txt", O_RDONLY);
@@ -23193,7 +24044,7 @@ int main(int argc, char **argv) {
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,
        in the guest the ext2 mount. Exercises create/write/read/truncate,
        multi-block mappings, sparse holes, directories and removal. */
-    {
+    if (!guest_ext4) {
         const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag" : "/tmp/xdiag";
         char sub[128], f1[128], f2[128], big[128], keep[128];
         snprintf(sub, sizeof sub, "%s/sub", base);
@@ -23338,6 +24189,92 @@ int main(int argc, char **argv) {
         if (write(kf, "0123456789abcdef", 16) != 16) return fail("ext2 keep write");
         close(kf);
         printf("DIFF_EXT2_OK\n");
+    } else {
+        printf("DIFF_EXT2_SKIP\n");
+    }
+
+    /* Read-only ext4 on the same virtio-blk device: natively the seed tree,
+       in the guest the ext4 mount. Exercises superblock detect, extent
+       mapping, directories, both symlink forms and EROFS on mutation. */
+    if (guest_ext4 || !getenv("SLOP_MNU_DIFF")) {
+        const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag4" : "/tmp/xdiag4";
+        int guest = getenv("SLOP_MNU_DIFF") != 0;
+        char hello[128], nested[128], asym[128], bsym[128], big[128], sub[128];
+        snprintf(hello, sizeof hello, "%s/hello.txt", base);
+        snprintf(nested, sizeof nested, "%s/sub/nested.txt", base);
+        snprintf(asym, sizeof asym, "%s/a-sym", base);
+        snprintf(bsym, sizeof bsym, "%s/b-sym", base);
+        snprintf(big, sizeof big, "%s/big.bin", base);
+        snprintf(sub, sizeof sub, "%s/sub", base);
+        int f = open(hello, O_RDONLY);
+        if (f < 0) return fail("ext4 open hello");
+        char hbuf[35] = {0};
+        if (read(f, hbuf, sizeof hbuf) != 35) return fail("ext4 hello size");
+        if (memcmp(hbuf, "Hello from ext4.\nSecond line here.\n", 35) != 0) return fail("ext4 hello content");
+        struct stat st;
+        if (fstat(f, &st) != 0 || st.st_size != 35 || !S_ISREG(st.st_mode)) return fail("ext4 hello stat");
+        close(f);
+        int nf = open(nested, O_RDONLY);
+        if (nf < 0) return fail("ext4 open nested");
+        char nbuf[25] = {0};
+        if (read(nf, nbuf, sizeof nbuf) != 25 || memcmp(nbuf, "nested content 0123456789\n", 25) != 0) return fail("ext4 nested content");
+        close(nf);
+        char rl[16] = {0};
+        if (readlink(asym, rl, sizeof rl) != 9 || memcmp(rl, "hello.txt", 9) != 0) return fail("ext4 readlink fast");
+        int af = open(asym, O_RDONLY);
+        if (af < 0) return fail("ext4 open through fast link");
+        char ab[5] = {0};
+        if (read(af, ab, sizeof ab) != 5 || memcmp(ab, "Hello", 5) != 0) return fail("ext4 read through");
+        close(af);
+        char rb[104] = {0};
+        if (readlink(bsym, rb, sizeof rb) != 100) return fail("ext4 readlink long");
+        for (int i = 0; i < 100; i++) if (rb[i] != 'x') return fail("ext4 readlink long content");
+        int bf = open(big, O_RDONLY);
+        if (bf < 0) return fail("ext4 big open");
+        if (fstat(bf, &st) != 0 || st.st_size != 102400) return fail("ext4 big size");
+        for (int c = 0; c < 25; c++) {
+            unsigned char rb2[4096];
+            if (read(bf, rb2, sizeof rb2) != (ssize_t)sizeof rb2) return fail("ext4 big read");
+            for (int i = 0; i < 4096; i++)
+                if (rb2[i] != (unsigned char)((c * 131 + i * 7 + 3) & 0xff)) return fail("ext4 big content");
+        }
+        close(bf);
+        DIR *dd = opendir(sub);
+        if (!dd) return fail("ext4 opendir");
+        int saw_nested = 0, entries = 0;
+        struct dirent *de;
+        while ((de = readdir(dd)) != NULL) {
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            entries++;
+            if (!strcmp(de->d_name, "nested.txt")) saw_nested = 1;
+        }
+        closedir(dd);
+        if (!saw_nested || entries != 1) return fail("ext4 readdir");
+        struct stat ls, fs;
+        if (lstat(asym, &ls) != 0 || !S_ISLNK(ls.st_mode) || ls.st_size != 9) return fail("ext4 lstat link");
+        if (stat(asym, &fs) != 0 || !S_ISREG(fs.st_mode) || fs.st_size != 35) return fail("ext4 stat through");
+        if (guest) {
+            char nb[128], nl[128];
+            snprintf(nb, sizeof nb, "%s/nope.txt", base);
+            snprintf(nl, sizeof nl, "%s/nodir", base);
+            int wf = open(hello, O_WRONLY);
+            if (wf >= 0) {
+                char one = 'x';
+                int w = (int)write(wf, &one, 1);
+                close(wf);
+                if (w >= 0) return fail("ext4 write allowed");
+            }
+            if (open(nb, O_WRONLY | O_CREAT | O_TRUNC, 0644) >= 0) return fail("ext4 create allowed");
+            if (mkdir(nl, 0755) == 0) return fail("ext4 mkdir allowed");
+            if (unlink(hello) == 0) return fail("ext4 unlink allowed");
+            if (rmdir(sub) == 0) return fail("ext4 rmdir allowed");
+            if (truncate(big, 100) == 0) return fail("ext4 truncate allowed");
+            int ef = open(hello, O_WRONLY);
+            if (ef >= 0) close(ef);
+        }
+        printf("DIFF_EXT4_OK\n");
+    } else {
+        printf("DIFF_EXT4_SKIP\n");
     }
 
     if (access("/bin/nopie-helper", X_OK) == 0) {
@@ -24375,6 +25312,59 @@ cat build/ext2-pristine-counts.txt
 END FILE: tools/build-ext2.sh
 
 ================================================================================
+FILE: tools/build-ext4.sh
+SIZE: 2053 bytes
+SHA-256: c23880458a72c93203e5c1cd2ae36f20769dcfccfc6a217a3a396ba539167408
+================================================================================
+#!/bin/sh
+# Builds a small single-group ext4 image for the guest read-only tests.
+# The guest differential battery mounts it at /mnt (virtio-blk) while the
+# same test program reads the seed tree natively. The feature set is kept
+# minimal on purpose: extents on (the point of the exercise), 64bit,
+# metadata_csum, dir_index, huge_file, flex_bg and uninit_bg off so the
+# in-kernel reader only needs the classic 32-bit extent format.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+IMG=build/ext4.img
+SEED=build/ext4-seed
+if ! command -v mke2fs >/dev/null 2>&1; then
+  echo "missing required tool: mke2fs (e2fsprogs)" >&2
+  exit 1
+fi
+mkdir -p "$ROOT/$SEED/xdiag4/sub"
+# Small text file with known content.
+printf 'Hello from ext4.\nSecond line here.\n' > "$ROOT/$SEED/xdiag4/hello.txt"
+# Nested file to exercise multi-component lookup.
+printf 'nested content 0123456789\n' > "$ROOT/$SEED/xdiag4/sub/nested.txt"
+# Fast symlink (target fits inline) and a long one (block-backed).
+ln -sf hello.txt "$ROOT/$SEED/xdiag4/a-sym" 2>/dev/null || true
+python3 - "$ROOT/$SEED" <<'PY'
+import os, sys
+seed = sys.argv[1]
+# 100 KiB patterned file: spans many blocks / multiple extents on 4 KiB blocks.
+with open(os.path.join(seed, 'xdiag4', 'big.bin'), 'wb') as f:
+    for c in range(25):
+        f.write(bytes(((c * 131 + i * 7 + 3) & 0xff) for i in range(4096)))
+# Long symlink target (>60 bytes) for the block-backed symlink path.
+tgt = 'x' * 100
+try:
+    os.symlink(tgt, os.path.join(seed, 'xdiag4', 'b-sym'))
+except FileExistsError:
+    pass
+PY
+rm -f "$IMG"
+# 32 MiB, 4 KiB blocks; keep to one block group for a tiny image.
+mke2fs -t ext4 -b 4096 -N 256 -O extent,^64bit,^metadata_csum,^dir_index,^huge_file,^flex_bg,^uninit_bg -d "$SEED" -q "$IMG" 8192
+printf 'created %s\n' "$IMG"
+# Record the pristine free counts so the harness can verify the guest
+# never wrote to the read-only image.
+dumpe2fs -h "$IMG" 2>/dev/null | grep -E '^(Free blocks|Free inodes):' > build/ext4-pristine-counts.txt || true
+cat build/ext4-pristine-counts.txt
+--------------------------------------------------------------------------------
+END FILE: tools/build-ext4.sh
+
+================================================================================
 FILE: tools/build-initramfs.py
 SIZE: 2740 bytes
 SHA-256: d0ca4ece563b103066f3e0eff06445de44a827061366f066ad6ffa25330d0778
@@ -24961,8 +25951,8 @@ END FILE: tools/check-source.ps1
 
 ================================================================================
 FILE: tools/check-source.sh
-SIZE: 8680 bytes
-SHA-256: 4675b7bc0b9baaec18493de1cea3307f7ad502dd235af25a22ba617e29ea1b7b
+SIZE: 8755 bytes
+SHA-256: 1e81657554a2e24a79f0720052b35fb3779c137dd606e96ef03e09a92f2c1ee2
 ================================================================================
 #!/bin/sh
 set -eu
@@ -24974,7 +25964,7 @@ import re
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
- 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','%gs:73','%gs:40','%gs:24','iretq','signal_pending_check','USER_CS','USER_SS'],
  'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust','movups 0(%rsp),%xmm0'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
  'kernel/lib.rs':['spawn_user(loaded)','wait_child(user_pid)','scheduler: user process reaped','kmain_high_continue','apply_relocations','keep_slots','KIMAGE_BASE'],
@@ -25038,11 +26028,12 @@ required={
  'kernel/net.rs':['OUR_IP','csum_pseudo','arp_lookup','udp_send','tcp_connect','tcp_listen','tcp_accept','is_loopback','LOOPBACK','SynRcvd','pub fn poll','EHOSTUNREACH'],
  'kernel/socket.rs':['INET_UDP_BASE','INET_TCP_BASE','pub fn inet_kind','close_by_id'],
  'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count','link_path','rename_path','symlink_path','readlink_into','free_all_blocks'],
+ 'kernel/ext4.rs':['extent_lookup','EXTENTS_FL','EXT_MAGIC','readlink_into','INO_BASE','is_ext4_ino','probe'],
  'tools/run-qemu.sh':['virtio-net-pci','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
  'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net','/lib/vdso.so'],
  'arch/x86_64/context.S':['switch_context','mov %rsp,(%rdi)','mov %rsi,%rsp','movups %xmm0','fpu_restore_regs'],
- 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS','CURRENT_FPU'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','%gs:73','%gs:40','%gs:24','iretq','signal_pending_check','USER_CS','USER_SS','%gs:0'],
  'tests/bbtest.sh':['out shell-echo','out fs-cat','out proc-signal','BB|done|end'],
  'tools/busybox-test.sh':['busybox compat: PASS','build/busybox','tests/musl/busybox'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
@@ -25082,8 +26073,8 @@ END FILE: tools/check-toolchain.sh
 
 ================================================================================
 FILE: tools/differential-test.sh
-SIZE: 7005 bytes
-SHA-256: ca6fc41c855c270485b00afc78acf9d756b4f161b467e9752490fe92e922d71d
+SIZE: 7361 bytes
+SHA-256: b32d23f26f57d15a1ee6b84f1c70b5c89c8c2299538bd2ca5e914fc8d450ff87
 ================================================================================
 #!/bin/sh
 set -eu
@@ -25122,6 +26113,9 @@ phase "native build"
 "$MUSL" -static -O1 -o build/differential-host tests/differential.c
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
+./tools/build-ext4.sh >/tmp/scratchpad/ext4-build.log 2>&1
+rm -rf /tmp/xdiag4
+cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
 
 if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
@@ -25130,7 +26124,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   exit 1
 fi
 phase "native markers"
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_EXT4_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -25208,6 +26202,12 @@ for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIF
     exit 1
   fi
 done
+# The ext2 image has no ext4 seed tree, so the guest must skip (not run) it.
+if ! grep -F "DIFF_EXT4_SKIP" build/differential-serial.log >/dev/null; then
+  echo "guest marker missing: DIFF_EXT4_SKIP"
+  fail_diag
+  exit 1
+fi
 phase "host-side ext2 verification"
 
 # Host-side proof that the guest wrote a real ext2 filesystem: the journal
@@ -25246,6 +26246,153 @@ echo "ext2: guest bytes verified on the platter"
 echo "differential test: PASS"
 --------------------------------------------------------------------------------
 END FILE: tools/differential-test.sh
+
+================================================================================
+FILE: tools/ext4-test.sh
+SIZE: 5330 bytes
+SHA-256: eecdf04e1efbe3b7230c94e80d4f34f8c8e7565c205fab6a73a0f0747b2104e1
+================================================================================
+#!/bin/sh
+# Read-only ext4 guest test: builds an ext4 image with a seed tree, runs
+# the differential battery natively (against a seed copy) and in the guest
+# (against the ext4 mount), then proves the image is untouched.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+MUSL=${MUSL_GCC:-/tmp/opencode/musl-install/bin/musl-gcc}
+test -x "$MUSL" || { echo "musl-gcc not found"; exit 1; }
+BACKUP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/slop-ext4.XXXXXX")
+cp tests/minimal-linux.S "$BACKUP_DIR/minimal-linux.S"
+cp tools/build-initramfs.py "$BACKUP_DIR/build-initramfs.py"
+cleanup() {
+  cp "$BACKUP_DIR/minimal-linux.S" tests/minimal-linux.S
+  cp "$BACKUP_DIR/build-initramfs.py" tools/build-initramfs.py
+  rm -f tests/musl/differential
+  rm -f tests/musl/nopie-helper
+  rm -rf "$BACKUP_DIR"
+}
+trap cleanup EXIT
+
+phase() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$1"; }
+fail_diag() {
+  echo "--- failure diagnostics ---"
+  echo "qemu status: ${guest_status:-n/a} (expected 33)"
+  echo "guest markers reached:"
+  for m in DIFF_OK DIFF_EXT4_OK DIFF_EXT2_SKIP DIFF_DONE; do
+    if grep -qF "$m" build/ext4-serial.log 2>/dev/null; then echo "  present: $m"; else echo "  MISSING from here on: $m"; break; fi
+  done
+  echo "--- serial tail ---"
+  tail -n 20 build/ext4-serial.log 2>/dev/null || echo "(no serial log)"
+  echo "--- end diagnostics ---"
+}
+
+mkdir -p /tmp/scratchpad
+phase "native build"
+"$MUSL" -static -O1 -o build/differential-host tests/differential.c
+"$MUSL" -O1 -o build/differential tests/differential.c
+"$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
+./tools/build-ext4.sh >/tmp/scratchpad/ext4-build.log 2>&1
+rm -rf /tmp/xdiag4
+cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
+if ! ./build/differential-host > build/ext4-native.out; then
+  echo "native ext4 test failed"
+  tail -n 10 build/ext4-native.out 2>/dev/null || echo "(no native log)"
+  exit 1
+fi
+phase "native markers"
+for marker in DIFF_EXT4_OK DIFF_EXT2_OK DIFF_DONE; do
+  if ! grep -F "$marker" build/ext4-native.out >/dev/null; then
+    echo "native marker missing: $marker"
+    exit 1
+  fi
+done
+
+cat > tests/minimal-linux.S <<'INNER_EOF'
+.global _start
+.section .text
+_start:
+    mov $59, %rax
+    lea p(%rip), %rdi
+    lea argv(%rip), %rsi
+    lea envp(%rip), %rdx
+    syscall
+1:  jmp 1b
+# mov $59,%rax
+.section .rodata
+p: .asciz "/bin/differential"
+arg0: .asciz "differential"
+env0: .asciz "SLOP_MNU_DIFF=1"
+.align 8
+argv: .quad arg0, 0
+envp: .quad env0, 0
+# /bin/hello
+INNER_EOF
+cp build/differential tests/musl/differential
+cp build/nopie-helper tests/musl/nopie-helper
+phase "uefi image"
+python3 - <<'PY'
+from pathlib import Path
+p=Path('tools/build-initramfs.py')
+s=p.read_text()
+needle="('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),"
+if needle not in s:
+    raise SystemExit('could not locate hello-net initramfs entry')
+s=s.replace(needle,needle+"('/bin/differential',Path('tests/musl/differential').read_bytes(),0o100755),('/bin/nopie-helper',Path('tests/musl/nopie-helper').read_bytes(),0o100755),",1)
+p.write_text(s)
+PY
+./tools/build-uefi.sh >/tmp/scratchpad/ext4-uefi-build.log 2>&1
+OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
+OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
+cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
+rm -f build/ext4-serial.log
+phase "guest run (240s budget)"
+if timeout 240 qemu-system-x86_64 -machine q35,accel=tcg -cpu max -m 256M -smp 1 \
+  -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+  -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
+  -drive format=raw,file=fat:rw:build/efi \
+  -drive file=build/ext4.img,format=raw,if=none,id=hd0 \
+  -device virtio-blk-pci,drive=hd0 \
+  -device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
+  -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+  -serial file:build/ext4-serial.log -display none -no-reboot -no-shutdown >/dev/null 2>&1; then
+  guest_status=0
+else
+  guest_status=$?
+fi
+if [ "$guest_status" -ne 33 ]; then
+  echo "guest QEMU status $guest_status (expected 33)"
+  fail_diag
+  exit 1
+fi
+phase "guest markers"
+for marker in DIFF_EXT4_OK DIFF_EXT2_SKIP DIFF_DONE; do
+  if ! grep -F "$marker" build/ext4-serial.log >/dev/null; then
+    echo "guest marker missing: $marker"
+    fail_diag
+    exit 1
+  fi
+done
+phase "host-side ext4 verification"
+# The guest mount is read-only: e2fsck must be clean and the free counts
+# must be byte-identical to the pristine image built above.
+if ! e2fsck -n -f build/ext4.img >/tmp/scratchpad/ext4-fsck.log 2>&1; then
+  echo "ext4 image failed consistency check after guest run"
+  cat /tmp/scratchpad/ext4-fsck.log >&2
+  exit 1
+fi
+echo "ext4: e2fsck clean"
+pristine_blocks=$(awk '/^Free blocks/{print $3}' build/ext4-pristine-counts.txt)
+pristine_inodes=$(awk '/^Free inodes/{print $3}' build/ext4-pristine-counts.txt)
+now_blocks=$(dumpe2fs -h build/ext4.img 2>/dev/null | awk '/^Free blocks/{print $3}')
+now_inodes=$(dumpe2fs -h build/ext4.img 2>/dev/null | awk '/^Free inodes/{print $3}')
+if [ "$now_blocks" != "$pristine_blocks" ] || [ "$now_inodes" != "$pristine_inodes" ]; then
+  echo "ext4 free-count mismatch: blocks $now_blocks (want $pristine_blocks), inodes $now_inodes (want $pristine_inodes)" >&2
+  exit 1
+fi
+echo "ext4: free counts unchanged (blocks=$now_blocks inodes=$now_inodes)"
+echo "ext4 test: PASS"
+--------------------------------------------------------------------------------
+END FILE: tools/ext4-test.sh
 
 ================================================================================
 FILE: tools/heap-test.sh

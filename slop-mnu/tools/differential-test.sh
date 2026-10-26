@@ -35,6 +35,9 @@ phase "native build"
 "$MUSL" -static -O1 -o build/differential-host tests/differential.c
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
+./tools/build-ext4.sh >/tmp/scratchpad/ext4-build.log 2>&1
+rm -rf /tmp/xdiag4
+cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
 
 if ! ./build/differential-host > build/differential-native.out; then
   echo "native differential test failed"
@@ -43,7 +46,7 @@ if ! ./build/differential-host > build/differential-native.out; then
   exit 1
 fi
 phase "native markers"
-for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_DONE; do
+for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIFF_INOTIFY_OK DIFF_PTHREAD_OK DIFF_COND_OK DIFF_KILL_OK DIFF_TLS_OK DIFF_STOP_OK DIFF_FP_OK DIFF_SIGNALFD_STOP_OK DIFF_SIGNALFD_NOCLDSTOP_OK DIFF_CFR_OK DIFF_SPLICE_OK DIFF_TEE_OK DIFF_FALLOC_OK DIFF_TCPSRV_OK DIFF_UDPLOOP_OK DIFF_UNIXDG_OK DIFF_AT_OK DIFF_BIGFILE_OK DIFF_EXT2_OK DIFF_EXT4_OK DIFF_DONE; do
   if ! grep -F "$marker" build/differential-native.out >/dev/null; then
     echo "native marker missing: $marker"
     exit 1
@@ -121,6 +124,12 @@ for marker in DIFF_OK DIFF_ERRNO_OK DIFF_PROC_OK DIFF_CAP_OK DIFF_SECCOMP_OK DIF
     exit 1
   fi
 done
+# The ext2 image has no ext4 seed tree, so the guest must skip (not run) it.
+if ! grep -F "DIFF_EXT4_SKIP" build/differential-serial.log >/dev/null; then
+  echo "guest marker missing: DIFF_EXT4_SKIP"
+  fail_diag
+  exit 1
+fi
 phase "host-side ext2 verification"
 
 # Host-side proof that the guest wrote a real ext2 filesystem: the journal

@@ -8,7 +8,7 @@ import re
 r=Path('.')
 required={
  'loader/entry.S':['sub $8, %rsp','call kmain_bootinfo'],
- 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','%gs:73','%gs:40','%gs:24','iretq','signal_pending_check','USER_CS','USER_SS'],
  'arch/x86_64/exceptions.S':['isr_invalid_tss','isr_stack_segment','isr_alignment_check','call exception_rust','movups 0(%rsp),%xmm0'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],
  'kernel/lib.rs':['spawn_user(loaded)','wait_child(user_pid)','scheduler: user process reaped','kmain_high_continue','apply_relocations','keep_slots','KIMAGE_BASE'],
@@ -72,11 +72,12 @@ required={
  'kernel/net.rs':['OUR_IP','csum_pseudo','arp_lookup','udp_send','tcp_connect','tcp_listen','tcp_accept','is_loopback','LOOPBACK','SynRcvd','pub fn poll','EHOSTUNREACH'],
  'kernel/socket.rs':['INET_UDP_BASE','INET_TCP_BASE','pub fn inet_kind','close_by_id'],
  'kernel/ext2.rs':['create_file','write_file','truncate_file','unlink_path','mkdir_path','rmdir_path','dir_insert','alloc_block','free_block','patch_inode','inode_sector_count','link_path','rename_path','symlink_path','readlink_into','free_all_blocks'],
+ 'kernel/ext4.rs':['extent_lookup','EXTENTS_FL','EXT_MAGIC','readlink_into','INO_BASE','is_ext4_ino','probe'],
  'tools/run-qemu.sh':['virtio-net-pci','-netdev user'],
  'tools/net-echo.py':['udp_loop','tcp_loop','net-echo.ready'],
  'tools/build-initramfs.py':['/bin/hello-socket','/bin/hello-net','/lib/vdso.so'],
  'arch/x86_64/context.S':['switch_context','mov %rsp,(%rdi)','mov %rsi,%rsp','movups %xmm0','fpu_restore_regs'],
- 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','EXEC_PENDING','EXEC_RIP','SYSCALL_FRAME','iretq','signal_pending_check','USER_CS','USER_SS','CURRENT_FPU'],
+ 'arch/x86_64/syscall.S':['push %r11','push %r15','mov 48(%rsp), %r8','push 56(%rsp)','call syscall_dispatch_raw','%gs:73','%gs:40','%gs:24','iretq','signal_pending_check','USER_CS','USER_SS','%gs:0'],
  'tests/bbtest.sh':['out shell-echo','out fs-cat','out proc-signal','BB|done|end'],
  'tools/busybox-test.sh':['busybox compat: PASS','build/busybox','tests/musl/busybox'],
  'arch/x86_64/user.S':['enter_user_asm','resume_user_asm','iretq'],

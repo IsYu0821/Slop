@@ -144,7 +144,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
     nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
     nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
-    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>sys_mknodat(a[0] as i64,a[1],a[2] as u32,a[3]),
     nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
     nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
     nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
@@ -1405,6 +1405,11 @@ fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
  let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
+fn sys_mknodat(dirfd:i64,path_ptr:u64,mode:u32,rdev:u64)->i64{
+ let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mknod(path,mode,rdev){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
 fn sys_rmdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};

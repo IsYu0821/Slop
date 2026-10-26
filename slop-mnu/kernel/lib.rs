@@ -24,6 +24,7 @@ pub mod time;
 pub mod vfs;
 pub mod device;
 pub mod ext2;
+pub mod ext4;
 pub mod inotify;
 pub mod fd;
 pub mod flock;

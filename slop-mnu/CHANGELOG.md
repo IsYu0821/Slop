@@ -1,3 +1,10 @@
+## 0.83.0 - 2026-10-26
+- ext4 read-only mount: superblock feature detection (EXTENTS required, 64BIT refused), recursive extent-tree block mapping with holes as zeros, directory and both symlink forms, served through a new `MountKind::Ext4` with `0x200000`-based inodes disjoint from ext2; every mutating op returns EROFS and `mountinfo` reports the `ext4` fstype.
+- New `DIFF_EXT4_OK` differential battery (seed tree built by `tools/build-ext4.sh`, native-vs-guest byte comparison, guest-side EROFS assertions) plus standalone `tools/ext4-test.sh`, which also proves read-only operation via clean `e2fsck` and unchanged free counts.
+- `MKNODAT` syscall wired through to `vfs::mknod`, covered by the `*at` battery on tmpfs (fifo + regular + EEXIST + EBADF).
+- Per-CPU syscall-state groundwork for SMP: GS base pinned per CPU (no userspace GS use, so no swapgs dance), `%gs`-relative syscall frame/FPU/result slots, per-CPU Rust accessors; APs keep their own blocks without cross-CPU clobbering. No scheduling change yet.
+- Verified with all quality gates green: check-source, heap, acceptance, differential (e2fsck clean), busybox 115/115, ext4-test PASS, 2 vCPU boot with both CPUs online and attested.
+
 ## 0.82.0 - 2026-10-26
 - SMP bring-up: MADT enumeration (type 0/9, enabled only), per-AP stacks and CPU state, INIT/SIPI start into a parked halt loop, and atomic attestations (state machine, magic, stack probe, single tick) with a TSC deadline instead of sleeps; missing APs stay absent and the boot continues.
 - Real-mode trampoline at physical 0x7000 (the AP starts with paging off): 16-bit entry, protected-mode transition, mailbox handoff (PML4/entry/LAPIC/ID/stack tables), long-mode entry, APIC-ID scan, per-CPU stack switch and high-half `ap_main` with per-CPU GDT/TSS/IDT and LAPIC enable, plus RAM stage markers for diagnostics.
