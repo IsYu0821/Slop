@@ -164,9 +164,9 @@ pub fn send_frame(frame:&[u8])->Result<(),i64>{
   loop{
    let used=used_idx(tx_ring(),size).read_volatile();
    let done={let mut net=NET.lock();if used.wrapping_sub(net.tx_used)>=1{net.tx_used=used;true}else{false}};
-   if done{return Ok(())}
+   if done{crate::net::note_tx_ok();return Ok(())}
    spins+=1;
-   if spins>4_000_000{return Err(crate::errno::EIO)}
+   if spins>4_000_000{crate::net::note_tx_timeout();return Err(crate::errno::EIO)}
    core::hint::spin_loop();
   }
  }

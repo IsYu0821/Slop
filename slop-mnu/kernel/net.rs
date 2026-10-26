@@ -6,7 +6,7 @@
 //! and every blocking wait loops `poll` plus a `sti;hlt;cli` nap so the tick
 //! (which polls too) provides the wakeup without needing a device IRQ.
 use crate::{errno,sync::SpinLock,wait_queue::WaitQueue};
-use core::sync::atomic::{AtomicU32,Ordering};
+use core::sync::atomic::{AtomicU32,AtomicU64,Ordering};
 
 pub const OUR_IP:u32=0x0A00_020F;  /* 10.0.2.15, QEMU user networking */
 pub const GATEWAY:u32=0x0A00_0202; /* 10.0.2.2 */
@@ -82,6 +82,15 @@ fn ip_emit(proto:u8,dst_ip:u32,dst_mac:&[u8;6],payload:&[u8])->Result<(),i64>{
 /* ---------- ARP ---------- */
 
 static ARP:SpinLock<[(u32,[u8;6]);4]>=SpinLock::new([(0,[0;6]);4]);
+/* DIAG: ARP RX/TX counters. */
+static ARP_TX:AtomicU64=AtomicU64::new(0);
+static ARP_RX:AtomicU64=AtomicU64::new(0);
+static TX_OK:AtomicU64=AtomicU64::new(0);
+static TX_TIMEOUT:AtomicU64=AtomicU64::new(0);
+pub fn arp_counts()->(u64,u64){(ARP_TX.load(Ordering::Relaxed),ARP_RX.load(Ordering::Relaxed))}
+pub fn note_tx_ok(){TX_OK.fetch_add(1,Ordering::Relaxed);}
+pub fn note_tx_timeout(){TX_TIMEOUT.fetch_add(1,Ordering::Relaxed);}
+pub fn tx_counts()->(u64,u64){(TX_OK.load(Ordering::Relaxed),TX_TIMEOUT.load(Ordering::Relaxed))}
 fn arp_lookup(ip:u32)->Option<[u8;6]>{
  if ip==0xFFFF_FFFF{return Some(BROADCAST)}
  ARP.lock().iter().find(|e|e.0==ip).map(|e|e.1)
@@ -94,6 +103,7 @@ fn arp_insert(ip:u32,mac:[u8;6]){
  t[0]=(ip,mac);
 }
 fn arp_emit(op:u16,target_ip:u32,dst_mac:&[u8;6],target_mac:&[u8;6]){
+ ARP_TX.fetch_add(1,Ordering::Relaxed);
  let mut p=[0u8;28];
  p[0..2].copy_from_slice(&1u16.to_be_bytes());
  p[2..4].copy_from_slice(&ETH_IPV4.to_be_bytes());
@@ -110,12 +120,27 @@ fn arp_reply(ip:u32,mac:&[u8;6]){arp_emit(2,ip,mac,mac)}
 fn resolve(hop:u32)->Result<[u8;6],i64>{
  if let Some(m)=arp_lookup(hop){return Ok(m)}
  arp_request(hop);
+ /* Fast path: poll tightly first (replies typically arrive in microseconds;
+    sleeping first would always miss them and force a retry). */
+ for _ in 0..1000{
+  poll();
+  if let Some(m)=arp_lookup(hop){return Ok(m)}
+  core::hint::spin_loop();
+ }
  let mut round=0u32;
  loop{
   poll();
   if let Some(m)=arp_lookup(hop){return Ok(m)}
   round+=1;
-  if round>2_000{return Err(errno::EHOSTUNREACH)}
+  /* Retransmit the request: a single ARP can be lost while Slirp or the
+     virtio queue settles, and Linux also retries rather than failing. */
+  if round%500==0{arp_request(hop);}
+  if round>4_000{
+   let (tx,rx)=arp_counts();
+   let (tok,tto)=tx_counts();
+   crate::println!("net: arp resolve failed for {:#x} tx={} rx={} txok={} txto={}",hop,tx,rx,tok,tto);
+   return Err(errno::EHOSTUNREACH)
+  }
   nap(round);
  }
 }
@@ -909,6 +934,7 @@ fn tcp_tick(){
 /* ---------- receive path ---------- */
 
 fn dispatch_arp(frame:&[u8]){
+ ARP_RX.fetch_add(1,Ordering::Relaxed);
  let p=&frame[14..];
  if p.len()<28{return}
  let op=be16(p,6);
