@@ -510,3 +510,123 @@ pub fn file_size(inum: u32) -> Option<u64> {
     let inode = read_inode(&sb, inum).ok()?;
     Some(inode_len(&inode))
 }
+
+/* ---------- write path (overwrite within EOF; no allocation yet) ---------- */
+
+fn write_bytes_at(off: u64, src: &[u8]) -> Result<(), i64> {
+    let cap = crate::driver::virtio_blk::capacity() * 512;
+    if off as usize + src.len() > cap as usize {
+        return Err(errno::EINVAL);
+    }
+    let mut done = 0usize;
+    while done < src.len() {
+        let sec = (off as usize + done) / 512;
+        let soff = (off as usize + done) % 512;
+        let n = core::cmp::min(src.len() - done, 512 - soff);
+        let mut frame = [0u8; 512];
+        if soff != 0 || n < 512 {
+            if crate::driver::virtio_blk::read_sector(sec as u64, &mut frame).is_err() {
+                return Err(crate::errno::EIO);
+            }
+        }
+        frame[soff..soff + n].copy_from_slice(&src[done..done + n]);
+        if crate::driver::virtio_blk::write_sector(sec as u64, &frame).is_err() {
+            return Err(crate::errno::EIO);
+        }
+        done += n;
+    }
+    Ok(())
+}
+
+fn write_block(block: u64, blksize: usize, buf: &[u8]) -> Result<(), i64> {
+    if buf.len() < blksize {
+        return Err(errno::EINVAL);
+    }
+    write_bytes_at(block * blksize as u64, &buf[..blksize])
+}
+
+fn write_inode(sb: &Super, inum: u32, inode: &Inode) -> Result<(), i64> {
+    if inum == 0 {
+        return Err(errno::EINVAL);
+    }
+    let g = ((inum - 1) as usize) / sb.s_inodes_per_group as usize;
+    let idx = (inum - 1) as usize % sb.s_inodes_per_group as usize;
+    let gd = read_group_desc(sb, g)?;
+    let bs = block_size(sb);
+    let inode_size = sb.s_inode_size as usize;
+    if inode_size < 128 || inode_size > 1024 {
+        return Err(errno::EINVAL);
+    }
+    let table_block = gd.bg_inode_table_lo as u64;
+    let byte_off = idx * inode_size;
+    let block = table_block + (byte_off / bs) as u64;
+    let off = byte_off % bs;
+    if off + 128 > bs {
+        return Err(errno::EINVAL);
+    }
+    let mut buf = [0u8; 4096];
+    read_block(block, bs, &mut buf)?;
+    let dst = &mut buf[off..off + core::mem::size_of::<Inode>()];
+    let src = unsafe {
+        core::slice::from_raw_parts(
+            (inode as *const Inode) as *const u8,
+            core::mem::size_of::<Inode>(),
+        )
+    };
+    dst.copy_from_slice(src);
+    write_block(block, bs, &buf)?;
+    Ok(())
+}
+
+/* Overwrites bytes within the current EOF (no allocation, no extension).
+   Extending writes, holes, and all metadata allocation return EROFS until
+   the allocator lands. Returns bytes written. */
+pub fn write_file(inum: u32, off: u64, src: &[u8]) -> Result<usize, i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    if src.is_empty() {
+        return Ok(0);
+    }
+    let sb = superblock()?;
+    let mut inode = read_inode(&sb, inum)?;
+    if inode.i_mode & 0o170000 == 0o040000 {
+        return Err(errno::EISDIR);
+    }
+    if inode.i_mode & 0o170000 != 0o100000 {
+        return Err(errno::EINVAL);
+    }
+    if !is_extents(&inode) {
+        return Err(errno::EINVAL);
+    }
+    let size = inode_len(&inode);
+    let end = off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
+    if end > size {
+        return Err(errno::EROFS);
+    }
+    let bs = block_size(&sb);
+    let mut done = 0usize;
+    while done < src.len() {
+        let poff = off as usize + done;
+        let blk = read_file_block(&sb, &inode, (poff / bs) as u32)?;
+        if blk == 0 {
+            return Err(errno::EROFS);
+        }
+        let po = poff % bs;
+        let n = core::cmp::min(src.len() - done, bs - po);
+        if n < bs || po != 0 {
+            let mut block = [0u8; 4096];
+            read_block(blk, bs, &mut block)?;
+            block[po..po + n].copy_from_slice(&src[done..done + n]);
+            write_block(blk, bs, &block)?;
+        } else {
+            write_block(blk, bs, &src[done..done + n])?;
+        }
+        done += n;
+    }
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    inode.i_mtime = t;
+    inode.i_ctime = t;
+    write_inode(&sb, inum, &inode)?;
+    Ok(src.len())
+}

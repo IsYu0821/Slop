@@ -1104,7 +1104,7 @@ pub fn inode_size(ino:u64)->Option<u64>{
 pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
  if is_proc_file_inode(inode.ino)||is_sys_file_inode(inode.ino){return Err(errno::EROFS)}
  if is_ext2_inode(&inode){return crate::ext2::write_file(inode.rdev as u32,off,src)}
- if crate::ext4::is_ext4_ino(inode.ino){return Err(errno::EROFS)}
+  if crate::ext4::is_ext4_ino(inode.ino){return crate::ext4::write_file(inode.rdev as u32,off,src)}
  if let Some(fs_id)=tmpfs_fs_id(inode.ino){let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().find(|n|n.ino==inode.ino).ok_or(errno::ENOENT)?;let wrote=tmpfs_write_inode(node,off,src)?;drop(registry);if wrote>0{if let Ok(path)=core::str::from_utf8(&inode.name[..inode.name_len]){crate::inotify::notify(path,crate::inotify::IN_MODIFY)}}return Ok(wrote)}
  let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|&n|n.ino==inode.ino).ok_or(errno::ENOENT)?;
