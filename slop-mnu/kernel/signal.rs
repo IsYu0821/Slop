@@ -190,8 +190,8 @@ pub fn prepare_delivery(frame:*mut u64)->Option<Delivery>{
    if default_terminates(sig as i32){crate::task::exit_signal(sig as i32);}
    if default_stops(sig as i32){
     /* A blocked stop stays pending; the unblockable SIGSTOP and an
-       unblocked SIGTSTP/SIGTTIN/SIGTTOU park the task here. */
-    pop(sig);
+       unblocked SIGTSTP/SIGTTIN/SIGTTOU park the task here. stop_current
+       consumes the signal after the Stopped store (set-first ordering). */
     crate::task::stop_current(sig as i32);
     continue;
    }

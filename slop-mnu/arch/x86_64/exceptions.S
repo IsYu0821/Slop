@@ -1,8 +1,12 @@
 .text
-.global isr_default,isr_invalid_tss,isr_segment_not_present,isr_stack_segment
+.global isr_default,isr_debug,isr_invalid_tss,isr_segment_not_present,isr_stack_segment
 .global isr_general_protection,isr_page_fault,isr_alignment_check,isr_double_fault
 /* Exceptions without a CPU error code get a synthetic zero. */
 isr_default: pushq $0; pushq $255; jmp common_exception
+/* Debug (#DB, vector 1): no error code. The A2 stop trap single-steps a
+   user task with a pending stop into here so the stop runs on the task's
+   own kernel stack. */
+isr_debug: pushq $0; pushq $1; jmp common_exception
 /* Exceptions below already have a CPU-pushed error code. */
 isr_double_fault: pushq $8; jmp common_exception
 isr_invalid_tss: pushq $10; jmp common_exception

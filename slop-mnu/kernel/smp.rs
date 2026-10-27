@@ -644,6 +644,12 @@ pub struct PerCpuData {
     pub _pad: [u8; 6],
     pub cpu_index: u64,
     pub diag_entry_rsp: u64,
+    /* Set by interrupt handlers when the interrupted user task has a stop
+       pending: the IRQ return path (arch/x86_64/irq.S) then sets TF so the
+       task traps into #DB, where the stop runs on its own kernel stack.
+       IST handlers cannot schedule directly (shared per-CPU stack). */
+    pub stop_trap: u8,
+    pub _pad2: [u8; 7],
 }
 
 impl PerCpuData {
@@ -663,6 +669,8 @@ impl PerCpuData {
             _pad: [0; 6],
             cpu_index: 0,
             diag_entry_rsp: 0,
+            stop_trap: 0,
+            _pad2: [0; 7],
         }
     }
 }

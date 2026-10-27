@@ -76,7 +76,10 @@ int main(void) {
             close(fd);
             unlink(path);
             if (rn != n || memcmp(rbuf, buf, (size_t)n) != 0) {
-                printf("smp: child reread mismatch\n");
+                printf("smp: child reread mismatch rn=%d n=%d\n", rn, n);
+                printf("smp: wrote: %s", buf);
+                rbuf[sizeof(rbuf)-1] = 0;
+                printf("smp: read: %s", rbuf);
                 _exit(13);
             }
             /* Report cpus to parent. */

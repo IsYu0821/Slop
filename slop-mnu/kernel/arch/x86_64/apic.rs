@@ -275,6 +275,9 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         crate::net::poll();
     }
     crate::task::note_timer_stage(4);
+    /* A2 stop preemption: a user task with a pending stop is single-stepped
+       into #DB on return, where the stop runs on its own kernel stack. */
+    if cs&3==3{crate::task::request_stop_trap();}
     unsafe { write(0xb0,0) }
 }
 
@@ -348,7 +351,7 @@ pub fn send_resched_ipi(dest: u32) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "sysv64" fn apic_resched_rust() {
+pub extern "sysv64" fn apic_resched_rust(cs:u64) {
     /* DIAG-MS93: entry context on first call. */
     static RDIAG: AtomicU64 = AtomicU64::new(0);
     if RDIAG.swap(1, Ordering::Relaxed)==0{
@@ -364,6 +367,7 @@ pub extern "sysv64" fn apic_resched_rust() {
     }
     crate::task::request_resched();
     crate::task::note_ipi_recv();
+    if cs&3==3{crate::task::request_stop_trap();}
     unsafe { write(0xb0, 0) }
 }
 

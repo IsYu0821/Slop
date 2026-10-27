@@ -33,7 +33,16 @@ pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a
   if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
  crate::task::stack_guard();
  crate::task::note_syscall();
+ /* A SIGSTOP requested while running user code takes effect before the next
+    syscall executes, so a SIGSTOP to a syscall-heavy task does not wait for
+    its return path. stop_current parks; on SIGCONT the syscall runs. */
+ if let Some(sig)=crate::task::stop_requested(){crate::task::stop_current(sig);}
  let r=linux_abi::dispatch(nr,[a1,a2,a3,a4,a5,a6]);
+ /* Yield point for explicit reschedule requests (reschedule IPIs and
+    lifecycle kicks): hand over when asked. Broadcast preemption on every
+    syscall is deliberately avoided; the 1ms timer trap bounds the
+    preemption latency for CPU-bound tasks instead. */
+ crate::task::yield_if_needed();
  r
 }
 #[unsafe(no_mangle)]pub extern "sysv64" fn bad_sysret(rip:u64,rsp:u64)->!{crate::println!("rejected SYSRET rip={:#x} rsp={:#x}",rip,rsp);crate::arch::halt()}
@@ -110,3 +119,17 @@ pub fn set_return_context(frame:*mut u64,ctx:&UserFrame)->bool{
    threads that share the global syscall frame slot. */
 pub unsafe fn read_user_rsp()->u64{unsafe{(*pc()).syscall_user_rsp}}
 pub unsafe fn write_user_rsp(v:u64){unsafe{(*pc()).syscall_user_rsp=v}}
+/* Per-CPU syscall cells that are live across a context switch (set at entry
+   or by exec/sigreturn, consumed at return). The scheduler parks them into
+   the outgoing task and restores the incoming task's copies, so a switch
+   between the write and the read cannot observe another task's values. */
+pub unsafe fn read_syscall_frame()->u64{unsafe{(*pc()).syscall_frame}}
+pub unsafe fn write_syscall_frame(v:u64){unsafe{(*pc()).syscall_frame=v}}
+pub unsafe fn read_exec_rip()->u64{unsafe{(*pc()).exec_rip}}
+pub unsafe fn write_exec_rip(v:u64){unsafe{(*pc()).exec_rip=v}}
+pub unsafe fn read_exec_pending()->bool{unsafe{(*pc()).exec_pending!=0}}
+pub unsafe fn write_exec_pending(v:bool){unsafe{(*pc()).exec_pending=v as u8}}
+pub unsafe fn read_sigret_value()->u64{unsafe{(*pc()).sigret_value}}
+pub unsafe fn write_sigret_value(v:u64){unsafe{(*pc()).sigret_value=v}}
+pub unsafe fn read_sigret_valid()->bool{unsafe{(*pc()).sigret_valid!=0}}
+pub unsafe fn write_sigret_valid(v:bool){unsafe{(*pc()).sigret_valid=v as u8}}

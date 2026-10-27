@@ -60,6 +60,26 @@ apic_timer_entry:
     and $-16, %rsp
     call apic_timer_rust
     mov %r15, %rsp
+    /* A2 stop trap: if the handler armed a stop for the interrupted user
+       task, set TF so it traps into #DB immediately after IRET, where the
+       stop runs on the task's own kernel stack (IST handlers cannot
+       schedule). Frame: CS at 384(%r15), RFLAGS at 392(%r15).
+       Skip entirely before GS is live (same guard as the entry path). */
+    mov $0xc0000101, %ecx
+    rdmsr
+    test %edx, %edx
+    jne 8f
+    test %eax, %eax
+    je 9f
+8:  cmpb $0, %gs:96
+    je 9f
+    movq 384(%r15), %rax
+    andq $3, %rax
+    cmpq $3, %rax
+    jne 9f
+    movb $0, %gs:96
+    orq $0x100, 392(%r15)
+9:
     pop %r15
     pop %r14
     pop %r13
@@ -148,11 +168,29 @@ apic_resched_entry:
     jne 1f
     test %eax, %eax
     je 3f
-1:  movq %r15, %gs:88
+1:      movq %r15, %gs:88
 3:
+    mov 384(%r15), %rdi
     and $-16, %rsp
     call apic_resched_rust
     mov %r15, %rsp
+    /* A2 stop trap: same as the timer entry (CS at 384, RFLAGS at 392),
+       with the same before-GS-liveness guard. */
+    mov $0xc0000101, %ecx
+    rdmsr
+    test %edx, %edx
+    jne 8f
+    test %eax, %eax
+    je 9f
+8:  cmpb $0, %gs:96
+    je 9f
+    movq 384(%r15), %rax
+    andq $3, %rax
+    cmpq $3, %rax
+    jne 9f
+    movb $0, %gs:96
+    orq $0x100, 392(%r15)
+9:
     pop %r15
     pop %r14
     pop %r13

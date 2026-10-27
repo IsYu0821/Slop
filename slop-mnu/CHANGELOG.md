@@ -1,4 +1,12 @@
-## 0.85.0 - 2026-10-27
+## 0.86.0 - 2026-10-27
+- A2 remote stop/continue: stops act at syscall entry/return, trap return (#DB via TF single-step from timer/IPI) and timer ticks; remote SIGSTOP on a Running task only flags + IPIs, the target stops itself (state/ownership untouched); queued targets stop directly with balanced run-queue accounting; SIGCONT cancels pending stops; park loop breaks on newer cont epochs so no lost wakeup; waitpid reports stopped/continued states.
+- Real timer preemption (take_need_resched had no callers; CPU-bound tasks starved their CPU): targeted per-CPU traps, syscall-return yields on explicit request, lifecycle kicks on wake/resume.
+- Per-CPU syscall cells (exec redirect, syscall frame, sigreturn) parked/restored per task across switches; always reload CR3 on switch and invlpg on bulk unmap (stale-TLB faults on frame reuse fixed).
+- ROOT-store inode numbers are monotonic (len+2 collided after unlink compaction, resolving I/O to the wrong file); disjoint from initramfs/ext2/ext4/tmpfs numbers.
+- New `tools/stop-test.sh` battery (musl `tests/smp-stop.c`, native reference): 25 stop/cont rounds on a CPU-bound child with no-progress-while-stopped proof.
+- Verified: stop battery 1/2/4/8 vCPU x3 PASS with strict counters, A1 smp-stress/smp-exec batteries still green (16/16), native wait statuses identical. Record in `docs/a2-stop.md`.
+
+## 0.85.0 - 2026-10-26
 - A1 scheduler stabilization: post-switch hook completes yield/park transitions under the scheduler lock (outgoing task stays Running+owned until the switch commits), closing the AP-exec RIP=0 race where another CPU claimed a stack still in use.
 - Lock order: the scheduler lock is a leaf (spawn paths reserve a cleared slot, fill tables lock-free, then publish; `finish()` hoists its uid read), fixing the SCHED<->PROCS ABBA deadlock that wedged all CPUs on fork/exit bursts; spurious reservation wakes (stale `wake_pending`/`wake_tick`) and wake-race accounting (self-select consumes the wake, mid-switch skips stay silent) keep double_exec=0 and push==pop.
 - Socket lifecycle fixes: `close()` no longer frees fork-shared sockets out from under live peers (EPIPE/EOF); last-close actually frees via the saved kind (the 16-slot pool leaked, EMFILE); slot reuse fully resets `peer_closed`/waiters/pending queues; pipe reset clears wait queues.

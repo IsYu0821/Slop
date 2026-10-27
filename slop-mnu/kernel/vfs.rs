@@ -1,5 +1,13 @@
 //! Allocation-free initramfs VFS with read/write support.
 use crate::{arch::x86_64::{paging::PhysAccess,phys::{Identity,phys_to_virt}},errno,sync::SpinLock,vm::VmFlags};
+use core::sync::atomic::{AtomicU64,Ordering};
+/* Monotonic root-store inode numbers. The old scheme (len+2) reused numbers
+   after unlink compacted the table, so two live files could share an ino
+   and file I/O resolved to the wrong node (stale size/pages, EOF on live
+   data). The base is disjoint from initramfs (small), ext2 (0x100000+),
+   ext4 (0x200000+) and tmpfs (tagged high) numbers. */
+static NEXT_ROOT_INO:AtomicU64=AtomicU64::new(0x4000_0000);
+fn alloc_root_ino()->u64{NEXT_ROOT_INO.fetch_add(1,Ordering::Relaxed)}
 pub type Result<T>=core::result::Result<T,i64>;
 pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
 /* File block layout: 8 direct pages, one single-indirect table (512
@@ -474,7 +482,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let name_len=path.len();
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
-  let ino=(m.len+2)as u64;
+  let ino=alloc_root_ino();
   let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
   let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
   unsafe{Identity.table(frame).fill(0)}
@@ -506,7 +514,7 @@ pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let name_len=path.len();
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
- let ino=(m.len+2)as u64;
+ let ino=alloc_root_ino();
  let mut name=[0u8;NAME_MAX+1];name[..name_len].copy_from_slice(path.as_bytes());
  let node=Inode{ino,mode:S_IFDIR|mode&0o777,size:0,capacity:0,data:core::ptr::null_mut(),rdev:0,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len};
  let idx=m.len; m.nodes[idx]=node;
@@ -901,7 +909,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
  unsafe{crate::arch::x86_64::phys::Identity.table(frame).fill(0)}
   unsafe{core::slice::from_raw_parts_mut(phys_to_virt(frame)as*mut u8,tb.len()).copy_from_slice(tb)}
- let ino=(m.len+2)as u64 + 0x1000;
+ let ino=alloc_root_ino();
  let mut name=[0u8;NAME_MAX+1]; let nl=path.len(); name[..nl].copy_from_slice(path.as_bytes());
  let node=Inode{ino,mode:S_IFLNK|0o777,size:tb.len() as u64,capacity:tb.len() as u64,data:phys_to_virt(frame)as*mut u8,rdev:0,pages:[phys_to_virt(frame),0,0,0,0,0,0,0],indirect:0,dindirect:0,npages:1,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
@@ -922,7 +930,7 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
- let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=(m.len+2)as u64+0x2000; node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.indirect=oldnode.indirect; node.dindirect=oldnode.dindirect; node.npages=oldnode.npages; incref_all_pages(&node);
+ let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=alloc_root_ino(); node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.indirect=oldnode.indirect; node.dindirect=oldnode.dindirect; node.npages=oldnode.npages; incref_all_pages(&node);
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
  Ok(node)
 }
@@ -1163,7 +1171,7 @@ pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let nl=path.len();
  if nl>NAME_MAX{return Err(errno::ENAMETOOLONG)}
- let ino=(m.len+2)as u64+0x3000;
+ let ino=alloc_root_ino();
  let mut name=[0u8;NAME_MAX+1];name[..nl].copy_from_slice(path.as_bytes());
  let node=Inode{ino,mode,size:0,capacity:0,data:core::ptr::null_mut(),rdev,pages:[0;8],indirect:0,dindirect:0,npages:0,name,name_len:nl};
  let idx=m.len; m.nodes[idx]=node; m.len+=1;
