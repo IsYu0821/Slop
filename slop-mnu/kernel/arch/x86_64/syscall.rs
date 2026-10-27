@@ -1,19 +1,14 @@
 use crate::linux_abi;
 use super::{descriptors,msr};
+fn pc()->*mut crate::smp::PerCpuData{crate::smp::per_cpu_ptr(crate::smp::current_cpu())}
 
 unsafe extern "C" { fn syscall_entry(); }
-#[unsafe(no_mangle)] pub static mut SYSCALL_KERNEL_RSP:u64=0;
-#[unsafe(no_mangle)] pub static mut SYSCALL_USER_RSP:u64=0;
 /* Entry point of the saved user register frame, published for fork. */
-#[unsafe(no_mangle)] pub static mut SYSCALL_FRAME:u64=0;
 /* Scratch cell for the dispatcher result between the dispatcher call and the
    user-mode return. */
-#[unsafe(no_mangle)] pub static mut SYSCALL_RESULT:u64=0;
 /* The value rt_sigreturn restores into the user register file. It is
    published separately because the dispatcher writes the scratch cell above
    after the syscall returns. */
-#[unsafe(no_mangle)] pub static mut SIGRET_VALUE:u64=0;
-#[unsafe(no_mangle)] pub static mut SIGRET_VALID:u8=0;
 /* User selectors used by the IRETQ return path of the syscall entry. */
 #[unsafe(no_mangle)] pub static USER_CS:u64=descriptors::UCODE as u64;
 #[unsafe(no_mangle)] pub static USER_SS:u64=descriptors::UDATA as u64;
@@ -26,7 +21,7 @@ pub struct UserFrame{pub r15:u64,pub r14:u64,pub r13:u64,pub r12:u64,pub rbp:u64
 
 pub unsafe fn init(kernel_stack_top:u64){
  unsafe{
-  SYSCALL_KERNEL_RSP=kernel_stack_top;
+  (*pc()).syscall_kernel_rsp=kernel_stack_top;
   let mut efer=msr::rdmsr(msr::IA32_EFER);efer|=1|(1<<11);msr::wrmsr(msr::IA32_EFER,efer);
   let star=((descriptors::UCODE as u64-16)<<48)|((descriptors::KCODE as u64)<<32);
   msr::wrmsr(msr::IA32_STAR,star);msr::wrmsr(msr::IA32_LSTAR,syscall_entry as usize as u64);
@@ -35,17 +30,16 @@ pub unsafe fn init(kernel_stack_top:u64){
 }
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn syscall_dispatch_raw(nr:u64,a1:u64,a2:u64,a3:u64,a4:u64,a5:u64,a6:u64)->i64{
- if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
+  if nr>=200||nr==41||nr==42||nr==43||nr==49||nr==50||nr==57{}
  crate::task::stack_guard();
+ crate::task::note_syscall();
  let r=linux_abi::dispatch(nr,[a1,a2,a3,a4,a5,a6]);
  r
 }
 #[unsafe(no_mangle)]pub extern "sysv64" fn bad_sysret(rip:u64,rsp:u64)->!{crate::println!("rejected SYSRET rip={:#x} rsp={:#x}",rip,rsp);crate::arch::halt()}
 
-pub unsafe fn set_kernel_stack(value:u64){unsafe{SYSCALL_KERNEL_RSP=value}}
-#[unsafe(no_mangle)]pub static mut EXEC_PENDING:u8=0;
-#[unsafe(no_mangle)]pub static mut EXEC_RIP:u64=0;
-pub unsafe fn commit_exec_return(rip:u64,rsp:u64){unsafe{EXEC_RIP=rip;SYSCALL_USER_RSP=rsp;EXEC_PENDING=1;}}
+pub unsafe fn set_kernel_stack(value:u64){unsafe{(*pc()).syscall_kernel_rsp=value}}
+pub unsafe fn commit_exec_return(rip:u64,rsp:u64){unsafe{let p=pc();(*p).exec_rip=rip;(*p).syscall_user_rsp=rsp;(*p).exec_pending=1;}}
 /* Offsets of the on-stack user register frame saved by syscall_entry. */
 const F_R15:usize=0;const F_R14:usize=1;const F_R13:usize=2;const F_R12:usize=3;const F_RBP:usize=4;const F_RBX:usize=5;
 const F_R10:usize=6;const F_R9:usize=7;const F_R8:usize=8;const F_RDX:usize=9;const F_RSI:usize=10;const F_RDI:usize=11;
@@ -70,12 +64,12 @@ pub extern "sysv64" fn signal_pending_check(frame:*mut u64)->u64{
 /* Copies the in-flight syscall frame into a resume snapshot whose RAX is 0,
     the value fork must return in the child. Callers run in syscall context. */
 pub fn capture_fork_frame()->Option<UserFrame>{
- let f=unsafe{SYSCALL_FRAME as *const u64};if f.is_null(){return None}
+ let f=unsafe{(*pc()).syscall_frame as *const u64};if f.is_null(){return None}
  unsafe{
   Some(UserFrame{
    r15:*f.add(0),r14:*f.add(1),r13:*f.add(2),r12:*f.add(3),rbp:*f.add(4),rbx:*f.add(5),
    r10:*f.add(6),r9:*f.add(7),r8:*f.add(8),rdx:*f.add(9),rsi:*f.add(10),rdi:*f.add(11),
-   rax:0,rip:*f.add(13),rflags:*f.add(14),rsp:SYSCALL_USER_RSP,
+   rax:0,rip:*f.add(13),rflags:*f.add(14),rsp:unsafe{(*pc()).syscall_user_rsp},
   })
  }
 }
@@ -94,7 +88,7 @@ pub fn capture_user_frame(frame:*mut u64)->Option<UserFrame>{
   Some(UserFrame{
    r15:*f.add(0),r14:*f.add(1),r13:*f.add(2),r12:*f.add(3),rbp:*f.add(4),rbx:*f.add(5),
    r10:*f.add(6),r9:*f.add(7),r8:*f.add(8),rdx:*f.add(9),rsi:*f.add(10),rdi:*f.add(11),
-   rax:*f.add(12),rip:*f.add(13),rflags:*f.add(14),rsp:SYSCALL_USER_RSP,
+   rax:*f.add(12),rip:*f.add(13),rflags:*f.add(14),rsp:unsafe{(*pc()).syscall_user_rsp},
   })
  }
 }
@@ -107,12 +101,12 @@ pub fn set_return_context(frame:*mut u64,ctx:&UserFrame)->bool{
   *f.add(4)=ctx.rbp;*f.add(5)=ctx.rbx;*f.add(6)=ctx.r10;*f.add(7)=ctx.r9;
   *f.add(8)=ctx.r8;*f.add(9)=ctx.rdx;*f.add(10)=ctx.rsi;*f.add(11)=ctx.rdi;
   *f.add(12)=ctx.rax;*f.add(13)=ctx.rip;*f.add(14)=ctx.rflags;
-  SYSCALL_USER_RSP=ctx.rsp;
+  unsafe{(*pc()).syscall_user_rsp=ctx.rsp;}
  }
  true
 }
 
 /* Per-task user RSP accessors used by the scheduler when switching between
    threads that share the global syscall frame slot. */
-pub unsafe fn read_user_rsp()->u64{unsafe{SYSCALL_USER_RSP}}
-pub unsafe fn write_user_rsp(v:u64){unsafe{SYSCALL_USER_RSP=v}}
+pub unsafe fn read_user_rsp()->u64{unsafe{(*pc()).syscall_user_rsp}}
+pub unsafe fn write_user_rsp(v:u64){unsafe{(*pc()).syscall_user_rsp=v}}

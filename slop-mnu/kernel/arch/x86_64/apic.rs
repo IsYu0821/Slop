@@ -3,6 +3,8 @@ use crate::acpi::InterruptInfo;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TIMER_VECTOR: u8 = 0x40;
+/* Cross-CPU reschedule request (MS83): fixed-delivery IPI, no LVT entry. */
+pub const RESCHED_VECTOR: u8 = 0x41;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
 
 static mut LAPIC: u64 = 0;
@@ -197,9 +199,59 @@ pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) 
     Ok(())
 }
 
+/* DIAG-MS93: AP first-tick snapshot, printed at shutdown (serial
+   interleaves concurrent prints, so store now and print later). */
+static DIAG_AP: [AtomicU64; 10] = [const { AtomicU64::new(0) }; 10];
+pub fn diag_ap() -> [u64; 10] {
+    let mut v = [0u64; 10];
+    for i in 0..10 {
+        v[i] = DIAG_AP[i].load(Ordering::Relaxed);
+    }
+    v
+}
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn apic_timer_rust(cs:u64) {
+    /* DIAG-MS93: minimal path on APs to isolate the deafness: count, tick,
+       EOI only. Full path below runs on the BSP. */
+    if crate::smp::current_cpu()!=crate::smp::bsp_slot(){
+        crate::task::note_timer_tick();
+        TICKS.fetch_add(1, Ordering::Relaxed);
+        /* DIAG-MS93: dump LAPIC state on the first AP tick. */
+        static DIAG_DONE: AtomicU64 = AtomicU64::new(0);
+        if DIAG_DONE.swap(1, Ordering::Relaxed)==0{
+            let tpr=unsafe{read(0x80)};
+            let svr=unsafe{read(0xf0)};
+            let lvt=unsafe{read(0x320)};
+            let irr0=unsafe{read(0x200)};
+            let isr0=unsafe{read(0x100)};
+            let isr4=unsafe{read(0x140)};
+            let (cs,ss,rsp,cr3):(u64,u64,u64,u64);
+            unsafe{
+                core::arch::asm!("mov {o}, cs",o=out(reg)cs,options(nostack,preserves_flags));
+                core::arch::asm!("mov {o}, ss",o=out(reg)ss,options(nostack,preserves_flags));
+                core::arch::asm!("mov {o}, rsp",o=out(reg)rsp,options(nostack,preserves_flags));
+                core::arch::asm!("mov {o}, cr3",o=out(reg)cr3,options(nostack,preserves_flags));
+            }
+            let me=crate::smp::current_cpu();
+            let ist_now=crate::smp::tss_diag(me).2;
+            let entry_rsp=unsafe{(*crate::smp::per_cpu_ptr(me)).diag_entry_rsp};
+            DIAG_AP[0].store(cs,Ordering::Relaxed);
+            DIAG_AP[1].store(ss,Ordering::Relaxed);
+            DIAG_AP[2].store(rsp,Ordering::Relaxed);
+            DIAG_AP[3].store(cr3,Ordering::Relaxed);
+            DIAG_AP[4].store(ist_now,Ordering::Relaxed);
+            DIAG_AP[5].store(entry_rsp,Ordering::Relaxed);
+            DIAG_AP[6].store(tpr as u64,Ordering::Relaxed);
+            DIAG_AP[7].store(svr as u64,Ordering::Relaxed);
+            DIAG_AP[8].store(lvt as u64,Ordering::Relaxed);
+            DIAG_AP[9].store(me as u64,Ordering::Relaxed);
+        }
+        unsafe { write(0xb0,0) }
+        return;
+    }
     let now = super::tsc::rdtsc();
+    crate::task::note_timer_tick();
+    crate::task::note_timer_stage(0);
     let last = LAST_TSC.swap(now, Ordering::Relaxed);
     if last != 0 && now > last {
         TSC_TOTAL.fetch_add(now - last, Ordering::Relaxed);
@@ -210,11 +262,19 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
        and the length of the tick is the time the counter has passed. */
     let tick_ns=crate::time::advance(now);
     if tick_ns>0{crate::time::set_tick_ns(tick_ns);}
+    crate::task::note_timer_stage(1);
     /* The vector system call entry point reads the time from a shared page
        that the kernel keeps up to date. */
     crate::vdso::update(now);
+    crate::task::note_timer_stage(2);
     crate::task::on_timer_tick(cs & 3 != 0,tick_ns);
-    crate::net::poll();
+    crate::task::note_timer_stage(3);
+    /* The RX ring and TCP timers are serviced on the BSP only: every CPU
+       runs its own scheduler tick above, but the device is polled once. */
+    if crate::smp::current_cpu()==crate::smp::bsp_slot(){
+        crate::net::poll();
+    }
+    crate::task::note_timer_stage(4);
     unsafe { write(0xb0,0) }
 }
 
@@ -271,6 +331,58 @@ pub fn send_init_deassert(dest: u32) -> bool {
    level/trigger bits, which QEMU and real hardware both accept. */
 pub fn send_sipi(dest: u32, vector: u8) -> bool {
     send_ipi(dest, 0x0000_0600 | vector as u32)
+}
+
+/* Sends a fixed-delivery IPI for the given vector to one APIC ID.
+   Used for cross-CPU reschedule requests (MS83); shorthand and
+   trigger bits stay clear, destination is physical. */
+pub fn send_fixed_ipi(dest: u32, vector: u8) -> bool {
+    send_ipi(dest, 0x0000_0000 | vector as u32)
+}
+
+/* Requests a reschedule on one AP. The flag is per-CPU (MS93): an idle
+   target claims work after hlt, a running target observes it at the next
+   yield point. */
+pub fn send_resched_ipi(dest: u32) -> bool {
+    send_fixed_ipi(dest, RESCHED_VECTOR)
+}
+
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn apic_resched_rust() {
+    /* DIAG-MS93: entry context on first call. */
+    static RDIAG: AtomicU64 = AtomicU64::new(0);
+    if RDIAG.swap(1, Ordering::Relaxed)==0{
+        let (cs,ss,rsp,cr3):(u64,u64,u64,u64);
+        unsafe{
+            core::arch::asm!("mov {o}, cs",o=out(reg)cs,options(nostack,preserves_flags));
+            core::arch::asm!("mov {o}, ss",o=out(reg)ss,options(nostack,preserves_flags));
+            core::arch::asm!("mov {o}, rsp",o=out(reg)rsp,options(nostack,preserves_flags));
+            core::arch::asm!("mov {o}, cr3",o=out(reg)cr3,options(nostack,preserves_flags));
+        }
+        crate::println!("smp: resched entry cs={:#x} ss={:#x} rsp={:#x} cr3={:#x}",
+            cs,ss,rsp,cr3);
+    }
+    crate::task::request_resched();
+    crate::task::note_ipi_recv();
+    unsafe { write(0xb0, 0) }
+}
+
+/* Starts the periodic Local APIC timer on an application processor that
+   just entered the scheduler, using the calibrated count the BSP
+   programmed. The timer is unmasked so ticks and wakeups run on every
+   active CPU. */
+pub fn ap_timer_start() {
+    unsafe {
+        write(0x3e0, 0x3);
+        write(0x320, TIMER_VECTOR as u32 | (1 << 17));
+        write(0x380, TIMER_COUNT);
+        let _ = read(0x390);
+    }
+}
+
+/* Reads back the LVT timer entry (for AP bring-up diagnostics). */
+pub fn lvt_timer() -> u32 {
+    unsafe { read(0x320) }
 }
 
 /* Enables a secondary CPU's Local APIC for the parked state: the

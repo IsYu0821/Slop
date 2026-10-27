@@ -33,9 +33,9 @@ pub fn unblockable(sig:i32)->bool{sig==SIGKILL||sig==SIGSTOP}
 /* Classifies the disposition installed for a signal number. */
 pub enum Disposition{Handler(u64,u64,u64),Ignore,Terminate,Stop,Continue}
 pub fn task_index(pid:u32)->Option<usize>{
- /* The scheduler has 8 tasks, so the pid has to be in one of them. */
+ /* The pid has to name a live scheduler slot. */
  let s=task::sched_pids();
- (0..8).find(|&i|s[i]==pid)
+ s.iter().position(|&p|p==pid)
 }
 /* Delivers a signal to another task by marking its pending mask. */
 pub fn send(pid:u32,sig:i32)->Result<(),i64>{
@@ -240,7 +240,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  uc.uc_mcontext.gregs[REG_RCX]=0;uc.uc_mcontext.gregs[REG_RSP]=snap.rsp;uc.uc_mcontext.gregs[REG_RIP]=snap.rip;
  /* The machine context reports the result of the interrupted syscall, the
     way Linux fills the ucontext of a handler. */
- uc.uc_mcontext.gregs[REG_RAX]=unsafe{syscall::SYSCALL_RESULT} as i64 as u64;
+ uc.uc_mcontext.gregs[REG_RAX]=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_result} as i64 as u64;
  uc.uc_mcontext.gregs[REG_EFL]=snap.rflags;
  uc.uc_mcontext.gregs[REG_CSGSFS]=(cs&0xffff)|((ss&0xffff)<<16);
  uc.uc_mcontext.gregs[REG_OLDMASK]=saved_mask;
@@ -296,7 +296,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
  task::with_current_process(|p|p.sigmask=mask);
  /* A handler installed with SA_RESTART restarts the interrupted syscall;
     every other handler leaves the syscall with EINTR. */
- task::with_current_process(|p|{p.sig_restart=action.flags&SA_RESTART!=0;p.sig_syscall=snap.rax;p.sig_result=unsafe{syscall::SYSCALL_RESULT} as i64;});
+ task::with_current_process(|p|{p.sig_restart=action.flags&SA_RESTART!=0;p.sig_syscall=snap.rax;p.sig_result=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_result} as i64;});
  /* The signal leaves the pending set when it is delivered: Linux removes it
     before the handler runs, so the handler does not see it again. */
  pop(sig as i64);
@@ -315,7 +315,7 @@ fn build_frame(sig:i32,action:Action,frame:*mut u64)->Result<Delivery,i64>{
    enters the kernel with the stack pointer pointing just above the frame, so
    the frame starts one word below. */
 pub fn restore_frame()->Result<(),i64>{
- let sp=unsafe{syscall::SYSCALL_USER_RSP};
+ let sp=unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_user_rsp};
  if sp<0x2000{return Err(crate::errno::EFAULT)}
  let base=sp-8;
  let uc_addr=base+8;
@@ -347,9 +347,9 @@ pub fn restore_frame()->Result<(),i64>{
   area.copy_from_slice(&uc.fpstate[160..160+256]);
   task::write_current_fpu(&area);
  }
- if !syscall::set_return_context(unsafe{syscall::SYSCALL_FRAME as *mut u64},&frame){return Err(crate::errno::EFAULT)}
+ if !syscall::set_return_context(unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).syscall_frame as *mut u64},&frame){return Err(crate::errno::EFAULT)}
  /* The return path takes the user-mode result from this cell, so the
     restored value has to be published here. */
- unsafe{syscall::SIGRET_VALUE=rax;syscall::SIGRET_VALID=1;}
+ unsafe{let p=crate::smp::per_cpu_ptr(crate::smp::current_cpu());(*p).sigret_value=rax;(*p).sigret_valid=1;}
  Ok(())
 }

@@ -24,6 +24,7 @@ pub mod time;
 pub mod vfs;
 pub mod device;
 pub mod ext2;
+pub mod ext4;
 pub mod inotify;
 pub mod fd;
 pub mod flock;
@@ -122,6 +123,9 @@ extern "sysv64" fn kmain_high_continue()->!{
     if !memory::refcount_self_test(){println!("memory refcount self-test failed");arch::halt()}
     println!("resources: memory refcount self-test passed");
     if let Err(e)=task::scheduler_self_test(){println!("scheduler self-test failed: {}",e);arch::halt()}
+    /* DHCP lease is deferred to a dedicated test harness (not boot): the
+       early-boot call path trips an under-investigation null jump; static
+       QEMU user-net addressing is used until then. */
     let (initrd_base,initrd_size)=unsafe { BOOT_INITRD };
     if initrd_base==0 || initrd_size==0 { println!("no embedded Linux ELF"); arch::halt(); }
     let initramfs=unsafe { core::slice::from_raw_parts(arch::x86_64::phys::phys_to_virt(initrd_base) as *const u8,initrd_size as usize) };
@@ -144,6 +148,7 @@ extern "sysv64" fn kmain_high_continue()->!{
     println!("task: user process runnable pid={}",user_pid);
     let status=match task::wait_child(user_pid){Ok(v)=>v,Err(e)=>{println!("wait for user task failed errno={}",e);arch::halt()}};
     println!("scheduler: user process reaped pid={} status={}",user_pid,status);
+    task::report_smp_stats();
     arch::x86_64::qemu::exit(if status==0{0x10}else{0x11})
 }
 

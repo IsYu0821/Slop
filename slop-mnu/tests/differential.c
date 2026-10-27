@@ -1885,11 +1885,20 @@ int main(int argc, char **argv) {
        filesystem allows, linkat/symlinkat/readlinkat/renameat. ext2
        stays read-only for link/symlink/rename, so those run on the
        root/tmpfs side, like real software hitting different mounts. */
+    /* Probe the guest image flavor once: the ext4 seed tree lives at
+       /mnt/xdiag4, which never exists on the ext2 image. The read-only
+       ext4 mount cannot host scratch dirs, so those move to tmpfs. */
+    int guest_ext4 = 0;
+    if (getenv("SLOP_MNU_DIFF")) {
+        int pf = open("/mnt/xdiag4/hello.txt", O_RDONLY);
+        if (pf >= 0) { guest_ext4 = 1; close(pf); }
+    }
     {
         char base[128], sub[128], f1[128], g1[128];
         char base2[128], lnk[128], hlnk[128], h2[128];
         const char *envbase = getenv("SLOP_MNU_DIFF");
-        if (envbase) snprintf(base, sizeof base, "/mnt/atdiag");
+        if (envbase && !guest_ext4) snprintf(base, sizeof base, "/mnt/atdiag");
+        else if (envbase) snprintf(base, sizeof base, "/atdiag4");
         else snprintf(base, sizeof base, "/tmp/atdiag-%d", (int)getpid());
         if (envbase) snprintf(base2, sizeof base2, "/atfs2");
         else snprintf(base2, sizeof base2, "/tmp/atfs-%d", (int)getpid());
@@ -1926,6 +1935,25 @@ int main(int argc, char **argv) {
         close(reg);
         if (mkdirat(dfd, "sub", 0700) != 0) return fail("at mkdirat");
         if (mkdirat(dfd, "sub", 0700) != -1 || errno != EEXIST) return fail("at mkdirat eexist");
+        /* Device-node creation stays read-only on the disk mounts, so the
+           positive mknodat coverage runs on the tmpfs side (base2). */
+        int dfd2 = open(base2, O_RDONLY | O_DIRECTORY);
+        if (dfd2 < 0) return fail("at open base2 dirfd");
+        if (mknodat(dfd2, "fifo1", S_IFIFO | 0600, 0) != 0) return fail("at mknodat tmpfs fifo");
+        {
+            struct stat fst;
+            if (fstatat(dfd2, "fifo1", &fst, 0) != 0 || !S_ISFIFO(fst.st_mode)) return fail("at mknodat fifo stat");
+        }
+        if (mknodat(dfd2, "fifo1", S_IFIFO | 0600, 0) != -1 || errno != EEXIST) return fail("at mknodat eexist");
+        if (mknodat(dfd2, "plain", S_IFREG | 0644, 0) != 0) return fail("at mknodat reg");
+        {
+            struct stat pst;
+            if (fstatat(dfd2, "plain", &pst, 0) != 0 || !S_ISREG(pst.st_mode) || pst.st_size != 0) return fail("at mknodat reg stat");
+        }
+        if (mknodat(-5, "x", S_IFIFO | 0600, 0) != -1 || errno != EBADF) return fail("at mknodat badfd");
+        if (unlinkat(dfd2, "fifo1", 0) != 0) return fail("at mknodat fifo unlink");
+        if (unlinkat(dfd2, "plain", 0) != 0) return fail("at mknodat reg unlink");
+        close(dfd2);
         int sfd = openat(dfd, "sub", O_RDONLY | O_DIRECTORY);
         if (sfd < 0) return fail("at open subdir");
         int fdot = openat(sfd, "../f.txt", O_RDONLY);
@@ -2106,7 +2134,7 @@ int main(int argc, char **argv) {
     /* Persistent-style files on a real on-disk filesystem: natively /tmp,
        in the guest the ext2 mount. Exercises create/write/read/truncate,
        multi-block mappings, sparse holes, directories and removal. */
-    {
+    if (!guest_ext4) {
         const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag" : "/tmp/xdiag";
         char sub[128], f1[128], f2[128], big[128], keep[128];
         snprintf(sub, sizeof sub, "%s/sub", base);
@@ -2251,6 +2279,92 @@ int main(int argc, char **argv) {
         if (write(kf, "0123456789abcdef", 16) != 16) return fail("ext2 keep write");
         close(kf);
         printf("DIFF_EXT2_OK\n");
+    } else {
+        printf("DIFF_EXT2_SKIP\n");
+    }
+
+    /* Read-only ext4 on the same virtio-blk device: natively the seed tree,
+       in the guest the ext4 mount. Exercises superblock detect, extent
+       mapping, directories, both symlink forms and EROFS on mutation. */
+    if (guest_ext4 || !getenv("SLOP_MNU_DIFF")) {
+        const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag4" : "/tmp/xdiag4";
+        int guest = getenv("SLOP_MNU_DIFF") != 0;
+        char hello[128], nested[128], asym[128], bsym[128], big[128], sub[128];
+        snprintf(hello, sizeof hello, "%s/hello.txt", base);
+        snprintf(nested, sizeof nested, "%s/sub/nested.txt", base);
+        snprintf(asym, sizeof asym, "%s/a-sym", base);
+        snprintf(bsym, sizeof bsym, "%s/b-sym", base);
+        snprintf(big, sizeof big, "%s/big.bin", base);
+        snprintf(sub, sizeof sub, "%s/sub", base);
+        int f = open(hello, O_RDONLY);
+        if (f < 0) return fail("ext4 open hello");
+        char hbuf[35] = {0};
+        if (read(f, hbuf, sizeof hbuf) != 35) return fail("ext4 hello size");
+        if (memcmp(hbuf, "Hello from ext4.\nSecond line here.\n", 35) != 0) return fail("ext4 hello content");
+        struct stat st;
+        if (fstat(f, &st) != 0 || st.st_size != 35 || !S_ISREG(st.st_mode)) return fail("ext4 hello stat");
+        close(f);
+        int nf = open(nested, O_RDONLY);
+        if (nf < 0) return fail("ext4 open nested");
+        char nbuf[25] = {0};
+        if (read(nf, nbuf, sizeof nbuf) != 25 || memcmp(nbuf, "nested content 0123456789\n", 25) != 0) return fail("ext4 nested content");
+        close(nf);
+        char rl[16] = {0};
+        if (readlink(asym, rl, sizeof rl) != 9 || memcmp(rl, "hello.txt", 9) != 0) return fail("ext4 readlink fast");
+        int af = open(asym, O_RDONLY);
+        if (af < 0) return fail("ext4 open through fast link");
+        char ab[5] = {0};
+        if (read(af, ab, sizeof ab) != 5 || memcmp(ab, "Hello", 5) != 0) return fail("ext4 read through");
+        close(af);
+        char rb[104] = {0};
+        if (readlink(bsym, rb, sizeof rb) != 100) return fail("ext4 readlink long");
+        for (int i = 0; i < 100; i++) if (rb[i] != 'x') return fail("ext4 readlink long content");
+        int bf = open(big, O_RDONLY);
+        if (bf < 0) return fail("ext4 big open");
+        if (fstat(bf, &st) != 0 || st.st_size != 102400) return fail("ext4 big size");
+        for (int c = 0; c < 25; c++) {
+            unsigned char rb2[4096];
+            if (read(bf, rb2, sizeof rb2) != (ssize_t)sizeof rb2) return fail("ext4 big read");
+            for (int i = 0; i < 4096; i++)
+                if (rb2[i] != (unsigned char)((c * 131 + i * 7 + 3) & 0xff)) return fail("ext4 big content");
+        }
+        close(bf);
+        DIR *dd = opendir(sub);
+        if (!dd) return fail("ext4 opendir");
+        int saw_nested = 0, entries = 0;
+        struct dirent *de;
+        while ((de = readdir(dd)) != NULL) {
+            if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+            entries++;
+            if (!strcmp(de->d_name, "nested.txt")) saw_nested = 1;
+        }
+        closedir(dd);
+        if (!saw_nested || entries != 1) return fail("ext4 readdir");
+        struct stat ls, fs;
+        if (lstat(asym, &ls) != 0 || !S_ISLNK(ls.st_mode) || ls.st_size != 9) return fail("ext4 lstat link");
+        if (stat(asym, &fs) != 0 || !S_ISREG(fs.st_mode) || fs.st_size != 35) return fail("ext4 stat through");
+        if (guest) {
+            char nb[128], nl[128];
+            snprintf(nb, sizeof nb, "%s/nope.txt", base);
+            snprintf(nl, sizeof nl, "%s/nodir", base);
+            int wf = open(hello, O_WRONLY);
+            if (wf >= 0) {
+                char one = 'x';
+                int w = (int)write(wf, &one, 1);
+                close(wf);
+                if (w >= 0) return fail("ext4 write allowed");
+            }
+            if (open(nb, O_WRONLY | O_CREAT | O_TRUNC, 0644) >= 0) return fail("ext4 create allowed");
+            if (mkdir(nl, 0755) == 0) return fail("ext4 mkdir allowed");
+            if (unlink(hello) == 0) return fail("ext4 unlink allowed");
+            if (rmdir(sub) == 0) return fail("ext4 rmdir allowed");
+            if (truncate(big, 100) == 0) return fail("ext4 truncate allowed");
+            int ef = open(hello, O_WRONLY);
+            if (ef >= 0) close(ef);
+        }
+        printf("DIFF_EXT4_OK\n");
+    } else {
+        printf("DIFF_EXT4_SKIP\n");
     }
 
     if (access("/bin/nopie-helper", X_OK) == 0) {

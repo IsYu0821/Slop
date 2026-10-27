@@ -57,6 +57,7 @@ common_exception:
     mov 384(%rsp),%rsi
     mov 392(%rsp),%rdx
     mov 400(%rsp),%rcx
+    lea 392(%rsp),%r8
     mov %rsp,%rbp
     and $-16,%rsp
     cld

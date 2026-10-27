@@ -136,7 +136,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::STATFS=>sys_statfs(a[0],a[1]), nr::FSTATFS=>sys_fstatfs(a[0] as usize,a[1]),
     nr::READLINK=>sys_readlink(a[0],a[1],a[2]),
     nr::CLOSE_RANGE=>sys_close_range(a[0] as usize,a[1] as usize,a[2]),
-    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>0, nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
+    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>sys_getcpu(a[0],a[1]), nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
     nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>sys_fallocate(a[0] as usize,a[1],a[2],a[3]),
     nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>sys_splice(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::TEE=>sys_tee(a[0] as usize,a[1] as usize,a[2] as usize,a[3]),
     nr::COPY_FILE_RANGE=>sys_copy_file_range(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::FUTIMESAT=>0, nr::UTIMES=>0,
@@ -144,7 +144,7 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
     nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
     nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
-    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>errno::neg(errno::ENOSYS),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>sys_mknodat(a[0] as i64,a[1],a[2] as u32,a[3]),
     nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
     nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
     nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
@@ -177,6 +177,10 @@ fn fd_id(fd:u64)->Option<u32>{let r=crate::task::with_current_process(|p|p.fds.g
 fn fd_nlink(ino:u64,rdev:u64)->u32{
  if crate::vfs::is_ext2_ino(ino)&&rdev!=0&&rdev<=u32::MAX as u64{
   crate::ext2::nlink(rdev as u32)
+ }else if crate::ext4::is_ext4_ino(ino){
+  crate::ext4::nlink(rdev as u32)
+ }else if let Some(fs_id)=crate::vfs::tmpfs_fs_id(ino){
+  crate::vfs::tmpfs_nlink(fs_id,ino)
  }else{1}
 }
 fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
@@ -1406,6 +1410,11 @@ fn sys_mkdirat(dirfd:i64,path_ptr:u64,mode:u32)->i64{
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
  match crate::vfs::mkdir(path,mode&0o777){Ok(_)=>0,Err(e)=>errno::neg(e)}
 }
+fn sys_mknodat(dirfd:i64,path_ptr:u64,mode:u32,rdev:u64)->i64{
+ let (out,n)=match at_resolve(dirfd,path_ptr,true){Ok(v)=>v,Err(e)=>return e};
+ let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
+ match crate::vfs::mknod(path,mode,rdev){Ok(_)=>0,Err(e)=>errno::neg(e)}
+}
 fn sys_rmdir(path_ptr:u64)->i64{
  let (out,n)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
  let path=match core::str::from_utf8(&out[..n]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)};
@@ -2097,6 +2106,12 @@ fn sys_close_range(first:usize,last:usize,flags:u64)->i64{
   let _=crate::task::with_current_process(|p|p.fds.close(fd));
   fd+=1;
  }
+ 0
+}
+fn sys_getcpu(cpu:u64,node:u64)->i64{
+ let c=crate::smp::current_cpu() as u32;
+ if cpu!=0{let b=c.to_ne_bytes();if crate::usercopy::copy_to_user(cpu as usize,&b).is_err(){return errno::neg(errno::EFAULT)}}
+ if node!=0{let z=0u32.to_ne_bytes();if crate::usercopy::copy_to_user(node as usize,&z).is_err(){return errno::neg(errno::EFAULT)}}
  0
 }
 fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{

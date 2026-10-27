@@ -1,3 +1,17 @@
+## 0.84.0 - 2026-10-26
+- True SMP parallel execution (MS93, `docs/milestone93.md`): shared run-queue scheduler with per-CPU current slots, idle contexts and reschedule IPIs; APs claim tasks atomically with ownership tracking (double-exec detection), run user processes with syscalls/FPU/address-space switching, and park in idle `hlt` until the timer tick or an IPI wakes them.
+- AP bring-up fixes: CS reload after GDT switch (stale trampoline selector faulted first IRET), correct idle-stack entry (Intel-syntax `mov rsp`), per-CPU TSS RSP0, AP LAPIC timer start; no-save switch away from dead tasks to avoid post-unlock slot reuse races.
+- New `tools/smp-test.sh` battery (musl `tests/smp-stress.c`: fork CPU-bound children reporting `getcpu`, pipe/file I/O, exit statuses) proving AP user execution and 3-CPU parallelism on 4 vCPUs; per-CPU run/ctx/syscall/IPI stats plus run-queue audit printed at shutdown.
+- Scope notes: kernel threads and the `/init` exec chain stay BSP-pinned for stability (exec-on-AP crash and 4+ vCPU stop/continue flake under investigation; 8 vCPU acceptance unstable); fork/thread children migrate freely and pass file/pipe/socket/pthread batteries.
+- Verified: check-source, 1/2 vCPU acceptance green with APs active, 4 vCPU smp-stress parallel proof, no scheduler corruption (double_exec=0, push==pop, audit clean).
+
+## 0.83.0 - 2026-10-26
+- ext4 read-only mount: superblock feature detection (EXTENTS required, 64BIT refused), recursive extent-tree block mapping with holes as zeros, directory and both symlink forms, served through a new `MountKind::Ext4` with `0x200000`-based inodes disjoint from ext2; every mutating op returns EROFS and `mountinfo` reports the `ext4` fstype.
+- New `DIFF_EXT4_OK` differential battery (seed tree built by `tools/build-ext4.sh`, native-vs-guest byte comparison, guest-side EROFS assertions) plus standalone `tools/ext4-test.sh`, which also proves read-only operation via clean `e2fsck` and unchanged free counts.
+- `MKNODAT` syscall wired through to `vfs::mknod`, covered by the `*at` battery on tmpfs (fifo + regular + EEXIST + EBADF).
+- Per-CPU syscall-state groundwork for SMP: GS base pinned per CPU (no userspace GS use, so no swapgs dance), `%gs`-relative syscall frame/FPU/result slots, per-CPU Rust accessors; APs keep their own blocks without cross-CPU clobbering. No scheduling change yet.
+- Verified with all quality gates green: check-source, heap, acceptance, differential (e2fsck clean), busybox 115/115, ext4-test PASS, 2 vCPU boot with both CPUs online and attested.
+
 ## 0.82.0 - 2026-10-26
 - SMP bring-up: MADT enumeration (type 0/9, enabled only), per-AP stacks and CPU state, INIT/SIPI start into a parked halt loop, and atomic attestations (state machine, magic, stack probe, single tick) with a TSC deadline instead of sleeps; missing APs stay absent and the boot continues.
 - Real-mode trampoline at physical 0x7000 (the AP starts with paging off): 16-bit entry, protected-mode transition, mailbox handoff (PML4/entry/LAPIC/ID/stack tables), long-mode entry, APIC-ID scan, per-CPU stack switch and high-half `ap_main` with per-CPU GDT/TSS/IDT and LAPIC enable, plus RAM stage markers for diagnostics.
