@@ -515,16 +515,11 @@ pub fn tcp_close(id:u8){
    tcp_flush(&mut t);
   }
   drop(t);
- let mut round=0u32;
- loop{
-  poll();
-  {
-   let t=TCPS[i].lock();
-   if !t.used||t.reset||t.state==TcpState::Closed||t.state==TcpState::TimeWait||round>2_000{break}
-  }
-  round+=1;
-  nap(round);
- }
+ /* Close must not block: callers (fd close, exit teardown) hold the process
+    table lock, and the timer takes it every tick. Waiting here (poll+nap
+    yields with interrupts enabled) wedges the timer on UP and SMP when it
+    fires mid-close. Queue FIN via flush and free; loopback delivers
+    synchronously, and Linux close(2) does not wait for the peer either. */
  *TCPS[i].lock()=TcpConn::new();
 }
 pub fn tcp_bind(id:u8,ip:u32,port:u16)->Result<(),i64>{
