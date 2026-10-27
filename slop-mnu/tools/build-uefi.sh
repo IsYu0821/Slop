@@ -15,6 +15,7 @@ for src in loader/entry.S arch/x86_64/exceptions.S arch/x86_64/syscall.S arch/x8
   clang -target x86_64-pc-win32-coff -ffreestanding -mno-red-zone -c "$src" -o "$obj"
 done
 lld-link /subsystem:efi_application /entry:efi_main /nodefaultlib /machine:x64 \
+  /MAP:build/kernel.map \
   /out:build/efi/EFI/BOOT/BOOTX64.EFI \
   build/loader.obj build/entry-coff.obj build/exceptions-coff.obj build/syscall-coff.obj build/user-coff.obj build/irq-coff.obj build/context-coff.obj build/trampoline-coff.obj \
   build/initramfs.obj "$KLIB"
