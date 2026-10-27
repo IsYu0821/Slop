@@ -32,7 +32,8 @@ cleanup() {
 trap cleanup EXIT
 
 # Host reference run: the very same binary, on Linux.
-rm -rf /tmp/bbwork
+# (bbtest.sh uses a per-run workdir, so stale root-owned /tmp/bbwork from
+# other sessions cannot break the run.)
 ./build/busybox sh tests/bbtest.sh >"$HOSTOUT" 2>/dev/null || true
 tr -d '\r' <"$HOSTOUT" | grep '^BB|' >"$HOSTOUT.ref" || true
 mv "$HOSTOUT.ref" "$HOSTOUT"

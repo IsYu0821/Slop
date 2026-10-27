@@ -38,8 +38,16 @@ phase "native build"
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
 ./tools/build-ext4.sh >/tmp/scratchpad/ext4-build.log 2>&1
-rm -rf /tmp/xdiag4
-cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
+# Reuse a byte-identical pre-existing seed tree when a stale root-owned copy
+# from another session cannot be removed; fail loudly on any difference.
+if rm -rf /tmp/xdiag4 2>/dev/null; then
+  cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
+elif [ -d /tmp/xdiag4 ] && diff -r -q --exclude=b-sym --exclude=a-sym /tmp/xdiag4 build/ext4-seed/xdiag4 >/dev/null 2>&1; then
+  echo "note: reusing identical pre-existing /tmp/xdiag4 seed tree"
+else
+  echo "stale /tmp/xdiag4 differs and cannot be removed (not owner); clean it as root and rerun" >&2
+  exit 1
+fi
 if ! ./build/differential-host > build/ext4-native.out; then
   echo "native ext4 test failed"
   tail -n 10 build/ext4-native.out 2>/dev/null || echo "(no native log)"

@@ -8,10 +8,18 @@
 # Each check prints one line: BB|<name>|<value>
 
 umask 0022
-W=/tmp/bbwork
+# Fixed alternate workdir keeps host-vs-guest output byte-identical; a
+# per-run fallback covers the case where it is not writable (e.g. a stale
+# root-owned copy from another session).
+W=/tmp/bbwork-slop
 rm -rf "$W" 2>/dev/null
 mkdir -p "$W" 2>/dev/null
-cd "$W" 2>/dev/null || { echo "BB|setup|cannot-enter-workdir"; exit 1; }
+if ! cd "$W" 2>/dev/null; then
+  W=/tmp/bbwork-slop-$$
+  rm -rf "$W" 2>/dev/null
+  mkdir -p "$W" 2>/dev/null
+  cd "$W" 2>/dev/null || { echo "BB|setup|cannot-enter-workdir"; exit 1; }
+fi
 
 out() { printf 'BB|%s|%s\n' "$1" "$2"; }
 flat() { printf '%s' "$1" | tr '\n' '~'; }
@@ -104,12 +112,12 @@ touch empty.txt
 out fs-touch "$(test -f empty.txt && echo created)"
 ln -s f.txt link.txt
 out fs-readlink "$(readlink link.txt)"
-out fs-readlink-f "$(readlink -f link.txt)"
+out fs-readlink-f "$(readlink -f link.txt | sed "s|^.*/bbwork[^/]*/|BBWORK/|")"
 out fs-cat-symlink "$(cat link.txt)"
 out fs-basename "$(basename /usr/bin/ls)"
 out fs-dirname "$(dirname /usr/bin/ls)"
-out fs-realpath "$(realpath .)"
-out fs-pwd "$(pwd)"
+out fs-realpath "$(realpath . | sed "s|^.*/bbwork[^/]*$|BBWORK|")"
+out fs-pwd "$(pwd | sed "s|^.*/bbwork[^/]*$|BBWORK|")"
 mkdir -p sub/../sub2
 out fs-mkdir-dotdot "$(test -d sub2 && echo ok)"
 rmdir sub2
