@@ -133,3 +133,7 @@ pub unsafe fn read_sigret_value()->u64{unsafe{(*pc()).sigret_value}}
 pub unsafe fn write_sigret_value(v:u64){unsafe{(*pc()).sigret_value=v}}
 pub unsafe fn read_sigret_valid()->bool{unsafe{(*pc()).sigret_valid!=0}}
 pub unsafe fn write_sigret_valid(v:bool){unsafe{(*pc()).sigret_valid=v as u8}}
+/* Whether live XMM is kernel scratch with user state parked (see fpu_parked).
+   The scheduler diverts its save to scratch while set. */
+pub fn read_fpu_parked()->bool{unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).fpu_parked!=0}}
+pub fn write_fpu_parked(v:bool){unsafe{(*crate::smp::per_cpu_ptr(crate::smp::current_cpu())).fpu_parked=v as u8}}

@@ -1,4 +1,11 @@
-## 0.86.0 - 2026-10-27
+## 0.87.0 - 2026-10-27
+- Preemption correctness follow-up: a parked FPU state diverts the switch save to a scratch area instead of overwriting user SSE with kernel garbage (fixes XMM loss across mid-syscall preemption); FPU areas zeroed on spawn; completes the 0.86.0 cell-parking work.
+- TLB correctness: always reload CR3 on switch (PML4 frame reuse left stale mappings that faulted executable text) and invlpg on bulk unmap.
+- ROOT filesystem: monotonic inode numbers (len+2 collided after unlink compaction, resolving I/O to the wrong file).
+- Differential harness: PID-unique temp files (parallel-safe), stale-seed tolerance, native-flake retry.
+- Verified: A1 smp-test 16/16 PASS, stop-test 8/8 PASS, guest differential FP/STOP/signal tests pass; TCP loopback hang reproduced identically on A1 and current kernels (pre-existing C3 network-stack item, not a regression).
+
+## 0.86.0 - 2026-10-26
 - A2 remote stop/continue: stops act at syscall entry/return, trap return (#DB via TF single-step from timer/IPI) and timer ticks; remote SIGSTOP on a Running task only flags + IPIs, the target stops itself (state/ownership untouched); queued targets stop directly with balanced run-queue accounting; SIGCONT cancels pending stops; park loop breaks on newer cont epochs so no lost wakeup; waitpid reports stopped/continued states.
 - Real timer preemption (take_need_resched had no callers; CPU-bound tasks starved their CPU): targeted per-CPU traps, syscall-return yields on explicit request, lifecycle kicks on wake/resume.
 - Per-CPU syscall cells (exec redirect, syscall frame, sigreturn) parked/restored per task across switches; always reload CR3 on switch and invlpg on bulk unmap (stale-TLB faults on frame reuse fixed).

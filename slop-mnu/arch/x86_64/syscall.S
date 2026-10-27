@@ -54,6 +54,10 @@ syscall_entry:
     movups %xmm13,208(%r11)
     movups %xmm14,224(%r11)
     movups %xmm15,240(%r11)
+    /* The user SSE file now lives in the task area; live XMM is kernel
+       scratch until the return path restores it. A context switch in
+       between must divert its save to scratch (see fpu_parked). */
+    movb $1, %gs:104
 .Lfpu_saved:
     mov 96(%rsp), %rdi
     mov 88(%rsp), %rsi
@@ -118,6 +122,8 @@ syscall_entry:
     movups 208(%r11),%xmm13
     movups 224(%r11),%xmm14
     movups 240(%r11),%xmm15
+    /* Restored: live XMM is user state again until the next park. */
+    movb $0, %gs:104
 .Lfpu_restored:
     /* SYSRET loads RFLAGS from RAX, so a SYSRET return would replace the user
        flags with the syscall result. The return uses IRETQ instead: it

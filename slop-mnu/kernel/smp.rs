@@ -644,12 +644,19 @@ pub struct PerCpuData {
     pub _pad: [u8; 6],
     pub cpu_index: u64,
     pub diag_entry_rsp: u64,
-    /* Set by interrupt handlers when the interrupted user task has a stop
-       pending: the IRQ return path (arch/x86_64/irq.S) then sets TF so the
-       task traps into #DB, where the stop runs on its own kernel stack.
-       IST handlers cannot schedule directly (shared per-CPU stack). */
+    /* Set by interrupt return paths when the interrupted user task has a
+       stop pending; the asm return path then sets TF so the task traps
+       into #DB, where the stop runs on its own kernel stack. IST handlers
+       cannot schedule directly (shared per-CPU stack). */
     pub stop_trap: u8,
     pub _pad2: [u8; 7],
+    /* While set, live XMM holds kernel scratch and the task's user SSE
+       state is parked in its FPU area: a context switch must NOT save over
+       it, but divert the save to scratch. Set at syscall entry (after the
+       park), cleared at return (after the restore). Parked per task across
+       switches like user_rsp so migration is safe. */
+    pub fpu_parked: u8,
+    pub _pad3: [u8; 7],
 }
 
 impl PerCpuData {
@@ -671,6 +678,8 @@ impl PerCpuData {
             diag_entry_rsp: 0,
             stop_trap: 0,
             _pad2: [0; 7],
+            fpu_parked: 0,
+            _pad3: [0; 7],
         }
     }
 }

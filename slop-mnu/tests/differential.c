@@ -1374,10 +1374,14 @@ int main(int argc, char **argv) {
         sigaction(SIGUSR2, &sa, 0);
     }
 
-    /* copy_file_range: explicit and current offsets, flags and type errors. */
+    /* copy_file_range: explicit and current offsets, flags and type errors.
+       PID-unique paths so parallel runs never collide on stale files. */
     {
-        int f = open("/tmp/cfr-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
-        int g = open("/tmp/cfr-dst", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        char cfr_src[64], cfr_dst[64];
+        snprintf(cfr_src, sizeof cfr_src, "/tmp/cfr-src-%d", (int)getpid());
+        snprintf(cfr_dst, sizeof cfr_dst, "/tmp/cfr-dst-%d", (int)getpid());
+        int f = open(cfr_src, O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int g = open(cfr_dst, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (f < 0 || g < 0) return fail("cfr open");
         if (write(f, "0123456789abcdef", 16) != 16) return fail("cfr seed");
         loff_t oi = 4, oo = 0;
@@ -1403,10 +1407,14 @@ int main(int argc, char **argv) {
         printf("DIFF_CFR_OK\n");
     }
 
-    /* splice: file<->pipe moves, pipe offsets, type and flag errors. */
+    /* splice: file<->pipe moves, pipe offsets, type and flag errors.
+       PID-unique paths so parallel runs never collide on stale files. */
     {
-        int f = open("/tmp/spl-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
-        int g = open("/tmp/spl-dst", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        char spl_src[64], spl_dst[64];
+        snprintf(spl_src, sizeof spl_src, "/tmp/spl-src-%d", (int)getpid());
+        snprintf(spl_dst, sizeof spl_dst, "/tmp/spl-dst-%d", (int)getpid());
+        int f = open(spl_src, O_RDWR | O_CREAT | O_TRUNC, 0644);
+        int g = open(spl_dst, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (f < 0 || g < 0) return fail("splice open");
         if (write(f, "0123456789abcdef", 16) != 16) return fail("splice seed");
         int sp[2];
@@ -1442,7 +1450,9 @@ int main(int argc, char **argv) {
         char a1[8] = {0}, b1[8] = {0};
         if (read(ta[0], a1, 6) != 6 || memcmp(a1, "HelloW", 6) != 0) return fail("tee kept");
         if (read(tb[0], b1, 6) != 6 || memcmp(b1, "HelloW", 6) != 0) return fail("tee copy");
-        int f = open("/tmp/tee-src", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        char tee_path[64];
+        snprintf(tee_path, sizeof tee_path, "/tmp/tee-src-%d", (int)getpid());
+        int f = open(tee_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (f < 0) return fail("tee open");
         if (write(f, "data", 4) != 4) return fail("tee file seed");
         if (tee(f, tb[1], 4, 0) != -1 || errno != EINVAL) return fail("tee file in");
@@ -1457,7 +1467,9 @@ int main(int argc, char **argv) {
 
     /* fallocate: extend with zeros, KEEP_SIZE, PUNCH_HOLE, bad modes. */
     {
-        int h = open("/tmp/falloc", O_RDWR | O_CREAT | O_TRUNC, 0644);
+        char falloc_path[64];
+        snprintf(falloc_path, sizeof falloc_path, "/tmp/falloc-%d", (int)getpid());
+        int h = open(falloc_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (h < 0) return fail("falloc open");
         if (fallocate(h, 0, 0, 8192) != 0) return fail("falloc extend");
         struct stat st;
@@ -2135,7 +2147,10 @@ int main(int argc, char **argv) {
        in the guest the ext2 mount. Exercises create/write/read/truncate,
        multi-block mappings, sparse holes, directories and removal. */
     if (!guest_ext4) {
-        const char *base = getenv("SLOP_MNU_DIFF") ? "/mnt/xdiag" : "/tmp/xdiag";
+        char basebuf[128];
+        const char *base;
+        if (getenv("SLOP_MNU_DIFF")) base = "/mnt/xdiag";
+        else { snprintf(basebuf, sizeof basebuf, "/tmp/xdiag-%d", (int)getpid()); base = basebuf; }
         char sub[128], f1[128], f2[128], big[128], keep[128];
         snprintf(sub, sizeof sub, "%s/sub", base);
         snprintf(f1, sizeof f1, "%s/a.txt", base);

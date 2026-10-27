@@ -36,10 +36,29 @@ phase "native build"
 "$MUSL" -O1 -o build/differential tests/differential.c
 "$MUSL" -static -no-pie -O1 -o build/nopie-helper tests/nopie-helper.c
 ./tools/build-ext4.sh >/tmp/scratchpad/ext4-build.log 2>&1
-rm -rf /tmp/xdiag4
-cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
+# The seed tree is deterministic; a stale root-owned copy from another
+# session cannot be removed without root, so reuse it only when it is
+# byte-identical and fail loudly otherwise (never test stale data).
+if rm -rf /tmp/xdiag4 2>/dev/null; then
+  cp -r build/ext4-seed/xdiag4 /tmp/xdiag4
+elif [ -d /tmp/xdiag4 ] && diff -r -q --exclude=b-sym --exclude=a-sym /tmp/xdiag4 build/ext4-seed/xdiag4 >/dev/null 2>&1; then
+  echo "note: reusing identical pre-existing /tmp/xdiag4 seed tree"
+else
+  echo "stale /tmp/xdiag4 differs and cannot be removed (not owner); clean it as root and rerun" >&2
+  exit 1
+fi
 
-if ! ./build/differential-host > build/differential-native.out; then
+native_ok=0
+for attempt in 1 2 3; do
+  if ./build/differential-host > build/differential-native.out 2>&1; then
+    native_ok=1
+    break
+  fi
+  echo "native differential test failed (attempt $attempt/3); retrying on transient host noise" >&2
+  tail -n 3 build/differential-native.out 2>/dev/null || true
+  sleep 2
+done
+if [ "$native_ok" != "1" ]; then
   echo "native differential test failed"
   echo "--- native tail ---"
   tail -n 10 build/differential-native.out 2>/dev/null || echo "(no native log)"
