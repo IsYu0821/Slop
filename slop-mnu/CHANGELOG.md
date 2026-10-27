@@ -1,3 +1,10 @@
+## 0.85.0 - 2026-10-27
+- A1 scheduler stabilization: post-switch hook completes yield/park transitions under the scheduler lock (outgoing task stays Running+owned until the switch commits), closing the AP-exec RIP=0 race where another CPU claimed a stack still in use.
+- Lock order: the scheduler lock is a leaf (spawn paths reserve a cleared slot, fill tables lock-free, then publish; `finish()` hoists its uid read), fixing the SCHED<->PROCS ABBA deadlock that wedged all CPUs on fork/exit bursts; spurious reservation wakes (stale `wake_pending`/`wake_tick`) and wake-race accounting (self-select consumes the wake, mid-switch skips stay silent) keep double_exec=0 and push==pop.
+- Socket lifecycle fixes: `close()` no longer frees fork-shared sockets out from under live peers (EPIPE/EOF); last-close actually frees via the saved kind (the 16-slot pool leaked, EMFILE); slot reuse fully resets `peer_closed`/waiters/pending queues; pipe reset clears wait queues.
+- New `tests/smp-exec.c` (160 fork+execve, 364 fork/exit, 32 AF_UNIX ping-pongs) and `tests/exec-probe.S` raw-syscall exec target, both with Linux native references; `tools/smp-test.sh` extended to 1/2/4/8 vCPUs x ITER with strict counters.
+- Verified: full SMP stress battery 16/16 PASS (smp-stress distinct=4/8, smp-exec exact counts, every run double_exec=0 lost_owner=0 delta=0 runnable=0, all children reaped, no faults); record in `docs/a1-stress.md`. A2 remote stop/continue still open.
+
 ## 0.84.0 - 2026-10-26
 - True SMP parallel execution (MS93, `docs/milestone93.md`): shared run-queue scheduler with per-CPU current slots, idle contexts and reschedule IPIs; APs claim tasks atomically with ownership tracking (double-exec detection), run user processes with syscalls/FPU/address-space switching, and park in idle `hlt` until the timer tick or an IPI wakes them.
 - AP bring-up fixes: CS reload after GDT switch (stale trampoline selector faulted first IRET), correct idle-stack entry (Intel-syntax `mov rsp`), per-CPU TSS RSP0, AP LAPIC timer start; no-save switch away from dead tasks to avoid post-unlock slot reuse races.

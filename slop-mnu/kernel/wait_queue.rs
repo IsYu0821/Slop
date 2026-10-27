@@ -13,4 +13,7 @@ impl WaitQueue{
  pub fn sleep(&self)->Result<(),i64>{self.register()?;self.wait();Ok(())}
  pub fn wake_one(&self)->bool{let pid={let mut q=self.waiters.lock();match q.iter_mut().find(|w|w.used){Some(w)=>{w.used=false;w.pid},None=>return false}};crate::task::wake_pid(pid)}
  pub fn wake_all(&self)->usize{let mut n=0;while self.wake_one(){n+=1}n}
+ /* Drops every waiter without waking: pool reuse must not inherit stale
+    registrations, which would wake unrelated tasks that recycled the pid. */
+ pub fn clear(&self){let mut q=self.waiters.lock();for w in q.iter_mut(){*w=EMPTY}}
 }

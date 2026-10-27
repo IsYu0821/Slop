@@ -42,7 +42,10 @@ pub fn socket(kind:u32)->Result<u8,i64>{
  let sk=match kind{SOCK_STREAM=>SockKind::Stream,SOCK_DGRAM=>SockKind::Dgram,_=>return Err(errno::EINVAL)};
  for i in 0..MAX_SOCKETS{
   let mut s=SOCKS[i].lock();
-  if !s.used{s.used=true;s.kind=sk;s.state=SockState::Unbound;return Ok(i as u8)}
+  /* Fully reset: a reused slot must not inherit peer_closed, buffers or
+     waiters from its previous incarnation (stale peer_closed caused
+     EPIPE on fresh socketpairs). */
+  if !s.used{*s=Socket::new();s.used=true;s.kind=sk;s.state=SockState::Unbound;*PENDING[i as usize].lock()=[(None,None);16];return Ok(i as u8)}
  }
  Err(errno::EMFILE)
 }

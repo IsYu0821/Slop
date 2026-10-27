@@ -5,7 +5,7 @@ pub const CAPACITY:usize=4096;const MAX_PIPES:usize=16;
 struct Pipe{used:bool,buf:[u8;CAPACITY],head:usize,len:usize,readers:u32,writers:u32,readq:WaitQueue,writeq:WaitQueue}
 impl Pipe{
  const fn new()->Self{Self{used:false,buf:[0;CAPACITY],head:0,len:0,readers:0,writers:0,readq:WaitQueue::new(),writeq:WaitQueue::new()}}
- fn reset(&mut self){self.head=0;self.len=0;self.readers=0;self.writers=0;self.used=true;}
+ fn reset(&mut self){self.head=0;self.len=0;self.readers=0;self.writers=0;self.used=true;self.readq.clear();self.writeq.clear();}
 }
 static PIPES:[SpinLock<Pipe>;MAX_PIPES]=[const{SpinLock::new(Pipe::new())};MAX_PIPES];
 pub fn alloc()->Result<u8,i64>{for i in 0..MAX_PIPES{let mut p=PIPES[i].lock();if !p.used{p.reset();return Ok(i as u8)}}Err(crate::errno::EMFILE)}

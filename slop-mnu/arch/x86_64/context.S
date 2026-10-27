@@ -33,6 +33,20 @@ switch_context:
     movups %xmm14,224(%rdx)
     movups %xmm15,240(%rdx)
     mov %rsi,%rsp
+    /* Post-switch hook (task::switch_hook): completes the outgoing task's
+       yield/park transition on the incoming stack, after the switch is
+       committed. rbx/r12 are callee-saved so they survive the call, and at
+       this point they hold only dead outgoing state (the incoming values
+       are still on the new stack, popped below). rcx still carries the new
+       FPU area for the restores, so it is stashed. The frame below rsp is
+       free stack (fresh tasks build 64 bytes, live switches leave 56), so
+       align down to honor the SysV entry ABI either way. */
+    mov %rsp,%rbx
+    mov %rcx,%r12
+    and $-16,%rsp
+    call switch_hook
+    mov %rbx,%rsp
+    mov %r12,%rcx
     movups 0(%rcx),%xmm0
     movups 16(%rcx),%xmm1
     movups 32(%rcx),%xmm2

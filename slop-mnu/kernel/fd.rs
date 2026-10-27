@@ -47,10 +47,11 @@ impl FdTable{
     for i in 0..MAX_FDS{
      if !self.close_bit(i)||self.slots[i]<0{continue}
      let id=self.slots[i]as u32;
-     let kind=kind(id);
      self.slots[i]=FREE_FD;self.clear_close(i);
+     /* release_closed frees the description (and its socket, if any) only
+        on the last reference; never close the socket unconditionally, since
+        fork-shared siblings may still hold it. */
      release_closed(id);
-     if let Some(OpenKind::Socket(s))=kind{crate::socket::close(s);}
      closed+=1;
     }
     closed
@@ -107,7 +108,7 @@ fn release_inner(id:u32,closed:bool){
  if closed{if let OpenKind::Inode(n)=kind{crate::record_lock::on_close(crate::task::current_pid(),n.ino);}}
  if !last{return}
  crate::flock::release(id);crate::record_lock::release_ofd(id);
- match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),OpenKind::Socket(_)=>crate::socket::close_by_id(id),_=>{}}
+ match kind{OpenKind::PipeRead(p)=>crate::pipe::close_reader(p),OpenKind::PipeWrite(p)=>crate::pipe::close_writer(p),OpenKind::Inotify=>crate::inotify::close(id),OpenKind::IoUring=>iouring_close(id),OpenKind::Socket(s)=>crate::socket::close(s),_=>{}}
 }
 pub fn kind(id:u32)->Option<OpenKind>{OPEN.lock()[id as usize].map(|f|f.kind)}
 /* True when any open file description refers to the given inode number.
@@ -225,9 +226,11 @@ pub fn open_flags(path:&str,status:u32)->Result<i32,i64>{let inode=vfs::lookup(p
 pub fn create_open(path:&str,mode:u32)->Result<i32,i64>{create_open_flags(path,mode,0)}
 pub fn create_open_flags(path:&str,mode:u32,status:u32)->Result<i32,i64>{let inode=match vfs::lookup(path){Ok(n)=>n,Err(_)=>vfs::create(path,mode)?};let id=alloc_file_flags(if inode.mode&0o170000==0o020000{OpenKind::CharDevice(inode.rdev)}else if inode.mode&0o170000==0o060000{OpenKind::BlockDevice(inode.rdev)}else{OpenKind::Inode(inode)},status)?;match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>Ok(fd),Some(Err(e))=>{release(id);Err(e)},None=>{release(id);Err(errno::ESRCH)}}}
 pub fn close(fd:usize)->Result<(),i64>{
- let kind=crate::task::with_current_process(|p|p.fds.get(fd)).flatten().map(|id|crate::fd::kind(id));
+ /* The descriptor-table close drops one reference; the socket itself is
+    freed only when its last reference goes away (via the saved kind).
+    Closing it unconditionally here would break processes that still
+    share the description after fork (EPIPE/EOF on live peers). */
  crate::task::with_current_process(|p|p.fds.close(fd)).unwrap_or(Err(errno::ESRCH))?;
- if let Some(Some(crate::fd::OpenKind::Socket(s)))=kind{crate::socket::close(s);}
  Ok(())
 }
 pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{

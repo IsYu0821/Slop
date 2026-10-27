@@ -65,6 +65,8 @@ static CPU_SYSCALL:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
 static CPU_IPI_SENT:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
 static CPU_IPI_RECV:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
 static CPU_IDLE_LOOPS:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
+static SWITCH_OLD:[AtomicU32;NCPU]=[const{AtomicU32::new(IDLE_U32)};NCPU];
+static SWITCH_YIELD:[AtomicBool;NCPU]=[const{AtomicBool::new(false)};NCPU];
 static CPU_HLTS:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
 static CPU_TICKS:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
 static CPU_TSTAGE:[AtomicU64;NCPU]=[const{AtomicU64::new(0)};NCPU];
@@ -134,12 +136,13 @@ extern "sysv64" fn idle_loop(slot:usize)->!{
   let r:u64;unsafe{core::arch::asm!("mov {}, rsp",out(reg)r,options(nostack,preserves_flags))};r
  },idle_top(slot));
  crate::println!("smp: cpu{} slot={} current_cpu={} apic={:#x}",slot,slot,crate::smp::current_cpu(),crate::arch::x86_64::apic::apic_id());
- loop{
-  CPU_IDLE_LOOPS[slot].fetch_add(1,Ordering::Relaxed);
-  IDLE_MASK.fetch_or(1u64<<slot,Ordering::Relaxed);
-  /* DIAG: take/drop SCHED lock without scanning, to isolate lock effects. */
-  {let _s=SCHED.lock();}
-  let claimed={let mut s=SCHED.lock();claim_locked(&mut s,slot,slot.wrapping_mul(7)+1)};
+  loop{
+   CPU_IDLE_LOOPS[slot].fetch_add(1,Ordering::Relaxed);
+   IDLE_MASK.fetch_or(1u64<<slot,Ordering::Relaxed);
+   /* Claim one runnable task, if any. A task that another CPU is still
+      switching away from stays Running and owned until its post-switch
+      hook runs, so it is skipped here and picked up on a later pass. */
+   let claimed:Option<Task>={let mut s=SCHED.lock();claim_locked(&mut s,slot,slot.wrapping_mul(7)+1)};
   if let Some(nt)=claimed{
    IDLE_MASK.fetch_and(!(1u64<<slot),Ordering::Relaxed);
    PID.store(nt.pid,Ordering::Relaxed);
@@ -198,7 +201,8 @@ fn claim_locked(s:&mut Scheduler,cpu:usize,hint:usize)->Option<Task>{
   let i=(hint+step)%MAX_TASKS;
   if s.tasks[i].state!=State::Runnable{continue}
   if s.tasks[i].pinned!=PIN_ANY&&s.tasks[i].pinned!=cpu as u32{continue}
-  if TASK_OWNER[i].load(Ordering::Acquire)!=NO_OWNER{DOUBLE_EXEC.fetch_add(1,Ordering::Relaxed);continue}
+  let own_i=TASK_OWNER[i].load(Ordering::Acquire);
+  if own_i!=NO_OWNER{if skip_owned(s,i,own_i){DOUBLE_EXEC.fetch_add(1,Ordering::Relaxed);}continue}
   s.tasks[i].state=State::Running;
   TASK_OWNER[i].store(cpu as u32,Ordering::Release);
   s.cpu_current[cpu]=i;
@@ -268,40 +272,107 @@ pub fn live_pids(mut cb:impl FnMut(u32)){let s=SCHED.lock();let mut seen=[0u32;M
 pub fn thread_count(pid:u32)->usize{let s=SCHED.lock();s.tasks.iter().filter(|t|t.pid==pid&&t.state!=State::Unused).count().max(1)}
 pub fn ppid_of(pid:u32)->u32{let s=SCHED.lock();s.tasks.iter().find(|t|t.pid==pid&&t.state!=State::Unused).map(|t|t.ppid).unwrap_or(0)}
 pub fn last_pid()->u32{let s=SCHED.lock();s.next_pid.saturating_sub(1).max(1)}
-fn take_slot(s:&mut Scheduler)->Result<usize,i64>{
- if let Some(i)=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Unused){return Ok(i)}
- /* Threads are joined in userspace; the kernel never waits for them, so a
-    dead thread's slot is reclaimed here. Its CPU time folds into its
-    thread-group leader, matching Linux's per-process accounting. */
- if let Some(i)=(1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Zombie&&s.tasks[i].is_thread){
-  let t=s.tasks[i];s.tasks[i]=EMPTY;
-  TASK_OWNER[i].store(NO_OWNER,Ordering::Release);
-  KERNEL_ENTRIES.lock()[i]=None;USER_STARTS.lock()[i]=None;FORK_RESUMES.lock()[i]=None;
-  let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[i].take(){Some(p)=>(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns),_=>(0,0,0,0)}};
-  let lead=(1..MAX_TASKS).find(|&j|s.tasks[j].pid==t.tgid&&s.tasks[j].state!=State::Unused&&!s.tasks[j].is_thread);
-  if let Some(j)=lead{let mut procs=PROCS.lock();if let Some(p)=procs[j].as_mut(){
+/* Lock order: the scheduler lock is a leaf and is never held across any
+   other lock. Spawn paths reserve a slot (Sleeping+owned: invisible to
+   claimers, which need Runnable, and to slot scans, which need Unused),
+   fill the per-slot tables with the lock released, then publish the task.
+   The reverse order (exit/teardown holds the process table across
+   scheduler reads) is the only allowed nesting; inverting it deadlocked
+   SMP fork/exit bursts (all CPUs spinning on the two locks). */
+fn try_take_slot(s:&Scheduler)->Option<usize>{
+ (1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Unused)
+}
+/* Reserve one slot for the calling CPU without taking any other lock.
+   A dead thread's slot is reclaimed first (reaped with the lock released).
+   Returns (slot, pid). The slot stays Sleeping+owned until publish_spawn. */
+fn reserve_slot(c:usize)->Result<(usize,u32),i64>{
+ if let Some(slot)={let mut s=SCHED.lock();
+  if let Some(i)=try_take_slot(&s){
+   let pid=alloc_pid(&mut s);
+   /* Sleeping+owned+cleared: invisible to claimers (need Runnable), slot
+      scans (need Unused) and pid-based wakers. The slot must be cleared
+      wholesale: a recycled occupant may leave wake_pending set, and the
+      timer would otherwise spuriously wake the reservation mid-fill. */
+   s.tasks[i]=EMPTY;s.tasks[i].state=State::Sleeping;s.tasks[i].wake_tick=u64::MAX;TASK_OWNER[i].store(c as u32,Ordering::Release);
+   Some((i,pid))
+  }else{None}
+ }{return Ok(slot)}
+ let victim=reap_thread_slot(c)?;
+ let mut s=SCHED.lock();
+ /* The victim was reserved by reap_thread_slot; claim the reservation. */
+ if TASK_OWNER[victim].load(Ordering::Acquire)!=c as u32{return Err(crate::errno::EAGAIN)}
+ let pid=alloc_pid(&mut s);
+ Ok((victim,pid))
+}
+/* Reclaims one dead thread slot for reuse (threads are joined in userspace;
+   the kernel never waits for them). The victim is reserved under the
+   scheduler lock, then its table entries are dropped with the lock
+   released. Its CPU time folds into its thread-group leader, matching
+   Linux's per-process accounting. */
+fn reap_thread_slot(c:usize)->Result<usize,i64>{
+ let (victim,tgid)={
+  let mut s=SCHED.lock();
+  match (1..MAX_TASKS).find(|&i|s.tasks[i].state==State::Zombie&&s.tasks[i].is_thread){
+   Some(i)=>{let t=s.tasks[i];s.tasks[i]=EMPTY;s.tasks[i].state=State::Sleeping;s.tasks[i].wake_tick=u64::MAX;TASK_OWNER[i].store(c as u32,Ordering::Release);(i,t.tgid)}
+   None=>return Err(crate::errno::EAGAIN),
+  }
+  };
+ KERNEL_ENTRIES.lock()[victim]=None;USER_STARTS.lock()[victim]=None;FORK_RESUMES.lock()[victim]=None;
+ let (ut,st,ct,cst)={let mut procs=PROCS.lock();match procs[victim].take(){Some(p)=>(p.utime_ns,p.stime_ns,p.cutime_ns,p.cstime_ns),_=>(0,0,0,0)}};
+ {
+  let mut procs=PROCS.lock();
+  let lead={let s=SCHED.lock();(1..MAX_TASKS).find(|&j|s.tasks[j].pid==tgid&&s.tasks[j].state!=State::Unused&&!s.tasks[j].is_thread)};
+  if let Some(j)=lead{if let Some(p)=procs[j].as_mut(){
    p.utime_ns=p.utime_ns.saturating_add(ut);p.stime_ns=p.stime_ns.saturating_add(st);
    p.cutime_ns=p.cutime_ns.saturating_add(ct);p.cstime_ns=p.cstime_ns.saturating_add(cst);}}
-  return Ok(i)
  }
- Err(crate::errno::EAGAIN)
+ Ok(victim)
+}
+/* Publishes a reserved slot as a runnable task. Must run after the
+   per-slot tables were filled with the scheduler lock released. The slot
+   starts unowned (claims assign ownership); the Sleeping+owned reservation
+   was only valid until this handoff. */
+fn publish_spawn(slot:usize,task:Task){
+ TASK_OWNER[slot].store(NO_OWNER,Ordering::Release);
+ let mut s=SCHED.lock();
+ debug_assert!(s.tasks[slot].state==State::Sleeping&&s.tasks[slot].pid==0);
+ s.tasks[slot]=task;
+ RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);
 }
 fn alloc_pid(s:&mut Scheduler)->u32{let pid=s.next_pid;s.next_pid=s.next_pid.wrapping_add(1).max(2);pid}
 fn build_kernel_stack(slot:usize,entry:u64)->u64{let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let mut sp=(top&!15)-8;unsafe{sp-=8;*(sp as*mut u64)=entry;for _ in 0..6{sp-=8;*(sp as*mut u64)=0;}}sp}
 pub fn spawn_kernel(entry:fn())->Result<u32,i64>{
  let c=cpu();
- let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));KERNEL_ENTRIES.lock()[slot]=Some(entry);let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;let me=s.cpu_current[c];let (ppid,pgid,sid)=if me==IDLE_USIZE{(0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid)};s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:crate::smp::bsp_slot() as u32};RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);drop(s);poke_idle(c);Ok(pid)
+ let (ppid,pgid,sid)={let s=SCHED.lock();let me=s.cpu_current[c];if me==IDLE_USIZE{(0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid)}};
+ let (slot,pid)=reserve_slot(c)?;
+ let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,kernel_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
+ KERNEL_ENTRIES.lock()[slot]=Some(entry);
+ let cr3=crate::arch::x86_64::paging::PageTableRoot::current().pml4;
+ publish_spawn(slot,Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:crate::smp::bsp_slot() as u32});
+ poke_idle(c);Ok(pid)
 }
 static KERNEL_ENTRIES:IrqSpinLock<[Option<fn()>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static USER_STARTS:IrqSpinLock<[Option<crate::exec_runtime::Loaded>;MAX_TASKS]>=IrqSpinLock::new([None;MAX_TASKS]);
 static FORK_RESUMES:IrqSpinLock<[Option<crate::arch::x86_64::syscall::UserFrame>;MAX_TASKS]>=IrqSpinLock::new([const{None};MAX_TASKS]);
 pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{
  let c=cpu();
- let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)?;proc.set_exec_meta(&loaded);let mut s=SCHED.lock();let slot=take_slot(&mut s)?;let pid=alloc_pid(&mut s);let me=s.cpu_current[c];let (ppid,pgid,sid)=if me==IDLE_USIZE{(0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid)};let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:crate::smp::bsp_slot() as u32};RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);drop(s);poke_idle(c);Ok(pid)
+ let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)?;proc.set_exec_meta(&loaded);
+ let (ppid,pgid,sid)={let s=SCHED.lock();let me=s.cpu_current[c];if me==IDLE_USIZE{(0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid)}};
+ let (slot,pid)=reserve_slot(c)?;
+ let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
+ PROCS.lock()[slot]=Some(proc);USER_STARTS.lock()[slot]=Some(loaded);
+ publish_spawn(slot,Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:loaded.cr3,fs_base:0,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:PIN_ANY});
+ poke_idle(c);Ok(pid)
 }
 pub fn spawn_fork(mut child:Process,frame:crate::arch::x86_64::syscall::UserFrame)->Result<u32,i64>{
  let c=cpu();
- let child_cr3=child.cr3;let mut s=SCHED.lock();let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>{drop(s);child.abandon();return Err(e)}};let pid=alloc_pid(&mut s);let me=s.cpu_current[c];let (ppid,pgid,sid,fs_base)=if me==IDLE_USIZE{(0,0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid,s.tasks[me].fs_base)};let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:PIN_ANY};RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);drop(s);poke_idle(c);Ok(pid)
+ let child_cr3=child.cr3;
+ let (ppid,pgid,sid,fs_base)={let s=SCHED.lock();let me=s.cpu_current[c];if me==IDLE_USIZE{(0,0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid,s.tasks[me].fs_base)}};
+ let (slot,pid)=match reserve_slot(c){Ok(v)=>v,Err(e)=>{child.abandon();return Err(e)}};
+ let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
+ FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);
+ publish_spawn(slot,Task{fpu:fpu_area(slot),pid,tgid:pid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3:child_cr3,fs_base,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:false,user_rsp:0,pinned:PIN_ANY});
+ poke_idle(c);Ok(pid)
 }
 pub fn fork_process(frame:crate::arch::x86_64::syscall::UserFrame,flags:u64)->Result<u32,i64>{let child_cr3=match with_current_process(|p|p.clone_address_space()){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};let mut child=match with_current_process(|p|p.fork_child(child_cr3)){Some(Ok(v))=>v,Some(Err(e))=>return Err(e),None=>return Err(crate::errno::ESRCH)};if let Err(e)=apply_ns_flags(&mut child,flags){child.abandon();return Err(e)}spawn_fork(child,frame)}
 extern "sysv64" fn user_thread_trampoline()->!{
@@ -320,16 +391,13 @@ pub fn spawn_thread(frame:crate::arch::x86_64::syscall::UserFrame,child_stack:u6
   child.pending=0;child.sigframe=0;child.clear_child_tid=ctid;
   let cr3=child.cr3;
   if let Err(e)=apply_ns_flags(&mut child,ns_flags){return Err(e)}
- let mut frame=frame;frame.rsp=child_stack;
+  let mut frame=frame;frame.rsp=child_stack;
  let c=cpu();
- let mut s=SCHED.lock();
- let slot=match take_slot(&mut s){Ok(v)=>v,Err(e)=>return Err(e)};
- let pid=alloc_pid(&mut s);let me=s.cpu_current[c];let (tgid,ppid,pgid,sid)=if me==IDLE_USIZE{(pid,0,0,0)}else{let m=&s.tasks[me];(m.tgid,m.pid,m.pgid,m.sid)};
+ let (slot,pid)=match reserve_slot(c){Ok(v)=>v,Err(e)=>{child.abandon();return Err(e)}};
+ let (tgid,ppid,pgid,sid)={let s=SCHED.lock();let me=s.cpu_current[c];if me==IDLE_USIZE{(pid,0,0,0)}else{let m=&s.tasks[me];(m.tgid,m.pid,m.pgid,m.sid)}};
  let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,fork_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
  FORK_RESUMES.lock()[slot]=Some(frame);PROCS.lock()[slot]=Some(child);
-  s.tasks[slot]=Task{fpu:fpu_area(slot),pid,tgid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:true,user_rsp:child_stack,pinned:PIN_ANY};
- drop(s);
- RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);
+ publish_spawn(slot,Task{fpu:fpu_area(slot),pid,tgid,ppid,pgid,sid,state:State::Runnable,rsp:sp,kernel_stack_top:top,cr3,fs_base:tls,wake_tick:0,wake_pending:false,exit_code:0,term_signal:0,stop_sig:0,cont_pending:false,is_thread:true,user_rsp:child_stack,pinned:PIN_ANY});
  poke_idle(c);
  /* CLONE_PARENT_SETTID: store the child TID in the parent's memory (same
     address space here); CLONE_CHILD_SETTID: store it in the child's copy. */
@@ -638,12 +706,15 @@ pub fn timer_signal(pid:u32,sig:i32,value:u64,overrun:u32)->bool{
 }
 fn finish(code:i32,signal:u8)->!{{
  let me=current_pid();
- let (parent,uid)={
+ /* Read uid with no scheduler lock held: finish() holds SCHED across the
+    Zombie transition below, and the scheduler lock is a leaf (never held
+    across the process table). */
+ let uid=with_current_process(|p|p.uid).unwrap_or(0);
+ let parent={
   let mut s=SCHED.lock();let current=s.cpu_current[cpu()];
   if current==IDLE_USIZE{crate::arch::halt()}
   s.tasks[current].state=State::Zombie;s.tasks[current].exit_code=code;s.tasks[current].term_signal=signal;
   let parent=s.tasks[current].ppid;let is_thread=s.tasks[current].is_thread;
-  let uid=PROCS.lock()[current].as_ref().map(|p|p.uid).unwrap_or(0);
   drop(s);
   if parent!=0&&!is_thread{
    /* No core dumps: signal deaths report CLD_KILLED, exits CLD_EXITED. */
@@ -651,9 +722,8 @@ fn finish(code:i32,signal:u8)->!{{
    else{store_sigchld(parent,crate::signal::CLD_EXITED,me,uid,code&0xff);}
    wake_parent_for_wait(parent);
   }
-  (parent,uid)
+  parent
  };
- let _=(parent,uid);
 }loop{schedule(true);unsafe{core::arch::asm!("hlt",options(nomem,nostack));}}}
 pub fn setpgid(pid:u32,pgid:u32)->Result<(),i64>{
  let me=current_pid();
@@ -739,6 +809,53 @@ pub fn stack_guard(){
  }
 }
 pub fn exit_fault(vector:u64,error:u64,rip:u64,cr2:u64)->!{robust_exit();crate::println!("user fault vector={} error={:#x} rip={:#x} cr2={:#x}",vector,error,rip,cr2);with_current_process(|proc|proc.teardown_exit(128+11,vector));finish(128+11,11)}
+/* Post-switch hook, called from switch_context on the incoming stack right
+   after the new rsp is loaded. Completes the outgoing task's transition: a
+   yielding task becomes Runnable and ownership is released. Doing this here
+   (instead of before the switch) closes the race where another CPU claims a
+   task whose old stack is still live: until the hook runs, the outgoing task
+   stays Running and owned, so every claimer skips it. Runs with interrupts
+   enabled; the scheduler lock itself provides exclusion against timer/IPI
+   handlers that also take it. */
+#[unsafe(no_mangle)]pub extern "sysv64" fn switch_hook(){
+ let c=cpu();
+ if c>=NCPU{return}
+ /* Load without consuming yet: the stash stays pending until the transition
+    below commits, so a concurrent scanner can tell a mid-switch task
+    (skip silently) from a genuinely double-owned one (count it). */
+ let old=SWITCH_OLD[c].load(Ordering::Acquire);
+ if old==IDLE_U32{return}
+ let o=old as usize;
+ if o>=MAX_TASKS{return}
+ let mut s=SCHED.lock();
+ if TASK_OWNER[o].load(Ordering::Acquire)!=c as u32{
+  SWITCH_OLD[c].store(IDLE_U32,Ordering::Release);
+  return
+ }
+ let y=SWITCH_YIELD[c].load(Ordering::Acquire);
+ /* Release ownership before marking Runnable: a scanner in between sees
+    Running+unowned (skipped by the state check) or Runnable+unowned
+    (safe to claim, the switch already committed), never a stale pair. */
+ TASK_OWNER[o].store(NO_OWNER,Ordering::Release);
+ if y&&s.tasks[o].state==State::Running{
+   s.tasks[o].state=State::Runnable;
+   RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);
+  }
+ SWITCH_YIELD[c].store(false,Ordering::Release);
+ SWITCH_OLD[c].store(IDLE_U32,Ordering::Release);
+}
+/* An owned-but-Runnable task is benign while its owner is mid-switch (the
+   post-switch hook resolves it microseconds later; a wake landing in that
+   window makes it briefly Runnable+owned) or while it is still the owner's
+   current task (the owner will run or switch it itself). Skip those
+   silently; count only a genuinely stranded double-ownership. */
+fn skip_owned(s:&Scheduler,i:usize,owner:u32)->bool{
+ let o=owner as usize;
+ if o>=NCPU{return true}
+ if SWITCH_OLD[o].load(Ordering::Acquire)!=IDLE_U32{return false}
+ if s.cpu_current[o]==i{return false}
+ true
+}
 fn schedule(blocked:bool){
  let cpu=cpu();
  let mut sw_old:*mut u64=core::ptr::null_mut();
@@ -749,14 +866,13 @@ fn schedule(blocked:bool){
   let old=s.cpu_current[cpu];
   /* The idle loop never schedules: it claims directly. */
   if old==IDLE_USIZE{return}
-  if !blocked&&s.tasks[old].state==State::Running{s.tasks[old].state=State::Runnable;RUNQ_PUSH.fetch_add(1,Ordering::Relaxed);}
-  /* Leaving Running releases ownership so another CPU may claim this task.
-     Without this the stale owner would look like a double-exec forever. */
-  if s.tasks[old].state!=State::Running{TASK_OWNER[old].store(NO_OWNER,Ordering::Release);}
-  /* A dead or reaped task never resumes: abandon its stack without saving,
-     so no write to its slot happens after the lock is dropped (another CPU
-     may reap and reuse the slot concurrently). */
-  if s.tasks[old].state==State::Zombie||s.tasks[old].state==State::Unused{abandon_old=true;}
+  /* A dead or reaped task never resumes: abandon its stack without saving.
+     No hook runs on the nosave path, so ownership is released here; a
+     Zombie/Unused slot is never claimable, so this cannot race. */
+  if s.tasks[old].state==State::Zombie||s.tasks[old].state==State::Unused{
+   abandon_old=true;
+   TASK_OWNER[old].store(NO_OWNER,Ordering::Release);
+  }
   /* The user RSP is process-wide state in the syscall path; park the outgoing
      task's copy so a resuming thread restores its own. */
   if s.tasks[old].state!=State::Unused{s.tasks[old].user_rsp=unsafe{crate::arch::x86_64::syscall::read_user_rsp()};}
@@ -764,30 +880,64 @@ fn schedule(blocked:bool){
   for step in 1..=MAX_TASKS{
    let i=(old+step)%MAX_TASKS;
    if s.tasks[i].state!=State::Runnable{continue}
+   /* The outgoing task selects itself without tripping the ownership
+      alarm: a wake that landed after it started blocking made it Runnable
+      again, and continuing it here consumes that wake. */
+   if i==old{next=old;found=true;break}
    if s.tasks[i].pinned!=PIN_ANY&&s.tasks[i].pinned!=cpu as u32{continue}
-   if TASK_OWNER[i].load(Ordering::Acquire)!=NO_OWNER{DOUBLE_EXEC.fetch_add(1,Ordering::Relaxed);continue}
+   let own_i=TASK_OWNER[i].load(Ordering::Acquire);
+   if own_i!=NO_OWNER{if skip_owned(&s,i,own_i){DOUBLE_EXEC.fetch_add(1,Ordering::Relaxed);}continue}
    next=i;found=true;break;
   }
   if found{
+   if next==old{
+    /* Nothing else to run: keep the current task. No switch happens, so
+       no post-switch hook is needed; Running+owned stays consistent. A
+       Runnable old task got here via a wake that landed after it started
+       blocking: consume that wake's run-queue push and keep running. */
+    if s.tasks[old].state==State::Runnable{
+     RUNQ_POP.fetch_add(1,Ordering::Relaxed);
+    }
+    s.tasks[old].state=State::Running;
+    return;
+   }
    s.tasks[next].state=State::Running;
    TASK_OWNER[next].store(cpu as u32,Ordering::Release);
    s.cpu_current[cpu]=next;
    CPU_CUR[cpu].store(next as u32,Ordering::Release);
    RUNQ_POP.fetch_add(1,Ordering::Relaxed);
    CPU_TASKS_RUN[cpu].fetch_add(1,Ordering::Relaxed);
-   if next!=old{CPU_CTX[cpu].fetch_add(1,Ordering::Relaxed);}
+   CPU_CTX[cpu].fetch_add(1,Ordering::Relaxed);
    unsafe{(*crate::smp::per_cpu_ptr(cpu)).current_fpu=s.tasks[next].fpu};
+   /* Stash the outgoing task for the post-switch hook: it stays Running
+      and owned until the switch commits, so no other CPU can claim a
+      task whose old stack is still live. The hook (not here) moves a
+      yielding task back to Runnable and releases ownership. */
+   if !abandon_old{
+    SWITCH_OLD[cpu].store(old as u32,Ordering::Release);
+    SWITCH_YIELD[cpu].store(!blocked,Ordering::Release);
+   }
    sw_old=&mut s.tasks[old].rsp as *mut u64;sw_old_fpu=s.tasks[old].fpu;
    let nt=s.tasks[next];sw_new_rsp=nt.rsp;sw_new_fpu=nt.fpu;next_task=Some(nt);
   }else{
    if s.tasks[old].state==State::Running||s.tasks[old].state==State::Runnable{
+    /* Runnable here means a wake landed after the block started (the scan
+       above would otherwise have self-selected it): consume that wake. */
+    if s.tasks[old].state==State::Runnable{
+     RUNQ_POP.fetch_add(1,Ordering::Relaxed);
+    }
     s.tasks[old].state=State::Running;s.cpu_current[cpu]=old;return;
    }
-   /* Nothing runnable and the outgoing task is parked: release ownership
-      and switch to this CPU's idle loop until work arrives. */
+   /* Nothing runnable and the outgoing task is parked: switch to this
+      CPU's idle loop until work arrives. Ownership is released by the
+      post-switch hook (abandoned stacks release it here instead, since
+      the nosave path runs no hook). */
    s.cpu_current[cpu]=IDLE_USIZE;
    CPU_CUR[cpu].store(IDLE_U32,Ordering::Release);
-   if s.tasks[old].state!=State::Unused{TASK_OWNER[old].store(NO_OWNER,Ordering::Release);}
+   if !abandon_old{
+    SWITCH_OLD[cpu].store(old as u32,Ordering::Release);
+    SWITCH_YIELD[cpu].store(false,Ordering::Release);
+   }
    sw_old=&mut s.tasks[old].rsp as *mut u64;sw_old_fpu=s.tasks[old].fpu;
    to_idle=true;
   }
