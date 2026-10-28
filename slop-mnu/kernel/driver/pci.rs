@@ -640,3 +640,46 @@ pub fn selftest_msi() {
         crate::println!("pci: msi selftest SKIP (no MSI/MSI-X caps on bus)");
     }
 }
+
+/* ---- MSI-X capability parsing (table location only; delivery via Slop IRQ core later) ---- */
+pub struct MsixInfo { pub table_bar: u8, pub table_offset: u32, pub table_size: u16, pub pba_bar: u8, pub pba_offset: u32 }
+/// If the device has MSI-X, return table location. Does NOT enable (enable
+/// requires function masking + vector allocation, future work with real drivers).
+pub fn find_msix(bdf: Bdf) -> Option<MsixInfo> {
+    let acc = Cam;
+    let mut out = None;
+    walk_caps(bdf, |off, id| {
+        if id == CAP_ID_MSIX {
+            let ctrl = acc.read32(bdf, off + 2);
+            let tbl = acc.read32(bdf, off + 4);
+            let pba = acc.read32(bdf, off + 8);
+            out = Some(MsixInfo {
+                table_bar: (tbl & 7) as u8,
+                table_offset: tbl & !7,
+                table_size: ((ctrl & 0x3ff) + 1) as u16,
+                pba_bar: (pba & 7) as u8,
+                pba_offset: pba & !7,
+            });
+            return false;
+        }
+        true
+    });
+    out
+}
+pub fn selftest_msix() {
+    let acc = Cam;
+    for bus in 0..=1u8 {
+        for dev in 0..32u8 {
+            for fun in 0..1u8 {
+                let bdf = Bdf { segment: 0, bus, device: dev, function: fun };
+                if acc.read32(bdf, CFG_VENDOR) & 0xffff == 0xffff { continue; }
+                if let Some(m) = find_msix(bdf) {
+                    crate::println!("pci: msix {:02x}:{:02x}.{} bar{}+{:#x} size{}",
+                        bus, dev, fun, m.table_bar, m.table_offset, m.table_size);
+                    return;
+                }
+            }
+        }
+    }
+    crate::println!("pci: msix selftest SKIP (no MSI-X caps on bus 0)");
+}
