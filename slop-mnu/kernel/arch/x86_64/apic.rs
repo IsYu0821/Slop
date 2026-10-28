@@ -5,6 +5,9 @@ use core::sync::atomic::{AtomicU64, Ordering};
 pub const TIMER_VECTOR: u8 = 0x40;
 /* Cross-CPU reschedule request (MS83): fixed-delivery IPI, no LVT entry. */
 pub const RESCHED_VECTOR: u8 = 0x41;
+/* Slop IRQ core test vector: fixed-delivery IPI proves register →
+   interrupt → dispatch → handler → unregister without hardware. */
+pub const TEST_VECTOR: u8 = 0x42;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
 
 static mut LAPIC: u64 = 0;
@@ -369,6 +372,14 @@ pub extern "sysv64" fn apic_resched_rust(cs:u64) {
     crate::task::request_resched();
     crate::task::note_ipi_recv();
     if cs&3==3{crate::task::request_stop_trap();}
+    unsafe { write(0xb0, 0) }
+}
+
+/* Slop IRQ core test entry: dispatch vector 0x42 through the shared core,
+   then EOI. Proves the register → IPI → dispatch → handler path. */
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_test_rust() {
+    crate::irq::dispatch(TEST_VECTOR);
     unsafe { write(0xb0, 0) }
 }
 

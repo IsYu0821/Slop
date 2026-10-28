@@ -39,6 +39,7 @@ pub mod vdso;
 pub mod kheap;
 pub mod module;
 pub mod linux_compat;
+pub mod irq;
 
 #[repr(align(16))]
 struct Stack([u8; 131072]);

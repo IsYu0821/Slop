@@ -15,7 +15,9 @@ pub fn init(){
   Ok(cap)=>crate::println!("blk: virtio-blk up capacity={} sectors",cap),
   Err(e)=>crate::println!("blk: virtio-blk unavailable: {}",e),
  }
+ // Slop IRQ core self-test: register → IPI → dispatch → handler → unregister.
+ crate::irq::selftest_irq_dispatch();
  // Slop PCI core self-test: synthetic Linux driver to validate the
- // Linux-to-Slop adapter path (register/match/probe) without modules.
+ // Linux-to-Slop adapter path (register/match/probe) without a module.
  crate::linux_compat::selftest_pci_adapter();
 }
