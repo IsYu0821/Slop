@@ -28,4 +28,6 @@ pub fn init(){
  crate::driver::pci::selftest_bars();
  // Slop MMIO UC mapping self-test (map/read/unmap/double-unmap safe).
  crate::driver::pci::selftest_mmio();
+ // Slop MSI programming self-test (cap walk + program + readback verify).
+ crate::driver::pci::selftest_msi();
 }

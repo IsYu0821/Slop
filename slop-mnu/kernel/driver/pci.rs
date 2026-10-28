@@ -491,3 +491,152 @@ pub fn selftest_mmio() {
     }
     crate::println!("pci: mmio selftest SKIP (no MMIO BAR)");
 }
+
+/* ---- MSI capability parsing + programming (Slop core) ---- */
+pub const CAP_ID_MSI: u8 = 0x05;
+pub const CAP_ID_MSIX: u8 = 0x11;
+
+/// Walk the PCI capability list. Calls f(cap_offset, cap_id) for each; stops if f returns false.
+/// NOTE: QEMU leaves the Capabilities-List status bit clear on some devices
+/// that still link real caps (e.g. e1000e/AHCI); gate on a sane cap pointer
+/// instead of the status bit, with offset validation and a loop bound.
+pub fn walk_caps(bdf: Bdf, mut f: impl FnMut(u16, u8) -> bool) {
+    let acc = Cam;
+    let mut off = (acc.read32(bdf, CFG_CAP as u16) & 0xfc) as u16;
+    if off < 0x40 || off >= 0x100 { return; }
+    let mut guard = 0;
+    while off != 0 && guard < 64 {
+        guard += 1;
+        if off < 0x40 || off >= 0x100 { break; }
+        let h = acc.read32(bdf, off);
+        let id = (h & 0xff) as u8;
+        if id == 0 || id == 0xff { break; }
+        let next = ((h >> 8) & 0xff) as u16;
+        if !f(off, id) { break; }
+        if next != 0 && (next < 0x40 || next >= 0x100) { break; }
+        off = next & 0xfc;
+    }
+}
+
+/// Find MSI capability offset, if present. Returns (offset, is_64bit, mme_cap).
+pub fn find_msi(bdf: Bdf) -> Option<(u16, bool, u8)> {
+    let acc = Cam;
+    let mut out = None;
+    walk_caps(bdf, |off, id| {
+        if id == CAP_ID_MSI {
+            let ctrl = (acc.read32(bdf, off + 2) & 0xffff) as u16;
+            let is64 = (ctrl >> 7) & 1 == 1;
+            let mmc = ((ctrl >> 1) & 7) as u8;
+            out = Some((off, is64, mmc));
+            false
+        } else {
+            true
+        }
+    });
+    out
+}
+
+/// Program MSI address/data for a Slop IRQ vector and enable it.
+/// addr_hi: LAPIC base high (0 for xAPIC 32-bit). Returns 0 on success.
+pub fn msi_program(bdf: Bdf, vector: u8, dest_apic: u8) -> i32 {
+    let (off, is64, _mmc) = match find_msi(bdf) {
+        Some(t) => t,
+        None => return -19, // -ENODEV
+    };
+    let acc = Cam;
+    // MSI address: 0xFEE00000 | (dest << 12). RH=0, DM=0 (physical).
+    let addr: u32 = 0xfee0_0000 | ((dest_apic as u32) << 12);
+    // MSI data: vector[7:0], delivery mode 0 (fixed), level 0, trigger 0 (edge).
+    let data: u32 = vector as u32;
+    // Disable first (avoid torn programming), then program.
+    let mut ctrl = acc.read32(bdf, off + 2) & 0xffff;
+    ctrl &= !1u32;
+    acc.write32(bdf, off + 2, ctrl);
+    acc.write32(bdf, off + 4, addr);
+    if is64 {
+        acc.write32(bdf, off + 8, 0);
+        acc.write32(bdf, off + 12, data);
+    } else {
+        acc.write32(bdf, off + 8, data);
+    }
+    // Enable, single message (MME=0).
+    let mut ctrl2 = acc.read32(bdf, off + 2) & 0xffff;
+    ctrl2 = (ctrl2 & !(0x70 | 1)) | 1;
+    acc.write32(bdf, off + 2, ctrl2);
+    0
+}
+
+/// Disable MSI (clear enable bit). Safe no-op if absent.
+pub fn msi_disable(bdf: Bdf) {
+    if let Some((off, _, _)) = find_msi(bdf) {
+        let acc = Cam;
+        let ctrl = acc.read32(bdf, off + 2) & 0xffff;
+        acc.write32(bdf, off + 2, ctrl & !1);
+    }
+}
+
+/* MSI self-test: walk all PCI devices, report MSI/MSI-X caps, and for the
+   first MSI-capable device, program TEST_VECTOR2 for self-delivery, verify
+   by readback, then disable. No device event needed (programming path only;
+   dispatch itself is proven by the IPI self-test on the same Slop core). */
+pub fn selftest_msi() {
+    let acc = Cam;
+    let mut found = 0;
+    let mut done = false;
+    // Debug: list first few devices and their cap status.
+    let mut dbg = 0;
+    for bus in 0..=255u8 {
+        for dev in 0..32u8 {
+            for fun in 0..8u8 {
+                let bdf = Bdf { segment: 0, bus, device: dev, function: fun };
+                if acc.read32(bdf, CFG_VENDOR) & 0xffff == 0xffff { continue; }
+                if dbg < 8 {
+                    let st = acc.read32(bdf, 0x06);
+                    let cp = acc.read32(bdf, CFG_CAP as u16) & 0xff;
+                    let vv = acc.read32(bdf, CFG_VENDOR);
+                    crate::println!("pci: dev {:02x}:{:02x}.{} {:04x}:{:04x} status={:#x} capptr={:#x}", bus, dev, fun, vv & 0xffff, (vv >> 16) & 0xffff, st, cp);
+                    dbg += 1;
+                }
+                // Check for MSI / MSI-X caps.
+                let mut has_msi = false;
+                let mut has_msix = false;
+                walk_caps(bdf, |_off, id| {
+                    if id == CAP_ID_MSI { has_msi = true; }
+                    if id == CAP_ID_MSIX { has_msix = true; }
+                    true
+                });
+                if has_msi || has_msix { found += 1; }
+                if has_msi && !done {
+                    done = true;
+                    // Program TEST_VECTOR2 to self, verify, disable.
+                    let me = crate::arch::x86_64::apic::apic_id() as u8;
+                    if msi_program(bdf, crate::arch::x86_64::apic::TEST_VECTOR2, me) != 0 {
+                        crate::println!("pci: msi selftest FAIL program {:02x}:{:02x}.{}", bus, dev, fun);
+                        return;
+                    }
+                    // Read back address/data/enable.
+                    if let Some((off, is64, _)) = find_msi(bdf) {
+                        let ctrl = acc.read32(bdf, off + 2) & 0xffff;
+                        let addr = acc.read32(bdf, off + 4);
+                        let want_addr = 0xfee0_0000 | ((me as u32) << 12);
+                        let data_off = if is64 { off + 12 } else { off + 8 };
+                        let data = acc.read32(bdf, data_off) & 0xffff;
+                        if (ctrl & 1) == 0 || addr != want_addr || data != crate::arch::x86_64::apic::TEST_VECTOR2 as u32 {
+                            crate::println!("pci: msi selftest FAIL verify {:#x} {:#x} {:#x}", ctrl, addr, data);
+                            msi_disable(bdf);
+                            return;
+                        }
+                    } else {
+                        crate::println!("pci: msi selftest FAIL lost cap");
+                        return;
+                    }
+                    msi_disable(bdf);
+                    crate::println!("pci: msi selftest PASS {:02x}:{:02x}.{} programmed+verified", bus, dev, fun);
+                }
+            }
+        }
+    }
+    if found == 0 {
+        crate::println!("pci: msi selftest SKIP (no MSI/MSI-X caps on bus)");
+    }
+}

@@ -8,6 +8,7 @@ pub const RESCHED_VECTOR: u8 = 0x41;
 /* Slop IRQ core test vector: fixed-delivery IPI proves register →
    interrupt → dispatch → handler → unregister without hardware. */
 pub const TEST_VECTOR: u8 = 0x42;
+pub const TEST_VECTOR2: u8 = 0x43;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
 
 static mut LAPIC: u64 = 0;
@@ -380,6 +381,11 @@ pub extern "sysv64" fn apic_resched_rust(cs:u64) {
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn irq_test_rust() {
     crate::irq::dispatch(TEST_VECTOR);
+    unsafe { write(0xb0, 0) }
+}
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_test2_rust() {
+    crate::irq::dispatch(TEST_VECTOR2);
     unsafe { write(0xb0, 0) }
 }
 
