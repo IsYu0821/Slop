@@ -213,10 +213,6 @@ impl PciDev {
     }
 }
 
-struct PciReg { used: bool, drv: u64, name: [u8; 48] }
-const NO_REG: PciReg = PciReg { used: false, drv: 0, name: [0; 48] };
-static PCI_REGS: IrqSpinLock<[PciReg; 16]> = IrqSpinLock::new([NO_REG; 16]);
-
 fn drv_name(drv: u64) -> [u8; 48] {
     let mut n = [0u8; 48];
     if drv == 0 { return n; }
@@ -230,80 +226,27 @@ fn drv_name(drv: u64) -> [u8; 48] {
     n
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_register_driver(drv: u64) -> i32 {
-    if drv == 0 { return -22; } // -EINVAL
-    let p = unsafe { &*(drv as *const PciDriver) };
-    if p.id_table.is_null() || p.probe.is_none() { return -22; }
-    {
-        let mut regs = PCI_REGS.lock();
-        match regs.iter_mut().find(|r| !r.used) {
-            Some(r) => { r.used = true; r.drv = drv; r.name = drv_name(drv); }
-            None => return -12, // -ENOMEM
+/* Slop-core probe shim: adapts a Slop PCI match into a Linux probe call.
+   The opaque cookie is the Linux pci_driver address; we rebuild a compat
+   pci_dev (vendor/device/BDF filled, rest zeroed) and invoke the driver's
+   probe with the matching Linux ID entry. */
+fn slop_pci_probe_shim(bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, opaque: u64) -> i32 {
+    if opaque == 0 { return -22; }
+    let lp = unsafe { &*(opaque as *const PciDriver) };
+    let probe = match lp.probe { Some(f) => f, None => return -22 };
+    // Find the Linux ID entry that matches (for the id argument).
+    let mut matched: *const PciDeviceId = core::ptr::null();
+    if !lp.id_table.is_null() {
+        for k in 0..64 {
+            let e = unsafe { &*lp.id_table.add(k) };
+            if e.vendor == 0 && e.device == 0 && e.subvendor == 0 && e.subdevice == 0 && e.class == 0 { break; }
+            let vm = e.vendor == 0xffff_ffff || e.vendor == 0xffff || (e.vendor as u16) == vendor || e.vendor == 0;
+            let dm = e.device == 0xffff_ffff || e.device == 0xffff || (e.device as u16) == device || e.device == 0;
+            if vm && dm { matched = e as *const PciDeviceId; break; }
         }
     }
-    // Match against already-enumerated PCI devices and probe immediately
-    // (no hotplug bus rescan in this kernel yet).
-    let matched = pci_match_and_probe(drv);
-    crate::println!("pci: driver registered ({} devices matched)", matched);
-    0
-}
-
-fn pci_match_and_probe(drv: u64) -> i32 {
-    use crate::driver::pci::{Cam, ConfigAccess, CFG_VENDOR, CFG_CLASS};
-    let p = unsafe { &*(drv as *const PciDriver) };
-    let mut ids: usize = 0;
-    // Count table length (terminated by all-zero vendor/device/sub/class).
-    loop {
-        let e = unsafe { &*p.id_table.add(ids) };
-        if e.vendor == 0 && e.device == 0 && e.subvendor == 0 && e.subdevice == 0 && e.class == 0 {
-            break;
-        }
-        ids += 1;
-        if ids > 64 { break; }
-    }
-    let acc = Cam;
-    let mut n = 0;
-    for bus in 0..=255u8 {
-        for dev in 0..32u8 {
-            for fun in 0..8u8 {
-                let bdf = crate::driver::pci::Bdf { segment: 0, bus, device: dev, function: fun };
-                let w = acc.read32(bdf, CFG_VENDOR);
-                if w & 0xffff == 0xffff { continue; }
-                let vendor = (w & 0xffff) as u16;
-                let device = ((w >> 16) & 0xffff) as u16;
-                for k in 0..ids {
-                    let e = unsafe { &*p.id_table.add(k) };
-                    let vm = e.vendor == 0xffff || e.vendor == vendor as u32 || e.vendor == 0;
-                    let dm = e.device == 0xffff || e.device == device as u32 || e.device == 0;
-                    if vm && dm && pci_class_match(e, bdf) {
-                        if pci_probe_one(drv, bdf, vendor, device, e) == 0 { n += 1; }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    n
-}
-
-fn pci_class_match(e: &PciDeviceId, bdf: crate::driver::pci::Bdf) -> bool {
-    use crate::driver::pci::{Cam, ConfigAccess, CFG_CLASS};
-    if e.class == 0 && e.class_mask == 0 { return true; }
-    let acc = Cam;
-    let cls = acc.read32(bdf, CFG_CLASS);
-    // Linux compares (class ^ e.class) & e.class_mask == 0 on the 24-bit field.
-    // CFG_CLASS low byte is revision; class lives in the top 3 bytes.
-    let dev_cls = (cls >> 8) & 0xffffff;
-    let want = e.class & 0xffffff;
-    let mask = if e.class_mask == 0 { 0xffffff } else { e.class_mask & 0xffffff };
-    (dev_cls ^ want) & mask == 0
-}
-
-fn pci_probe_one(drv: u64, bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, id: *const PciDeviceId) -> i32 {
-    let p = unsafe { &*(drv as *const PciDriver) };
-    let probe = match p.probe { Some(f) => f, None => return -22 };
-    // Compat pci_dev on the heap (512B, real vendor/device prefix).
+    if matched.is_null() { return -19; } // -ENODEV
+    // Compat pci_dev on the heap (512B, real vendor/device/BDF prefix).
     let mem = crate::kheap::kzalloc(512);
     if mem.is_null() { return -12; }
     let pd = mem as *mut PciDev;
@@ -312,29 +255,46 @@ fn pci_probe_one(drv: u64, bdf: crate::driver::pci::Bdf, vendor: u16, device: u1
         (*pd).device = device;
         (*pd).bdf = ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32);
     }
-    // Fill BAR bases + IRQ line/pin from config space for future HW use.
-    pci_fill_dev_resources(pd, bdf);
-    let rc = unsafe { probe(pd, id) };
-    // NOTE: dev buffer intentionally leaked while bound (remove() path frees
-    // it later once unbind tracking lands; today delete_module drops the
-    // registration and leaks bound devs — documented, no WildPtr).
-    let _ = bdf;
+    let rc = unsafe { probe(pd, matched) };
     if rc != 0 { crate::kheap::kfree(mem); }
+    // NOTE: bound dev buffer intentionally leaked while bound (remove path
+    // frees once unbind tracking lands; today delete_module drops the
+    // registration but the dev stays alive, which is safe if never touched).
     rc
 }
 
-fn pci_fill_dev_resources(_pd: *mut PciDev, _bdf: crate::driver::pci::Bdf) {
-    // Future: copy BAR bases into resource[] once exact irq/resource offsets
-    // are pinned for the target kernel version. Today: vendor/device only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pci_register_driver(drv: u64) -> i32 {
+    if drv == 0 { return -22; } // -EINVAL
+    let p = unsafe { &*(drv as *const PciDriver) };
+    if p.id_table.is_null() || p.probe.is_none() { return -22; }
+    let name = drv_name(drv);
+    // Expand the Linux ID table into one Slop registration per entry.
+    // The Slop core owns enumeration/matching; this adapter only translates.
+    let mut count = 0;
+    for k in 0..64 {
+        let e = unsafe { &*p.id_table.add(k) };
+        if e.vendor == 0 && e.device == 0 && e.subvendor == 0 && e.subdevice == 0 && e.class == 0 { break; }
+        // Class-only entries need class matching which the Slop core does
+        // not do yet; skip them (documented gap, not silent mismatch).
+        if (e.vendor == 0 || e.vendor == 0xffff_ffff) && (e.device == 0 || e.device == 0xffff_ffff) && (e.class != 0 || e.class_mask != 0) {
+            continue;
+        }
+        let v = if e.vendor == 0xffff_ffff || e.vendor == 0xffff { 0xffff } else { (e.vendor & 0xffff) as u16 };
+        let d = if e.device == 0xffff_ffff || e.device == 0xffff { 0xffff } else { (e.device & 0xffff) as u16 };
+        let r = crate::driver::pci::register_slop_driver(&name, v, d, slop_pci_probe_shim, drv);
+        if r != 0 { return r; }
+        count += 1;
+    }
+    if count == 0 { return -22; }
+    0
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pci_unregister_driver(drv: u64) {
     if drv == 0 { return; }
-    let mut regs = PCI_REGS.lock();
-    for r in regs.iter_mut() {
-        if r.used && r.drv == drv { *r = NO_REG; }
-    }
+    // Slop core drops all registrations carrying this opaque cookie.
+    crate::driver::pci::unregister_slop_driver(drv);
 }
 /* Called on module unload: drop registrations that came from it. Full
    per-module owner tracking is future work; today we drop by pointer. */
@@ -640,4 +600,25 @@ pub unsafe extern "C" fn k_vsnprintf(buf: *mut u8, n: usize, fmt: *const u8, ap:
         }
     }
     k_snprintf(buf, n, fmt, args[0], args[1], args[2], args[3], args[4], args[5])
+}
+
+// Self-test: register a synthetic Linux PCI driver from kernel space
+// (bypasses module RDI issue) to validate the adapter + Slop core path.
+static mut TEST_IDS: [PciDeviceId; 2] = [
+    PciDeviceId { vendor: 0x1234, device: 0xABCD, subvendor: 0, subdevice: 0, class: 0, class_mask: 0, driver_data: 0, override_only: 0 },
+    PciDeviceId { vendor: 0x8086, device: 0x29C0, subvendor: 0, subdevice: 0, class: 0, class_mask: 0, driver_data: 0, override_only: 0 },
+];
+static mut TEST_DRV: PciDriver = PciDriver { name: 0 as *const u8, id_table: 0 as *const PciDeviceId, probe: None, remove: None };
+unsafe extern "C" fn test_probe(_d: *mut PciDev, _id: *const PciDeviceId) -> i32 {
+    crate::println!("pci: test probe ran (adapter works)");
+    0
+}
+pub fn selftest_pci_adapter() {
+    unsafe {
+        TEST_DRV.name = b"slotest\0" as *const u8;
+        TEST_DRV.id_table = &raw const TEST_IDS as *const PciDeviceId;
+        TEST_DRV.probe = Some(test_probe);
+        let rc = pci_register_driver(&raw const TEST_DRV as u64);
+        crate::println!("pci: selftest register rc={}", rc);
+    }
 }

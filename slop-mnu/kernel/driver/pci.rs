@@ -89,3 +89,77 @@ pub fn count()->usize{
  }
  n
 }
+
+/* ---- Slop PCI driver registry (core, OS-neutral) ----
+   Slop-native drivers AND the Linux compat adapter register here.
+   Matching is by explicit vendor/device (0xFFFF = wildcard, mirroring
+   PCI_ANY_ID). The core owns enumeration, matching, and probe dispatch;
+   adapters translate their own driver models into these plain IDs plus an
+   opaque cookie handed back to the probe callback. */
+pub type SlopProbeFn = fn(bdf: Bdf, vendor: u16, device: u16, opaque: u64) -> i32;
+pub struct SlopPciDriver {
+    pub used: bool,
+    pub name: [u8; 48],
+    pub vendor: u16,
+    pub device: u16,
+    pub probe: Option<SlopProbeFn>,
+    pub opaque: u64,
+}
+const NO_SLOP_DRV: SlopPciDriver = SlopPciDriver { used: false, name: [0; 48], vendor: 0, device: 0, probe: None, opaque: 0 };
+static SLOP_REGS: crate::sync::IrqSpinLock<[SlopPciDriver; 16]> = crate::sync::IrqSpinLock::new([NO_SLOP_DRV; 16]);
+
+fn slop_name(src: &[u8; 48]) -> [u8; 48] { *src }
+
+/// Register a Slop-native PCI driver. Returns 0 on success, -ENOSPC if full.
+pub fn register_slop_driver(name: &[u8; 48], vendor: u16, device: u16, probe: SlopProbeFn, opaque: u64) -> i32 {
+    {
+        let mut regs = SLOP_REGS.lock();
+        match regs.iter_mut().find(|r| !r.used) {
+            Some(r) => { r.used = true; r.name = slop_name(name); r.vendor = vendor; r.device = device; r.probe = Some(probe); r.opaque = opaque; }
+            None => return -28, // -ENOSPC
+        }
+    }
+    // Probe already-enumerated devices immediately (no hotplug bus rescan).
+    let mut n = 0;
+    let acc = Cam;
+    for bus in 0..=255u8 {
+        for dev in 0..32u8 {
+            let b0 = Bdf { segment: 0, bus, device: dev, function: 0 };
+            if acc.read32(b0, CFG_VENDOR) & 0xffff == 0xffff { continue; }
+            let multifunction = (acc.read32(b0, CFG_HEADER) >> 16) & 0x80 != 0;
+            let last = if multifunction { 8u8 } else { 1u8 };
+            for func in 0..last {
+                let bdf = Bdf { segment: 0, bus, device: dev, function: func };
+                let w = acc.read32(bdf, CFG_VENDOR);
+                if w & 0xffff == 0xffff { continue; }
+                let v = (w & 0xffff) as u16;
+                let d = ((w >> 16) & 0xffff) as u16;
+                let vm = vendor == 0xffff || vendor == v;
+                let dm = device == 0xffff || device == d;
+                if vm && dm {
+                    // Re-lookup the just-registered entry to call its probe.
+                    let (pf, oq) = {
+                        let regs = SLOP_REGS.lock();
+                        match regs.iter().find(|r| r.used && r.vendor == vendor && r.device == device && r.opaque == opaque) {
+                            Some(r) => (r.probe, r.opaque),
+                            None => (None, 0),
+                        }
+                    };
+                    if let Some(f) = pf {
+                        if f(bdf, v, d, oq) == 0 { n += 1; }
+                    }
+                }
+            }
+        }
+    }
+    crate::println!("pci: slop driver registered ({} devices matched)", n);
+    0
+}
+
+/// Unregister by opaque cookie (adapter passes its driver pointer).
+pub fn unregister_slop_driver(opaque: u64) {
+    let mut regs = SLOP_REGS.lock();
+    for r in regs.iter_mut() {
+        if r.used && r.opaque == opaque { *r = NO_SLOP_DRV; }
+    }
+}

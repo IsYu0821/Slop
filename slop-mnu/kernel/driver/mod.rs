@@ -15,4 +15,7 @@ pub fn init(){
   Ok(cap)=>crate::println!("blk: virtio-blk up capacity={} sectors",cap),
   Err(e)=>crate::println!("blk: virtio-blk unavailable: {}",e),
  }
+ // Slop PCI core self-test: synthetic Linux driver to validate the
+ // Linux-to-Slop adapter path (register/match/probe) without modules.
+ crate::linux_compat::selftest_pci_adapter();
 }
