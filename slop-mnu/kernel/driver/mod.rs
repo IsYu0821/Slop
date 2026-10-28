@@ -24,4 +24,6 @@ pub fn init(){
  // Slop PCI core self-test: synthetic Linux driver to validate the
  // Linux-to-Slop adapter path (register/match/probe) without a module.
  crate::linux_compat::selftest_pci_adapter();
+ // Slop PCI BAR sizing self-test (restore-checked, no crash).
+ crate::driver::pci::selftest_bars();
 }

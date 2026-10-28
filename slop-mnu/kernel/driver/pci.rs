@@ -163,3 +163,146 @@ pub fn unregister_slop_driver(opaque: u64) {
         if r.used && r.opaque == opaque { *r = NO_SLOP_DRV; }
     }
 }
+
+/* ---- BAR sizing (standard write-all-ones protocol) ---- */
+// Returns the size in bytes, or 0 for unimplemented BARs. Restores the
+// original address. Handles 32-bit MEM, 64-bit MEM (pair), and I/O BARs.
+pub fn bar_size(acc: &dyn ConfigAccess, bdf: Bdf, index: u8) -> u64 {
+    if index >= 6 { return 0; }
+    let off = CFG_BAR0 + 4 * (index as u16);
+    let orig_lo = acc.read32(bdf, off);
+    if orig_lo == 0 { return 0; }
+    if orig_lo & 1 != 0 {
+        // I/O BAR: low 2 bits are flags.
+        acc.write32(bdf, off, 0xffff_ffff);
+        let v = acc.read32(bdf, off);
+        acc.write32(bdf, off, orig_lo);
+        let mask = v & 0xffff_fffc;
+        if mask == 0 { return 0; }
+        return (!mask as u64 + 1) & 0xffff_ffff;
+    }
+    let kind = (orig_lo >> 1) & 3;
+    if kind == 2 {
+        // 64-bit MEM: pair of BARs.
+        if index >= 5 { return 0; }
+        let orig_hi = acc.read32(bdf, off + 4);
+        acc.write32(bdf, off, 0xffff_ffff);
+        acc.write32(bdf, off + 4, 0xffff_ffff);
+        let lo = acc.read32(bdf, off);
+        let hi = acc.read32(bdf, off + 4);
+        acc.write32(bdf, off, orig_lo);
+        acc.write32(bdf, off + 4, orig_hi);
+        let mask_lo = (lo & 0xffff_fff0) as u64;
+        let mask_hi = hi as u64;
+        if mask_lo == 0 && mask_hi == 0 { return 0; }
+        let combined = (mask_hi << 32) | mask_lo;
+        (!combined).wrapping_add(1)
+    } else {
+        acc.write32(bdf, off, 0xffff_ffff);
+        let v = acc.read32(bdf, off);
+        acc.write32(bdf, off, orig_lo);
+        let mask = (v & 0xffff_fff0) as u64;
+        if mask == 0 { return 0; }
+        (!mask).wrapping_add(1) & 0xffff_ffff
+    }
+}
+
+/* ---- BAR resource reservation (Slop core owns the ledger) ---- */
+#[derive(Clone, Copy)]
+struct BarRes { used: bool, base: u64, size: u64, owner: [u8; 32] }
+const NO_RES: BarRes = BarRes { used: false, base: 0, size: 0, owner: [0; 32] };
+static BAR_RESV: crate::sync::IrqSpinLock<[BarRes; 32]> = crate::sync::IrqSpinLock::new([NO_RES; 32]);
+
+fn ranges_overlap(a: u64, alen: u64, b: u64, blen: u64) -> bool {
+    a < b.wrapping_add(blen) && b < a.wrapping_add(alen)
+}
+
+/// Reserve [base, base+size) for owner. Fails if overlapping.
+pub fn reserve_bar(base: u64, size: u64, owner: &[u8]) -> Result<(), i64> {
+    if size == 0 { return Err(crate::errno::EINVAL); }
+    let mut t = BAR_RESV.lock();
+    for r in t.iter() {
+        if r.used && ranges_overlap(base, size, r.base, r.size) {
+            return Err(crate::errno::EBUSY);
+        }
+    }
+    match t.iter_mut().find(|r| !r.used) {
+        Some(r) => {
+            r.used = true;
+            r.base = base;
+            r.size = size;
+            let n = core::cmp::min(owner.len(), 32);
+            r.owner[..n].copy_from_slice(&owner[..n]);
+            Ok(())
+        }
+        None => Err(crate::errno::ENOMEM),
+    }
+}
+pub fn release_bar(base: u64, size: u64) {
+    let mut t = BAR_RESV.lock();
+    for r in t.iter_mut() {
+        if r.used && r.base == base && r.size == size {
+            *r = NO_RES;
+            return;
+        }
+    }
+}
+
+/// Size every BAR of a device and fill sizes in place. Returns count sized.
+pub fn size_bars(found: &mut Found) {
+    let acc = Cam;
+    let mut i = 0usize;
+    while i < 6 {
+        let off = CFG_BAR0 + 4 * (i as u16);
+        let lo = acc.read32(found.bdf, off);
+        if lo == 0 {
+            i += 1;
+            continue;
+        }
+        let wide = lo & 1 == 0 && ((lo >> 1) & 3) == 2;
+        found.bars[i].size = bar_size(&acc, found.bdf, i as u8);
+        // Zero-size means unimplemented; leave base as-is for diagnostics.
+        i += if wide { 2 } else { 1 };
+    }
+}
+
+/* Boot self-test: size BARs of every device, verify restore, no crash.
+   QEMU q35 exposes real BARs (host bridge, virtio); sizing must not wedge
+   config space and must leave addresses intact. */
+pub fn selftest_bars() {
+    let acc = Cam;
+    let mut done = 0;
+    for bus in 0..=255u8 {
+        for dev in 0..32u8 {
+            let bdf = Bdf { segment: 0, bus, device: dev, function: 0 };
+            if acc.read32(bdf, CFG_VENDOR) & 0xffff == 0xffff { continue; }
+            let mut f = match probe(&acc, bdf) {
+                Some(x) => x,
+                None => continue,
+            };
+            let bases_before = [f.bars[0].base, f.bars[1].base, f.bars[2].base, f.bars[3].base, f.bars[4].base, f.bars[5].base];
+            size_bars(&mut f);
+            // Verify restore: re-read bases, must match.
+            let g = match probe(&acc, bdf) {
+                Some(x) => x,
+                None => {
+                    crate::println!("pci: selftest FAIL reread {:02x}:{:02x}.{}", bus, dev, 0);
+                    return;
+                }
+            };
+            for k in 0..6 {
+                if g.bars[k].base != [bases_before[0], bases_before[1], bases_before[2], bases_before[3], bases_before[4], bases_before[5]][k] {
+                    crate::println!("pci: selftest FAIL restore {:02x}:{:02x}.{}", bus, dev, 0);
+                    return;
+                }
+            }
+            if f.bars.iter().any(|b| b.size != 0) {
+                crate::println!("pci: {:02x}:{:02x}.{} bar0={:#x}/{:#x}", bus, dev, 0, f.bars[0].base, f.bars[0].size);
+            }
+            done += 1;
+            if done >= 8 { break; }
+        }
+        if done >= 8 { break; }
+    }
+    crate::println!("pci: selftest PASS ({} devices sized, restore ok)", done);
+}
