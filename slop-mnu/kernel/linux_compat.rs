@@ -393,24 +393,76 @@ pub unsafe extern "C" fn iowrite16(v: u16, addr: u64) { unsafe { core::ptr::writ
 pub unsafe extern "C" fn iowrite32(v: u32, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u32, v) } }
 
 /* ================= IRQ (accepted, delivery not yet wired) ================= */
-struct IrqReg { used: bool, irq: u32, handler: u64, dev_id: u64 }
-const NO_IRQ: IrqReg = IrqReg { used: false, irq: 0, handler: 0, dev_id: 0 };
-static IRQS: IrqSpinLock<[IrqReg; 32]> = IrqSpinLock::new([NO_IRQ; 32]);
+/* ================= IRQ: thin adapter over Slop IRQ core ================= */
+// Linux irq_handler_t: fn(int irq, void *dev_id) -> irqreturn_t (1=HANDLED).
+// Slop core takes fn(u8, u64)->bool. This trampoline bridges them via a
+// side table keyed by (vector, dev_id); shared IRQs share the vector entry.
+struct LinuxIrq { used: bool, vec: u8, handler: u64, dev_id: u64 }
+const NO_LINUX_IRQ: LinuxIrq = LinuxIrq { used: false, vec: 0, handler: 0, dev_id: 0 };
+static LINUX_IRQS: IrqSpinLock<[LinuxIrq; 32]> = IrqSpinLock::new([NO_LINUX_IRQ; 32]);
+
+fn linux_irq_trampoline(vec: u8, dev_id: u64) -> bool {
+    let h = {
+        let t = LINUX_IRQS.lock();
+        match t.iter().find(|r| r.used && r.vec == vec && r.dev_id == dev_id) {
+            Some(r) => r.handler,
+            None => return false,
+        }
+    };
+    if h == 0 { return false; }
+    let r: i32 = unsafe {
+        let f: unsafe extern "C" fn(i32, u64) -> i32 = core::mem::transmute(h as usize);
+        f(vec as i32, dev_id)
+    };
+    r == 1 // IRQ_HANDLED
+}
+
+pub const IRQF_SHARED: u64 = 0x80;
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn request_irq(irq: u32, _handler: u64, _flags: u64, _name: *const u8, _dev_id: u64) -> i32 {
-    // No IRQ delivery yet (no IOAPIC/MSI routing; Slop IRQ core is future
-    // work). Report ENOSYS so drivers fail probe cleanly instead of hanging
-    // forever waiting for interrupts that can never arrive. Returning success
-    // here would be a dangerous lie.
-    crate::println!("irq: request_irq {} denied (no delivery yet); driver must poll or fail probe", irq);
-    -38 // -ENOSYS
+pub unsafe extern "C" fn request_irq(irq: u32, handler: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
+    if irq >= 256 || handler == 0 { return -22; }
+    let mut nm = [0u8; 32];
+    if !name.is_null() {
+        for i in 0..31 {
+            let b = unsafe { core::ptr::read_volatile(name.add(i)) };
+            if b == 0 { break; }
+            nm[i] = b;
+        }
+    }
+    let shared = (flags & IRQF_SHARED) != 0;
+    {
+        let mut t = LINUX_IRQS.lock();
+        // Duplicate (vec, dev_id) registration without SHARED is -EBUSY.
+        for r in t.iter() {
+            if r.used && r.vec == irq as u8 && r.dev_id == dev_id && !shared {
+                return -16;
+            }
+        }
+        match t.iter_mut().find(|r| !r.used) {
+            Some(r) => { r.used = true; r.vec = irq as u8; r.handler = handler; r.dev_id = dev_id; }
+            None => return -12,
+        }
+    }
+    // Register the Slop trampoline (shared iff driver asked shared).
+    let r = crate::irq::register(irq as u8, linux_irq_trampoline, dev_id, &nm, shared);
+    if r != 0 {
+        let mut t = LINUX_IRQS.lock();
+        for e in t.iter_mut() {
+            if e.used && e.vec == irq as u8 && e.dev_id == dev_id { *e = NO_LINUX_IRQ; }
+        }
+        return r;
+    }
+    0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_irq(_irq: u32, dev_id: u64) {
-    let mut t = IRQS.lock();
+pub unsafe extern "C" fn free_irq(irq: u32, dev_id: u64) {
+    if irq >= 256 { return; }
+    // Slop core waits out in-flight handlers (safe unload).
+    let _ = crate::irq::unregister(irq as u8, dev_id);
+    let mut t = LINUX_IRQS.lock();
     for r in t.iter_mut() {
-        if r.used && r.dev_id == dev_id { *r = NO_IRQ; }
+        if r.used && r.vec == irq as u8 && r.dev_id == dev_id { *r = NO_LINUX_IRQ; }
     }
 }
 
@@ -620,5 +672,50 @@ pub fn selftest_pci_adapter() {
         TEST_DRV.probe = Some(test_probe);
         let rc = pci_register_driver(&raw const TEST_DRV as u64);
         crate::println!("pci: selftest register rc={}", rc);
+    }
+}
+
+static LINUX_TEST_FIRED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+unsafe extern "C" fn linux_test_handler(_irq: i32, dev: u64) -> i32 {
+    if dev == 0x5a5a5a6 {
+        LINUX_TEST_FIRED.store(0x4c495251_51524551, core::sync::atomic::Ordering::SeqCst);
+        return 1; // IRQ_HANDLED
+    }
+    0
+}
+/// Boot self-test: Linux request_irq/free_irq adapter over the Slop core.
+/// Uses TEST_VECTOR (freed by the Slop selftest) with a kernel-side fake
+/// Linux handler, so no module-arg passing is involved.
+pub fn selftest_linux_irq() {
+    use crate::arch::x86_64::apic;
+    let flags: u64;
+    unsafe { core::arch::asm!("pushfq; pop {}", out(reg) flags, options(nomem)) };
+    let was_clear = flags & (1 << 9) == 0;
+    if was_clear { unsafe { core::arch::asm!("sti", options(nomem, nostack, preserves_flags)) }; }
+    LINUX_TEST_FIRED.store(0, core::sync::atomic::Ordering::SeqCst);
+    let h = linux_test_handler as usize as u64;
+    let rc = unsafe { request_irq(apic::TEST_VECTOR as u32, h, 0, b"slotest\0" as *const u8, 0x5a5a5a6) };
+    if rc != 0 {
+        crate::println!("irq: linux adapter selftest register failed rc={}", rc);
+        return;
+    }
+    let me = apic::apic_id();
+    if !apic::send_fixed_ipi(me, apic::TEST_VECTOR) {
+        crate::println!("irq: linux adapter selftest IPI send failed");
+        unsafe { free_irq(apic::TEST_VECTOR as u32, 0x5a5a5a6) };
+        return;
+    }
+    let mut spins = 0u32;
+    while LINUX_TEST_FIRED.load(core::sync::atomic::Ordering::SeqCst) != 0x4c495251_51524551 {
+        core::hint::spin_loop();
+        spins += 1;
+        if spins > 50_000_000 { break; }
+    }
+    unsafe { free_irq(apic::TEST_VECTOR as u32, 0x5a5a5a6) };
+    if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+    if LINUX_TEST_FIRED.load(core::sync::atomic::Ordering::SeqCst) == 0x4c495251_51524551 {
+        crate::println!("irq: linux adapter selftest PASS (module->adapter->core->handler->free)");
+    } else {
+        crate::println!("irq: linux adapter selftest FAIL no dispatch");
     }
 }
