@@ -121,7 +121,7 @@ fn cstr<'a>(tab: &'a [u8], off: usize) -> Result<&'a str, &'static str> {
 
 /* ---- Kernel symbol exports for .ko undefined symbols ---- */
 struct Export { name: &'static str, addr: u64 }
-fn export_table() -> [Export; 72] {
+fn export_table() -> [Export; 74] {
     use crate::linux_compat as lc;
     let e = |n: &'static str, a: u64| Export { name: n, addr: a };
     [
@@ -169,6 +169,8 @@ fn export_table() -> [Export; 72] {
         e("capable", lc::capable as usize as u64),
         e("test_u64_arg", lc::test_u64_arg as usize as u64),
         e("test_store_addr", lc::test_store_addr as usize as u64),
+        e("abi_probe_6", lc::abi_probe_6 as usize as u64),
+        e("abi_verify", lc::abi_verify as usize as u64),
         e("pci_register_simple", lc::pci_register_simple as usize as u64),
         e("__fentry__", lc::ret_thunk_addr()),
         e("__x86_return_thunk", lc::ret_thunk_addr()),
@@ -426,10 +428,19 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
         }
     };
     // Call init: returns 0 on success, negative errno on failure.
+    // DIAG: mask local APIC timer across init to rule out entry/exit clobber.
+    unsafe {
+        let lvt: u32 = crate::arch::x86_64::apic::read(0x320);
+        crate::arch::x86_64::apic::write(0x320, lvt | 0x10000);
+    }
     let rc: i32 = unsafe {
         let f: unsafe extern "C" fn() -> i32 = core::mem::transmute(init as usize);
         f()
     };
+    unsafe {
+        let lvt: u32 = crate::arch::x86_64::apic::read(0x320);
+        crate::arch::x86_64::apic::write(0x320, lvt & !0x10000);
+    }
     if rc != 0 {
         // Unload: unmap + free frames, drop slot.
         unload_pages(base, total_pages);

@@ -380,9 +380,49 @@ pub unsafe extern "C" fn free_irq(_irq: u32, dev_id: u64) {
     }
 }
 
-/* ================= misc ================= */
+/* ================= ABI battery (module calling-convention verification) ================= */
+// Module writes expected values to TEST_STORE, calls abi_probe_* with the
+// same values via registers/stack, then calls abi_verify() (no args) which
+// compares recorded vs expected and prints PASS/FAIL. This measures the
+// calling convention without requiring working arg passing to report.
+#[repr(C)]
+pub struct AbiExpect {
+    pub a0: u64,
+    pub a1: u64,
+    pub a2: u64,
+    pub a3: u64,
+    pub a4: u64,
+    pub a5: u64,
+    pub s0: u64,
+    pub s1: u64,
+}
+static mut ABI_GOT: AbiExpect = AbiExpect { a0: 0, a1: 0, a2: 0, a3: 0, a4: 0, a5: 0, s0: 0, s1: 0 };
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn capable(_cap: i32) -> bool { true }
+pub unsafe extern "C" fn abi_probe_6(a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) {
+    unsafe {
+        ABI_GOT.a0 = a0;
+        ABI_GOT.a1 = a1;
+        ABI_GOT.a2 = a2;
+        ABI_GOT.a3 = a3;
+        ABI_GOT.a4 = a4;
+        ABI_GOT.a5 = a5;
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn abi_verify() -> i32 {
+    unsafe {
+        let exp = &*(&raw const TEST_STORE as *const AbiExpect);
+        let got = &*(&raw const ABI_GOT as *const AbiExpect);
+        let mut ok = true;
+        if got.a0 != exp.a0 { crate::println!("abi: FAIL a0 got {:#x} want {:#x}", got.a0, exp.a0); ok = false; }
+        if got.a1 != exp.a1 { crate::println!("abi: FAIL a1 got {:#x} want {:#x}", got.a1, exp.a1); ok = false; }
+        if got.a2 != exp.a2 { crate::println!("abi: FAIL a2 got {:#x} want {:#x}", got.a2, exp.a2); ok = false; }
+        if got.a3 != exp.a3 { crate::println!("abi: FAIL a3 got {:#x} want {:#x}", got.a3, exp.a3); ok = false; }
+        if got.a4 != exp.a4 { crate::println!("abi: FAIL a4 got {:#x} want {:#x}", got.a4, exp.a4); ok = false; }
+        if got.a5 != exp.a5 { crate::println!("abi: FAIL a5 got {:#x} want {:#x}", got.a5, exp.a5); ok = false; }
+        if ok { crate::println!("abi: PASS all 6 regs"); 0 } else { -1 }
+    }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn test_u64_arg(a: u64, b: u64) -> u64 {
     crate::println!("module: test_u64 got {:#x} {:#x}", a, b);
@@ -414,6 +454,9 @@ pub unsafe extern "C" fn pci_register_simple() -> i32 {
     crate::println!("pci: simple no-match");
     0
 }
+/* ================= misc ================= */
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn capable(_cap: i32) -> bool { true }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn stack_chk_fail() -> ! {
     crate::println!("module: stack protector violation; halting CPU");
