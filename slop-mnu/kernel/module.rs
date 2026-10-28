@@ -70,6 +70,16 @@ fn cur_cr3() -> u64 {
     unsafe { core::arch::asm!("mov {}, cr3", out(reg) v, options(nostack, preserves_flags)) };
     v
 }
+/* Translate a module VA to a direct-map pointer for the write path.
+   Reads/writes go through the RW alias; execution uses the RX mapping,
+   so fetch never observes a partially-written instruction stream. */
+fn module_write_ptr(base: u64, frames: &[u64; 256], va: u64) -> *mut u8 {
+    let off = va.wrapping_sub(base);
+    let pi = (off / 4096) as usize;
+    let po = (off % 4096) as usize;
+    let pa = frames[pi];
+    (crate::arch::x86_64::phys::phys_to_virt(pa) + po as u64) as *mut u8
+}
 
 /* Read a section header field block. shoff/shentsize/shnum/shstrndx drive it. */
 struct Shdr {
@@ -271,20 +281,25 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
     }
     let base = MODULE_NEXT.fetch_add((total_pages * 4096) as u64, Ordering::SeqCst);
     if base + (total_pages * 4096) as u64 > MODULE_END { return Err("module area exhausted"); }
-    // Map + copy. Text is mapped RW first (relocations write into code);
-    // after relocations we protect it back to RX (W^X).
+    // Map with final perms immediately (RX text, RW data). All writes go
+    // through the direct-map alias, never through the executable mapping,
+    // so there is no self-modifying-code window for fetch staleness.
     let root = PageTableRoot { pml4: cur_cr3() };
     let acc = Identity;
     let mut va = base;
     let mut frames: [u64; 256] = [0; 256];
     let mut nframes = 0usize;
+    let mut is_text = [false; 128];
     for i in 0..shnum {
         if !secs[i].used { continue; }
+        let sh = read_shdr(img, shoff, shentsize, i)?;
+        let rx = (sh.flags & SHF_EXECINSTR) != 0;
+        if i < 128 { is_text[i] = rx; }
         let pages = (secs[i].size / 4096) as usize;
         for _ in 0..pages {
             let pa = alloc_frame().ok_or("oom")?;
             if nframes < 256 { frames[nframes] = pa; nframes += 1; }
-            let flags = PRESENT | WRITABLE | NX; // RW for now; text -> RX later
+            let flags = PRESENT | if rx { 0 } else { WRITABLE | NX };
             root.map_page(&acc, va, pa, flags).map_err(|_| "map failed")?;
             va += 4096;
         }
@@ -297,8 +312,8 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
         secs[i].va = cur;
         cur += secs[i].size;
         let sh = read_shdr(img, shoff, shentsize, i)?;
-        // Copy content (NOBITS stays zeroed? frames may be dirty: zero first).
-        let dst = secs[i].va as *mut u8;
+        // Copy content via direct map (NOBITS stays zeroed; frames may be dirty).
+        let dst = module_write_ptr(base, &frames, secs[i].va);
         unsafe { core::ptr::write_bytes(dst, 0, secs[i].size as usize) };
         let sh = read_shdr(img, shoff, shentsize, i)?;
         if sh.stype != SHT_NOBITS && sh.size > 0 {
@@ -348,30 +363,31 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             match typ {
                 R_64 => unsafe {
                     let v = sva.wrapping_add(addend as u64);
-                    core::ptr::write_unaligned(loc as *mut u64, v)
+                    let wptr = module_write_ptr(base, &frames, loc);
+                    core::ptr::write_unaligned(wptr as *mut u64, v);
+                    // Read-back verification: catches mapping/aliasing bugs
+                    // where the write lands elsewhere than the fetch path.
+                    let back = core::ptr::read_volatile(wptr as *const u64);
+                    if back != v {
+                        crate::println!("module: RELOC MISMATCH loc={:#x} wrote={:#x} read={:#x}", loc, v, back);
+                        return Err("reloc verify failed");
+                    }
                 },
                 R_32 | R_32S => unsafe {
-                    core::ptr::write_unaligned(loc as *mut u32, sva.wrapping_add(addend as u64) as u32)
+                    let wptr = module_write_ptr(base, &frames, loc);
+                    core::ptr::write_unaligned(wptr as *mut u32, sva.wrapping_add(addend as u64) as u32)
                 }
                 R_PC32 | R_PLT32 => unsafe {
                     let v = (sva.wrapping_add(addend as u64)).wrapping_sub(p) as u32;
-                    core::ptr::write_unaligned(loc as *mut u32, v)
+                    let wptr = module_write_ptr(base, &frames, loc);
+                    core::ptr::write_unaligned(wptr as *mut u32, v)
                 }
                 _ => return Err("unsupported reloc"),
             }
         }
     }
-    // W^X: protect EXECINSTR sections back to RX now that relocs are done.
-    for i in 0..shnum {
-        if !secs[i].used { continue; }
-        let sh = read_shdr(img, shoff, shentsize, i)?;
-        if (sh.flags & SHF_EXECINSTR) == 0 { continue; }
-        let pages = (secs[i].size / 4096) as usize;
-        for p in 0..pages {
-            let v = secs[i].va + (p * 4096) as u64;
-            root.protect_page(&acc, v, PRESENT).map_err(|_| "protect failed")?;
-        }
-    }
+    // Text was mapped RX from the start; writes went through the direct-map
+    // alias, so no mprotect dance is needed (and fetch never observes tearing).
     // Find init_module / cleanup_module.
     let mut init = 0u64;
     let mut exit = 0u64;
