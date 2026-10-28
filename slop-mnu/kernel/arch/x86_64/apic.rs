@@ -11,12 +11,12 @@ static mut LAPIC: u64 = 0;
 static TICKS: AtomicU64 = AtomicU64::new(0);
 
 #[inline]
-unsafe fn write(off: u64, v: u32) {
+pub(crate) unsafe fn write(off: u64, v: u32) {
     unsafe { ((LAPIC + off) as *mut u32).write_volatile(v) }
 }
 
 #[inline]
-unsafe fn read(off: u64) -> u32 {
+pub(crate) unsafe fn read(off: u64) -> u32 {
     unsafe { ((LAPIC + off) as *const u32).read_volatile() }
 }
 
