@@ -230,6 +230,13 @@ fn drv_name(drv: u64) -> [u8; 48] {
    The opaque cookie is the Linux pci_driver address; we rebuild a compat
    pci_dev (vendor/device/BDF filled, rest zeroed) and invoke the driver's
    probe with the matching Linux ID entry. */
+static LINUX_PCI_DRVS: IrqSpinLock<[u64; 16]> = IrqSpinLock::new([0; 16]);
+fn track_linux_pci_drv(drv: u64) {
+    if drv == 0 { return; }
+    let mut t = LINUX_PCI_DRVS.lock();
+    if t.iter().any(|&d| d == drv) { return; }
+    if let Some(s) = t.iter_mut().find(|s| **s == 0) { *s = drv; }
+}
 fn slop_pci_probe_shim(bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, opaque: u64) -> i32 {
     if opaque == 0 { return -22; }
     let lp = unsafe { &*(opaque as *const PciDriver) };
@@ -287,6 +294,7 @@ pub unsafe extern "C" fn pci_register_driver(drv: u64) -> i32 {
         count += 1;
     }
     if count == 0 { return -22; }
+    track_linux_pci_drv(drv);
     0
 }
 
@@ -767,3 +775,43 @@ pub unsafe extern "C" fn dma_map_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dma_unmap_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) {}
+
+/* Force-drop every Linux-side IRQ registration (module unload / init-failure
+   safety net). Slop core waits out in-flight handlers, so no use-after-free.
+   Slop-native drivers use the Slop core directly and are unaffected. */
+pub fn force_unregister_all_irqs() {
+    let vecs: [(u8, u64); 32] = {
+        let t = LINUX_IRQS.lock();
+        let mut out = [(0u8, 0u64); 32];
+        let mut n = 0usize;
+        for r in t.iter() {
+            if r.used && n < 32 { out[n] = (r.vec, r.dev_id); n += 1; }
+        }
+        out
+    };
+    for (v, d) in vecs.iter() {
+        if *v != 0 || *d != 0 {
+            let _ = crate::irq::unregister(*v, *d);
+            let mut t = LINUX_IRQS.lock();
+            for r in t.iter_mut() {
+                if r.used && r.vec == *v && r.dev_id == *d { *r = NO_LINUX_IRQ; }
+            }
+        }
+    }
+}
+/* Force-drop every Linux-side PCI registration (same rationale as IRQ).
+   Only modules use this path; Slop-native drivers are unaffected. */
+pub fn force_unregister_all_pci() {
+    let drvs = {
+        let mut t = LINUX_PCI_DRVS.lock();
+        let mut out = [0u64; 16];
+        out.copy_from_slice(&t[..]);
+        for d in t.iter_mut() { *d = 0; }
+        out
+    };
+    for drv in drvs.iter() {
+        if *drv != 0 {
+            crate::driver::pci::unregister_slop_driver(*drv);
+        }
+    }
+}

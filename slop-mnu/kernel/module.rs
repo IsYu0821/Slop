@@ -450,7 +450,10 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
         crate::arch::x86_64::apic::write(0x320, lvt & !0x10000);
     }
     if rc != 0 {
-        // Unload: unmap + free frames, drop slot.
+        // Unload: unmap + free frames, drop slot. Also drop any IRQ/PCI the
+        // failed init registered (exit won't run, so no normal cleanup).
+        crate::linux_compat::force_unregister_all_irqs();
+        crate::linux_compat::force_unregister_all_pci();
         unload_pages(base, total_pages);
         let mut mods = MODS.lock();
         mods[slot] = EMPTY_MOD;
@@ -491,7 +494,17 @@ pub fn unload(name: &str) -> Result<(), i64> {
             f();
         }
     }
+    // Unload safety net: drop any Linux IRQ/PCI registrations the module left
+    // behind (Slop core waits out in-flight handlers; no UAF). Slop-native
+    // drivers are unaffected (separate paths). Report DMA leaks (don't
+    // silently free in-use buffers; that would corrupt ongoing transfers).
+    crate::linux_compat::force_unregister_all_irqs();
+    crate::linux_compat::force_unregister_all_pci();
     crate::linux_compat::pci_unregister_for_module();
+    let live = crate::dma::live_maps();
+    if live != 0 {
+        crate::println!("module: {} unload with {} live DMA mappings (leaked, not force-freed)", name, live);
+    }
     unload_pages(base, pages);
     crate::println!("module: {} unloaded", name);
     Ok(())
