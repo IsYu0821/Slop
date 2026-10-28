@@ -36,6 +36,9 @@ pub mod vm;
 pub mod wait_queue;
 pub mod usercopy;
 pub mod vdso;
+pub mod kheap;
+pub mod module;
+pub mod linux_compat;
 
 #[repr(align(16))]
 struct Stack([u8; 131072]);

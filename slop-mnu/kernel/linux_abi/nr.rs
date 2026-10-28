@@ -51,3 +51,5 @@ pub const IO_URING_SETUP:u64=425; pub const IO_URING_ENTER:u64=426; pub const IO
 pub const SETSOCKOPT:u64=54; pub const GETSOCKOPT:u64=55; pub const SENDMSG:u64=46; pub const RECVMSG:u64=47; pub const ACCEPT4:u64=288;
 pub const SENDMMSG:u64=307; pub const RECVMMSG:u64=299;
 pub const PIDFD_OPEN:u64=434; pub const PIDFD_SEND_SIGNAL:u64=424; pub const PIDFD_GETFD:u64=438;
+pub const CREATE_MODULE:u64=174; pub const INIT_MODULE:u64=175; pub const DELETE_MODULE:u64=176;
+pub const FINIT_MODULE:u64=313;

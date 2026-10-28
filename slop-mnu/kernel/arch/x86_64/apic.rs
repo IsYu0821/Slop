@@ -215,7 +215,8 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
        EOI only. Full path below runs on the BSP. */
     if crate::smp::current_cpu()!=crate::smp::bsp_slot(){
         crate::task::note_timer_tick();
-        TICKS.fetch_add(1, Ordering::Relaxed);
+    TICKS.fetch_add(1, Ordering::Relaxed);
+    crate::linux_compat::tick_jiffies();
         /* DIAG-MS93: dump LAPIC state on the first AP tick. */
         static DIAG_DONE: AtomicU64 = AtomicU64::new(0);
         if DIAG_DONE.swap(1, Ordering::Relaxed)==0{
