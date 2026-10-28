@@ -19,6 +19,8 @@ pub fn init(){
  crate::irq::selftest_irq_dispatch();
  // Linux IRQ adapter self-test over the Slop core (no module needed).
  crate::linux_compat::selftest_linux_irq();
+ // Slop DMA core self-test (coherent + streaming + mask + leak check).
+ crate::dma::selftest_dma();
  // Slop PCI core self-test: synthetic Linux driver to validate the
  // Linux-to-Slop adapter path (register/match/probe) without a module.
  crate::linux_compat::selftest_pci_adapter();

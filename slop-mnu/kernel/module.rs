@@ -121,7 +121,7 @@ fn cstr<'a>(tab: &'a [u8], off: usize) -> Result<&'a str, &'static str> {
 
 /* ---- Kernel symbol exports for .ko undefined symbols ---- */
 struct Export { name: &'static str, addr: u64 }
-fn export_table() -> [Export; 74] {
+fn export_table() -> [Export; 82] {
     use crate::linux_compat as lc;
     let e = |n: &'static str, a: u64| Export { name: n, addr: a };
     [
@@ -169,6 +169,14 @@ fn export_table() -> [Export; 74] {
         e("capable", lc::capable as usize as u64),
         e("test_u64_arg", lc::test_u64_arg as usize as u64),
         e("test_store_addr", lc::test_store_addr as usize as u64),
+        e("dma_alloc_coherent", lc::dma_alloc_coherent as usize as u64),
+        e("dma_free_coherent", lc::dma_free_coherent as usize as u64),
+        e("dma_map_single", lc::dma_map_single as usize as u64),
+        e("dma_unmap_single", lc::dma_unmap_single as usize as u64),
+        e("dma_sync_single_for_cpu", lc::dma_sync_single_for_cpu as usize as u64),
+        e("dma_sync_single_for_device", lc::dma_sync_single_for_device as usize as u64),
+        e("dma_map_sg", lc::dma_map_sg as usize as u64),
+        e("dma_unmap_sg", lc::dma_unmap_sg as usize as u64),
         e("abi_probe_6", lc::abi_probe_6 as usize as u64),
         e("abi_verify", lc::abi_verify as usize as u64),
         e("pci_register_simple", lc::pci_register_simple as usize as u64),

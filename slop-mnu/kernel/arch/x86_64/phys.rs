@@ -16,6 +16,30 @@ pub fn virt_to_phys(va:u64)->u64{
     let root=super::paging::PageTableRoot::current();
     root.translate(&Identity,va).map(|e|(e&super::paging::ADDR)|(va&0xfff)).unwrap_or(0)
 }
+/// Full VA→PA walk including 1 GiB / 2 MiB huge pages (the direct map uses
+/// 1 GiB pages, which `translate` rejects). Used by the Slop DMA core, which
+/// must resolve direct-mapped buffers without direct-map arithmetic.
+pub fn virt_to_phys_full(va:u64)->u64{
+    use super::paging::{PageTableRoot, ADDR, PRESENT};
+    let root=PageTableRoot::current();
+    let acc=Identity;
+    let t0=unsafe{acc.table(root.pml4)};
+    let e0=t0[((va>>39)&511)as usize];
+    if e0&PRESENT==0{return 0}
+    if e0&(1<<7)!=0{return (e0&ADDR)|(va&0x3fff_ffff)}
+    let t1=unsafe{acc.table(e0&ADDR)};
+    let e1=t1[((va>>30)&511)as usize];
+    if e1&PRESENT==0{return 0}
+    if e1&(1<<7)!=0{return (e1&ADDR)|(va&0x1f_ffff)}
+    let t2=unsafe{acc.table(e1&ADDR)};
+    let e2=t2[((va>>21)&511)as usize];
+    if e2&PRESENT==0{return 0}
+    if e2&(1<<7)!=0{return (e2&ADDR)|(va&0x1f_ffff)}
+    let t3=unsafe{acc.table(e2&ADDR)};
+    let e3=t3[((va>>12)&511)as usize];
+    if e3&PRESENT==0{return 0}
+    e3&ADDR
+}
 pub struct Identity;
 impl PhysAccess for Identity {
     unsafe fn table(&self, pa:u64)->&mut[u64;512] {

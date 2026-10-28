@@ -40,6 +40,7 @@ pub mod kheap;
 pub mod module;
 pub mod linux_compat;
 pub mod irq;
+pub mod dma;
 
 #[repr(align(16))]
 struct Stack([u8; 131072]);

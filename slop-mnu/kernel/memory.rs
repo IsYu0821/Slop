@@ -29,6 +29,29 @@ pub fn alloc_frame()->Option<u64>{
 
 pub fn free_frame(pa:u64)->Result<(),i64>{if pa&(PAGE_SIZE-1)!=0{return Err(crate::errno::EINVAL)}let mut s=ALLOC.lock();if s.free_len==RECYCLED{return Err(crate::errno::ENOMEM)}if s.free[..s.free_len].contains(&pa){return Err(crate::errno::EINVAL)}let i=s.free_len;s.free[i]=pa;s.free_len+=1;Ok(())}
 
+/* Contiguous physical run for coherent DMA (Slop DMA core). Bump-allocated
+   from range tails so the frames are guaranteed consecutive; freed pages go
+   back to the general free list (reuse need not stay contiguous). */
+pub fn alloc_contiguous(pages: usize)->Option<u64>{
+ if pages==0||pages>1024{return None}
+ let mut base=None;
+ {
+  let mut s=ALLOC.lock();
+  let want=(pages as u64)*PAGE_SIZE;
+  for i in 0..s.len{
+   let r=s.ranges[i];
+   if r.end>=r.next&&r.end-r.next>=want{s.ranges[i].next=r.next+want;base=Some(r.next);break}
+  }
+ }
+ let b=base?;
+ for k in 0..pages{
+  let pa=b+(k as u64)*PAGE_SIZE;
+  let idx=(pa/PAGE_SIZE)as usize;
+  if idx<MAX_FRAMES{REFCOUNTS.lock()[idx]=1;}
+ }
+ Some(b)
+}
+
 /* Total and free physical frames, for /proc/meminfo and sysinfo. */
 pub fn frame_stats()->(u64,u64){let s=ALLOC.lock();let mut free=0u64;for r in &s.ranges[..s.len]{free=free.saturating_add((r.end-r.next)/PAGE_SIZE);}(s.total,free.saturating_add(s.free_len as u64))}
 

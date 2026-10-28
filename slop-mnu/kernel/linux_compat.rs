@@ -719,3 +719,51 @@ pub fn selftest_linux_irq() {
         crate::println!("irq: linux adapter selftest FAIL no dispatch");
     }
 }
+
+/* ================= DMA: thin adapters over Slop DMA core ================= */
+// dma_mask is u64 max (device-specific masks are future work with real BARs).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_alloc_coherent(_dev: u64, size: usize, dma_handle: *mut u64, _gfp: u32) -> *mut u8 {
+    if dma_handle.is_null() || size == 0 || size > 4 * 1024 * 1024 { return core::ptr::null_mut(); }
+    match crate::dma::alloc_coherent(size) {
+        Some((va, pa)) => {
+            unsafe { core::ptr::write_unaligned(dma_handle, pa) };
+            va as *mut u8
+        }
+        None => core::ptr::null_mut(),
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_free_coherent(_dev: u64, size: usize, vaddr: *mut u8, bus: u64) {
+    if vaddr.is_null() { return; }
+    let _ = vaddr;
+    crate::dma::free_coherent(0, bus, size);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_map_single(_dev: u64, ptr: *mut u8, size: usize, dir: u32) -> u64 {
+    if ptr.is_null() || size == 0 { return crate::dma::DMA_MAPPING_ERROR; }
+    // Slop DMA core validates contiguity via page tables (no casts) and
+    // enforces a full 64-bit mask here; per-device masks ride with BARs later.
+    crate::dma::map_single(ptr as u64, size, dir, u64::MAX)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_unmap_single(_dev: u64, bus: u64, size: usize, dir: u32) {
+    crate::dma::unmap_single(bus, size, dir);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_sync_single_for_cpu(_dev: u64, bus: u64, size: usize, dir: u32) {
+    crate::dma::sync_single(bus, size, dir);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_sync_single_for_device(_dev: u64, bus: u64, size: usize, dir: u32) {
+    crate::dma::sync_single(bus, size, dir);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_map_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) -> i32 {
+    // Scatter-gather needs exact struct scatterlist layout pinning
+    // (CONFIG_NEED_SG_DMA_* dependent); fail safe until then.
+    crate::println!("dma: map_sg not yet wired (needs sg layout); returning 0");
+    0
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dma_unmap_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) {}
