@@ -348,9 +348,6 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             match typ {
                 R_64 => unsafe {
                     let v = sva.wrapping_add(addend as u64);
-                    if loc >= 0xffff900010004030 && loc < 0xffff900010004040 {
-                        crate::println!("module: dbg loc={:#x} sym={} shndx={} sval={:#x} v={:#x}", loc, sym, sshndx, sval, v);
-                    }
                     core::ptr::write_unaligned(loc as *mut u64, v)
                 },
                 R_32 | R_32S => unsafe {

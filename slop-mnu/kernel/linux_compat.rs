@@ -384,9 +384,9 @@ pub unsafe extern "C" fn free_irq(_irq: u32, dev_id: u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn capable(_cap: i32) -> bool { true }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn test_u64_arg(x: u64, y: u64) -> u64 {
-    crate::println!("module: test_u64 got {:#x} {:#x}", x, y);
-    x.wrapping_add(y)
+pub unsafe extern "C" fn test_u64_arg(x: u64) -> u64 {
+    crate::println!("module: test_u64 got {:#x}", x);
+    x.wrapping_add(1)
 }
 pub static mut TEST_STORE: [u64; 8] = [0; 8];
 #[unsafe(no_mangle)]
