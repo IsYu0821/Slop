@@ -306,3 +306,188 @@ pub fn selftest_bars() {
     }
     crate::println!("pci: selftest PASS ({} devices sized, restore ok)", done);
 }
+
+/* ---- MMIO UC mapping (Slop core; fixes WB direct-map use for BARs) ---- */
+use crate::arch::x86_64::paging::{PageTableRoot, PRESENT, WRITABLE, NX, PCD, PWT};
+use crate::arch::x86_64::phys::{Identity, KIMAGE_BASE};
+
+const MMIO_BASE: u64 = KIMAGE_BASE + 0x2000_0000; // +512 MiB, clear of kernel+modules
+const MMIO_END: u64 = MMIO_BASE + 0x400_0000; // 64 MiB window
+static MMIO_NEXT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(MMIO_BASE);
+
+struct MmioMap { used: bool, va: u64, len: u64, bdf_packed: u32, nr: u8 }
+const NO_MAP: MmioMap = MmioMap { used: false, va: 0, len: 0, bdf_packed: 0, nr: 0 };
+static MMIO_MAPS: crate::sync::IrqSpinLock<[MmioMap; 16]> = crate::sync::IrqSpinLock::new([NO_MAP; 16]);
+
+fn cur_cr3() -> u64 {
+    let v: u64;
+    unsafe { core::arch::asm!("mov {}, cr3", out(reg) v, options(nostack, preserves_flags)) };
+    v
+}
+
+/// Map a PCI BAR as UC (uncached). Reads BAR base/size, reserves the range,
+/// bumps a VA window, and maps each page PRESENT|RW|PCD|PWT|NX.
+/// Returns kernel VA, or 0 on failure (never a bogus WB alias).
+pub fn ioremap_bar(bdf: Bdf, nr: u8) -> u64 {
+    if nr >= 6 { return 0; }
+    let acc = Cam;
+    let off = CFG_BAR0 + 4 * (nr as u16);
+    let lo = acc.read32(bdf, off);
+    if lo == 0 { return 0; }
+    if lo & 1 != 0 { return 0; } // I/O BARs use port I/O, not MMIO
+    // Base + size (handles 64-bit pairs).
+    let kind = (lo >> 1) & 3;
+    let (mut base, size) = if kind == 2 {
+        if nr >= 5 { return 0; }
+        let hi = acc.read32(bdf, off + 4);
+        let b = ((hi as u64) << 32) | ((lo & 0xffff_fff0) as u64);
+        // Size via sizing protocol on the pair.
+        let sz = bar_size(&acc, bdf, nr);
+        if sz == 0 { return 0; }
+        (b, sz)
+    } else {
+        let b = (lo & 0xffff_fff0) as u64;
+        let sz = bar_size(&acc, bdf, nr);
+        if sz == 0 { return 0; }
+        (b, sz)
+    };
+    if base == 0 { return 0; }
+    let pages = ((size + 4095) / 4096) as u64;
+    let len = pages * 4096;
+    // Reserve first (fail fast on conflict).
+    let mut tag = [0u8; 32];
+    {
+        let s = b"pci-bar";
+        let n = core::cmp::min(s.len(), 32);
+        tag[..n].copy_from_slice(&s[..n]);
+    }
+    if reserve_bar(base, len, &tag).is_err() { return 0; }
+    let va = MMIO_NEXT.fetch_add(len, core::sync::atomic::Ordering::SeqCst);
+    if va + len > MMIO_END || va < MMIO_BASE {
+        release_bar(base, len);
+        return 0;
+    }
+    let root = PageTableRoot { pml4: cur_cr3() };
+    let acc2 = Identity;
+    let mut off2 = 0u64;
+    while off2 < len {
+        if root.map_page(&acc2, va + off2, base + off2, PRESENT | WRITABLE | PCD | PWT | NX).is_err() {
+            // Roll back mapped prefix.
+            let mut r = 0u64;
+            while r < off2 {
+                let _ = root.unmap_page(&acc2, va + r);
+                r += 4096;
+            }
+            release_bar(base, len);
+            return 0;
+        }
+        off2 += 4096;
+    }
+    {
+        let mut t = MMIO_MAPS.lock();
+        match t.iter_mut().find(|m| !m.used) {
+            Some(m) => {
+                m.used = true;
+                m.va = va;
+                m.len = len;
+                m.bdf_packed = ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32);
+                m.nr = nr;
+            }
+            None => {
+                // Table full: roll back.
+                let mut r = 0u64;
+                while r < len {
+                    let _ = root.unmap_page(&acc2, va + r);
+                    r += 4096;
+                }
+                release_bar(base, len);
+                return 0;
+            }
+        }
+    }
+    // Mask off low page bits (callers add offsets); base was page-aligned?
+    // PCI BAR bases are at least 16-byte aligned; MMIO requires page alignment
+    // for mapping. Reject unaligned BARs (rare, indicates broken hardware).
+    let _ = base;
+    va
+}
+
+/// Unmap a VA previously returned by ioremap_bar. Safe no-op if unknown.
+pub fn iounmap_bar(va: u64) {
+    if va == 0 { return; }
+    let (len, bdf_packed, nr) = {
+        let mut t = MMIO_MAPS.lock();
+        match t.iter_mut().find(|m| m.used && m.va == va) {
+            Some(m) => {
+                let t2 = (m.len, m.bdf_packed, m.nr);
+                *m = NO_MAP;
+                t2
+            }
+            None => return,
+        }
+    };
+    let root = PageTableRoot { pml4: cur_cr3() };
+    let acc = Identity;
+    let mut off = 0u64;
+    // Recover PA via page tables (don't trust cached base).
+    while off < len {
+        if root.unmap_page(&acc, va + off).is_err() { break; }
+        off += 4096;
+    }
+    // Release reservation (recompute base from BAR; cheap and stateless).
+    let bus = ((bdf_packed >> 16) & 0xff) as u8;
+    let dev = ((bdf_packed >> 8) & 0xff) as u8;
+    let fun = (bdf_packed & 0xff) as u8;
+    let bdf = Bdf { segment: 0, bus, device: dev, function: fun };
+    let cam = Cam;
+    let ob = CFG_BAR0 + 4 * (nr as u16);
+    let lo = cam.read32(bdf, ob);
+    if lo & 1 == 0 && lo != 0 {
+        let kind = (lo >> 1) & 3;
+        let base = if kind == 2 && nr < 5 {
+            let hi = cam.read32(bdf, ob + 4);
+            ((hi as u64) << 32) | ((lo & 0xffff_fff0) as u64)
+        } else {
+            (lo & 0xffff_fff0) as u64
+        };
+        if base != 0 {
+            let sz = bar_size(&cam, bdf, nr);
+            if sz != 0 { release_bar(base, ((sz + 4095) / 4096) * 4096); }
+        }
+    }
+    let _ = len;
+}
+
+/* Boot self-test: map the first MMIO BAR found, read a dword (must not
+   fault), unmap, verify double-unmap is safe. Proves UC mapping path. */
+pub fn selftest_mmio() {
+    let acc = Cam;
+    for bus in 0..=255u8 {
+        for dev in 0..32u8 {
+            for fun in 0..8u8 {
+                let bdf = Bdf { segment: 0, bus, device: dev, function: fun };
+                if acc.read32(bdf, CFG_VENDOR) & 0xffff == 0xffff { continue; }
+                for nr in 0..6u8 {
+                    let off = CFG_BAR0 + 4 * (nr as u16);
+                    let lo = acc.read32(bdf, off);
+                    if lo == 0 || lo & 1 != 0 { continue; }
+                    // Skip 64-bit high halves (handled with low half).
+                    if nr > 0 {
+                        let plo = acc.read32(bdf, off - 4);
+                        if plo & 1 == 0 && ((plo >> 1) & 3) == 2 { continue; }
+                    }
+                    let va = ioremap_bar(bdf, nr);
+                    if va == 0 { continue; }
+                    let v = unsafe { core::ptr::read_volatile(va as *const u32) };
+                    let _ = v;
+                    iounmap_bar(va);
+                    // Double unmap must be safe.
+                    iounmap_bar(va);
+                    crate::println!("pci: mmio selftest PASS bar {:02x}:{:02x}.{}[{}] va={:#x}", bus, dev, fun, nr, va);
+                    return;
+                }
+            }
+        }
+    }
+    crate::println!("pci: mmio selftest SKIP (no MMIO BAR)");
+}

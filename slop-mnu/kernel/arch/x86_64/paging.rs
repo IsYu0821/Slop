@@ -1,5 +1,8 @@
 use crate::memory; pub const PAGE:u64=4096;
 pub const PRESENT:u64=1;pub const WRITABLE:u64=1<<1;pub const USER:u64=1<<2;pub const GLOBAL:u64=1<<8;pub const NX:u64=1<<63;pub const ADDR:u64=0x000f_ffff_ffff_f000;
+/* x86 PAT index bits for the page-table entry (default PAT MSR):
+   PWT=bit3, PCD=bit4. UC (uncached, for MMIO) is PCD|PWT. */
+pub const PWT:u64=1<<3;pub const PCD:u64=1<<4;
 pub trait PhysAccess{unsafe fn table(&self,pa:u64)->&mut[u64;512];}
 pub struct PageTableRoot{pub pml4:u64}
 impl PageTableRoot{

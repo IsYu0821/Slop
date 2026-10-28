@@ -26,4 +26,6 @@ pub fn init(){
  crate::linux_compat::selftest_pci_adapter();
  // Slop PCI BAR sizing self-test (restore-checked, no crash).
  crate::driver::pci::selftest_bars();
+ // Slop MMIO UC mapping self-test (map/read/unmap/double-unmap safe).
+ crate::driver::pci::selftest_mmio();
 }

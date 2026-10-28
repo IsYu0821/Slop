@@ -74,6 +74,9 @@ pub struct Transport{
  pub io:u16,
  /// The base address of every memory mapped bar.
  pub bar_base:[u64;6],
+ /// UC-mapped VA for each BAR (0 if PIO/unmapped). Slop PCI core owns the
+ /// mapping; accesses MUST use these, never the WB direct-map alias.
+ pub bar_va:[u64;6],
  /// The offset of the common configuration inside its bar.
  pub common:u64,
  /// The bar that carries the common configuration.
@@ -89,13 +92,13 @@ pub struct Transport{
  pub notify_bar:u32,
  /// The number of queues the device offers.
  pub queues:u16,
- /// The physical address of the notification area.
+ /// The UC-mapped VA of the notification area (Slop PCI core).
  pub notify_base:u64,
 }
 
 impl Transport{
  /// The transport of a device that speaks the legacy port I/O interface.
- pub const fn legacy(io:u16)->Self{Self{modern:false,io,bar_base:[0;6],common:0,common_bar:0,device_cfg:0,device_bar:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0}}
+ pub const fn legacy(io:u16)->Self{Self{modern:false,io,bar_base:[0;6],bar_va:[0;6],common:0,common_bar:0,device_cfg:0,device_bar:0,notify_mult:0,notify_off:0,notify_bar:0,queues:0,notify_base:0}}
 }
 
 /// Reads a capability sized byte range from the configuration space.
@@ -169,9 +172,30 @@ pub fn probe(device:u16)->Option<Transport>{
   let (common,dev_cfg,mult,noff,nbar,cbar,dbar)=modern_caps(found.bdf)?;
   let mut bar_base=[0u64;6];
   for i in 0..6{bar_base[i]=found.bars[i].base}
+  // Map MMIO BARs UC via the Slop PCI core (never the WB direct-map alias).
+  // Map each unique BAR once; shared BARs reuse the same mapping.
+  let mut bar_va=[0u64;6];
+  for &b in &[cbar, dbar, nbar] {
+      if (b as usize) < 6 && bar_va[b as usize] == 0 {
+          let v = crate::driver::pci::ioremap_bar(found.bdf, b as u8);
+          if v == 0 { 
+              // Unmap what we mapped so far, then fail (no WB fallback).
+              for k in 0..6 {
+                  if bar_va[k] != 0 { crate::driver::pci::iounmap_bar(bar_va[k]); }
+              }
+              return None;
+          }
+          bar_va[b as usize] = v;
+      }
+  }
   let mmio=bar0.base;
-  let notify_base=if nbar<6{bar_base[nbar as usize]}else{mmio};
-  let mut t=Transport{modern:true,io:0,bar_base,common,common_bar:cbar,device_cfg:dev_cfg,device_bar:dbar,notify_mult:mult,notify_off:noff,notify_bar:nbar,queues:0,notify_base};
+  // notify_base holds a VA (mapped) for the UC path, matching bar_va[].
+  let notify_base_va = if (nbar as usize) < 6 { bar_va[nbar as usize] } else { 0 };
+  if (nbar as usize) < 6 && notify_base_va == 0 { 
+      for k in 0..6 { if bar_va[k] != 0 { crate::driver::pci::iounmap_bar(bar_va[k]); } }
+      return None;
+  }
+  let mut t=Transport{modern:true,io:0,bar_base,bar_va,common,common_bar:cbar,device_cfg:dev_cfg,device_bar:dbar,notify_mult:mult,notify_off:noff,notify_bar:nbar,queues:0,notify_base:notify_base_va};
   t.queues=unsafe{core::ptr::read_volatile(t.common_ptr(CFG_NUM_QUEUES)as*const u16)};
   Some(t)
  }else{
@@ -182,8 +206,9 @@ pub fn probe(device:u16)->Option<Transport>{
 
 impl Transport{
  #[inline]fn bar_base(&self,bar:u32)->u64{if (bar as usize)<6{self.bar_base[bar as usize]}else{self.bar_base[0]}}
- #[inline]fn common_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.bar_base(self.common_bar)+self.common+off)as*mut u8)}}
- #[inline]fn device_ptr(&self,off:u64)->*mut u8{unsafe{(phys_to_virt(self.bar_base(self.device_bar)+self.device_cfg+off)as*mut u8)}}
+ #[inline]fn bar_va(&self,bar:u32)->u64{if (bar as usize)<6{self.bar_va[bar as usize]}else{0}}
+ #[inline]fn common_ptr(&self,off:u64)->*mut u8{unsafe{(self.bar_va(self.common_bar)+self.common+off)as*mut u8}}
+ #[inline]fn device_ptr(&self,off:u64)->*mut u8{unsafe{(self.bar_va(self.device_bar)+self.device_cfg+off)as*mut u8}}
  /// Reads the device status.
  pub fn status(&self)->u8{if self.modern{unsafe{core::ptr::read_volatile(self.common_ptr(CFG_STATUS))}}else{unsafe{port::inb(self.io+LEGACY_STATUS)}}}
  /// Writes the device status.
@@ -258,7 +283,7 @@ impl Transport{
      multiplier times the queue index. The value written is the queue
      index itself. */
   let addr=self.notify_base+(self.notify_off as u64)+(self.notify_mult as u64)*(index as u64);
-  unsafe{core::ptr::write_volatile(phys_to_virt(addr)as*mut u16,index);}
+  unsafe{core::ptr::write_volatile(addr as *mut u16,index);}
  }
  /// Reads a device specific configuration value.
  pub fn device_config(&self,offset:u64)->u64{
