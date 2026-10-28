@@ -15,9 +15,9 @@ use core::sync::atomic::{AtomicU64, Ordering};
 // The caller passes up to 6 register varargs (SysV: rsi..r9); stack varargs
 // are not read (documented limitation; test drivers avoid them).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+fn format_into(out: &mut [u8], fmt: *const u8, args_in: [u64; 6]) -> usize {
     if fmt.is_null() { return 0; }
-    let mut args = [a, b, c, d, e, f];
+    let mut args = args_in;
     let mut ai = 0usize;
     let mut out = [0u8; 512];
     let mut n = 0usize;
@@ -27,50 +27,53 @@ pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, 
         *ai += 1;
         v
     };
-    let mut push = |out: &mut [u8; 512], n: &mut usize, by: u8| {
+    // total counts the full length (for snprintf return); n counts written.
+    let mut total = 0usize;
+    let mut push = |out: &mut [u8; 512], n: &mut usize, total: &mut usize, by: u8| {
+        *total += 1;
         if *n < out.len() { out[*n] = by; *n += 1; }
     };
-    let push_u64 = |out: &mut [u8; 512], n: &mut usize, mut v: u64, base: u64, upper: bool| {
-        if v == 0 { push(out, n, b'0'); return; }
+    let push_u64 = |out: &mut [u8; 512], n: &mut usize, total: &mut usize, mut v: u64, base: u64, upper: bool| {
+        if v == 0 { push(out, n, &mut *total, b'0'); return; }
         let mut tmp = [0u8; 20];
         let mut l = 0usize;
         while v > 0 { let r = (v % base) as u8; tmp[l] = if r < 10 { b'0' + r } else { (if upper { b'A' } else { b'a' }) + r - 10 }; l += 1; v /= base; }
-        while l > 0 { l -= 1; push(out, n, tmp[l]); }
+        while l > 0 { l -= 1; push(out, n, &mut *total, tmp[l]); }
     };
     loop {
         let ch = unsafe { core::ptr::read_volatile(p) };
         if ch == 0 { break; }
         p = unsafe { p.add(1) };
-        if ch != b'%' { push(&mut out, &mut n, ch); continue; }
+        if ch != b'%' { push(&mut out, &mut n, &mut total, ch); continue; }
         let s = unsafe { core::ptr::read_volatile(p) };
         if s == 0 { break; }
         p = unsafe { p.add(1) };
         match s {
-            b'%' => push(&mut out, &mut n, b'%'),
-            b'c' => push(&mut out, &mut n, next_arg(&mut args, &mut ai) as u8),
+            b'%' => push(&mut out, &mut n, &mut total, b'%'),
+            b'c' => push(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai) as u8),
             b's' => {
                 let sp = next_arg(&mut args, &mut ai) as *const u8;
                 if !sp.is_null() {
                     for i in 0..256 {
                         let by = unsafe { core::ptr::read_volatile(sp.add(i)) };
                         if by == 0 { break; }
-                        push(&mut out, &mut n, by);
+                        push(&mut out, &mut n, &mut total, by);
                     }
                 } else {
-                    for by in b"(null)".iter() { push(&mut out, &mut n, *by); }
+                    for by in b"(null)".iter() { push(&mut out, &mut n, &mut total, *by); }
                 }
             }
             b'd' | b'i' => {
                 let v = next_arg(&mut args, &mut ai) as i64;
-                if v < 0 { push(&mut out, &mut n, b'-'); push_u64(&mut out, &mut n, (-v) as u64, 10, false); }
-                else { push_u64(&mut out, &mut n, v as u64, 10, false); }
+                if v < 0 { push(&mut out, &mut n, &mut total, b'-'); push_u64(&mut out, &mut n, &mut total, (-v) as u64, 10, false); }
+                else { push_u64(&mut out, &mut n, &mut total, v as u64, 10, false); }
             }
-            b'u' => push_u64(&mut out, &mut n, next_arg(&mut args, &mut ai), 10, false),
-            b'x' => push_u64(&mut out, &mut n, next_arg(&mut args, &mut ai), 16, false),
-            b'X' => push_u64(&mut out, &mut n, next_arg(&mut args, &mut ai), 16, true),
+            b'u' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 10, false),
+            b'x' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, false),
+            b'X' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, true),
             b'p' => {
-                push(&mut out, &mut n, b'0'); push(&mut out, &mut n, b'x');
-                push_u64(&mut out, &mut n, next_arg(&mut args, &mut ai), 16, false);
+                push(&mut out, &mut n, &mut total, b'0'); push(&mut out, &mut n, &mut total, b'x');
+                push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, false);
             }
             b'l' => {
                 // %l[dux]: consume length, treat as 64-bit.
@@ -81,20 +84,29 @@ pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, 
                     match s2 {
                         b'd' => {
                             let v = v as i64;
-                            if v < 0 { push(&mut out, &mut n, b'-'); push_u64(&mut out, &mut n, (-v) as u64, 10, false); }
-                            else { push_u64(&mut out, &mut n, v as u64, 10, false); }
+                            if v < 0 { push(&mut out, &mut n, &mut total, b'-'); push_u64(&mut out, &mut n, &mut total, (-v) as u64, 10, false); }
+                            else { push_u64(&mut out, &mut n, &mut total, v as u64, 10, false); }
                         }
-                        b'x' => push_u64(&mut out, &mut n, v, 16, false),
-                        _ => push_u64(&mut out, &mut n, v, 10, false),
+                        b'x' => push_u64(&mut out, &mut n, &mut total, v, 16, false),
+                        _ => push_u64(&mut out, &mut n, &mut total, v, 10, false),
                     }
-                } else { push(&mut out, &mut n, b'%'); push(&mut out, &mut n, b'l'); }
+                } else { push(&mut out, &mut n, &mut total, b'%'); push(&mut out, &mut n, &mut total, b'l'); }
             }
-            _ => { push(&mut out, &mut n, b'%'); push(&mut out, &mut n, s); }
+            _ => { push(&mut out, &mut n, &mut total, b'%'); push(&mut out, &mut n, &mut total, s); }
         }
-        if n >= 500 { break; }
+        if total >= 4096 { break; }
     }
+    // NUL-terminate if room (snprintf semantics; printk ignores the NUL).
+    if n < out.len() { out[n] = 0; }
+    total
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+    let mut out = [0u8; 512];
+    let n_full = format_into(&mut out, fmt, [a, b, c, d, e, f]);
+    let n = core::cmp::min(n_full, 511);
     crate::console::write_bytes(&out[..n]);
-    n as i32
+    n_full as i32
 }
 
 /* ================= kmalloc family (page-granular via kheap) ================= */
@@ -176,16 +188,30 @@ pub struct PciDriver {
     // (further fields ignored: suspend/remove/shutdown/... not called by us)
 }
 // Minimal pci_dev: real prefix (bus_list/bus/subordinate/sysdata/procent/
-// slot/devfn/vendor/device/...) then zeroed. Offsets vendor@60 device@62
-// verified against host headers; irq/resource left for future HW drivers.
+// slot/devfn/vendor/device/...) then Slop-private area. Offsets vendor@60
+// device@62 verified against host headers; irq/resource left for future HW
+// drivers. Bytes 64.. hold Slop's BDF + drvdata (never read by Linux ABI).
 #[repr(C)]
 pub struct PciDev {
     _pad0: [u8; 60],
     pub vendor: u16,
     pub device: u16,
-    _rest: [u8; 448],
+    pub bdf: u32,      // bus<<16 | dev<<8 | func (Slop-private)
+    _pad1: u32,
+    pub drvdata: u64,  // Slop-private (pci_set/get_drvdata)
+    _rest: [u8; 432],
 }
 const _: () = assert!(core::mem::size_of::<PciDev>() == 512);
+impl PciDev {
+    fn bdf_of(&self) -> crate::driver::pci::Bdf {
+        crate::driver::pci::Bdf {
+            segment: 0,
+            bus: ((self.bdf >> 16) & 0xff) as u8,
+            device: ((self.bdf >> 8) & 0xff) as u8,
+            function: (self.bdf & 0xff) as u8,
+        }
+    }
+}
 
 struct PciReg { used: bool, drv: u64, name: [u8; 48] }
 const NO_REG: PciReg = PciReg { used: false, drv: 0, name: [0; 48] };
@@ -284,6 +310,7 @@ fn pci_probe_one(drv: u64, bdf: crate::driver::pci::Bdf, vendor: u16, device: u1
     unsafe {
         (*pd).vendor = vendor;
         (*pd).device = device;
+        (*pd).bdf = ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32);
     }
     // Fill BAR bases + IRQ line/pin from config space for future HW use.
     pci_fill_dev_resources(pd, bdf);
@@ -316,31 +343,79 @@ pub fn pci_unregister_for_module() {
     // (its cleanup_module runs first), so nothing to do here yet.
 }
 
+fn pci_cmd_set(bdf: crate::driver::pci::Bdf, bits: u16, on: bool) {
+    use crate::driver::pci::{Cam, ConfigAccess, CFG_COMMAND};
+    let acc = Cam;
+    let cur = acc.read32(bdf, CFG_COMMAND) as u16;
+    let v = if on { cur | bits } else { cur & !bits };
+    acc.write32(bdf, CFG_COMMAND, v as u32);
+}
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_enable_device(_dev: *mut PciDev) -> i32 { 0 }
+pub unsafe extern "C" fn pci_enable_device(dev: *mut PciDev) -> i32 {
+    if dev.is_null() { return -22; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    use crate::driver::pci::{CMD_IO, CMD_MEM};
+    pci_cmd_set(bdf, CMD_IO | CMD_MEM, true);
+    0
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_disable_device(_dev: *mut PciDev) {}
+pub unsafe extern "C" fn pci_disable_device(dev: *mut PciDev) {
+    if dev.is_null() { return; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    use crate::driver::pci::{CMD_IO, CMD_MEM, CMD_BUS_MASTER};
+    pci_cmd_set(bdf, CMD_IO | CMD_MEM | CMD_BUS_MASTER, false);
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_request_regions(_dev: *mut PciDev, _name: *const u8) -> i32 { 0 }
+pub unsafe extern "C" fn pci_request_regions(_dev: *mut PciDev, _name: *const u8) -> i32 {
+    // No BAR reservation table yet (PCI subsystem step): accept, since Slop
+    // owns all BARs on this single-enumeration platform and hands them out
+    // read-only from config space. Revisit with resource management.
+    0
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pci_release_regions(_dev: *mut PciDev) {}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_set_master(_dev: *mut PciDev) {}
+pub unsafe extern "C" fn pci_set_master(dev: *mut PciDev) {
+    if dev.is_null() { return; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    pci_cmd_set(bdf, crate::driver::pci::CMD_BUS_MASTER, true);
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_clear_master(_dev: *mut PciDev) {}
+pub unsafe extern "C" fn pci_clear_master(dev: *mut PciDev) {
+    if dev.is_null() { return; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    pci_cmd_set(bdf, crate::driver::pci::CMD_BUS_MASTER, false);
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_set_drvdata(_dev: *mut PciDev, _data: u64) {}
+pub unsafe extern "C" fn pci_set_drvdata(dev: *mut PciDev, data: u64) {
+    if dev.is_null() { return; }
+    unsafe { (*dev).drvdata = data; }
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_get_drvdata(_dev: *mut PciDev) -> u64 { 0 }
+pub unsafe extern "C" fn pci_get_drvdata(dev: *mut PciDev) -> u64 {
+    if dev.is_null() { return 0; }
+    unsafe { (*dev).drvdata }
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_ioremap_bar(_dev: *mut PciDev, _nr: u64) -> u64 { 0 }
+pub unsafe extern "C" fn pci_ioremap_bar(_dev: *mut PciDev, nr: u64) -> u64 {
+    // No MMIO mapping yet (needs UC mappings + BAR resource management from
+    // the Slop PCI core). Return NULL so drivers fail probe cleanly instead
+    // of dereferencing a bogus direct-map alias with wrong caching.
+    crate::println!("pci: ioremap_bar{} denied (no UC mapping yet)", nr);
+    0
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pci_iounmap(_dev: *mut PciDev, _addr: u64) {}
 
 /* ================= MMIO ================= */
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ioremap(phys: u64, _size: u64) -> u64 {
-    crate::arch::x86_64::phys::phys_to_virt(phys)
+    // Direct-map aliases are WB-cached RAM mappings; using them for MMIO
+    // silently corrupts device interaction. Until the Slop PCI/DMA core
+    // provides real UC mappings, fail closed so drivers error out cleanly.
+    crate::println!("mmio: ioremap {:#x} denied (no UC mapping yet)", phys);
+    0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn iounmap(_addr: u64) {}
@@ -363,14 +438,13 @@ const NO_IRQ: IrqReg = IrqReg { used: false, irq: 0, handler: 0, dev_id: 0 };
 static IRQS: IrqSpinLock<[IrqReg; 32]> = IrqSpinLock::new([NO_IRQ; 32]);
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn request_irq(irq: u32, handler: u64, _flags: u64, _name: *const u8, dev_id: u64) -> i32 {
-    let mut t = IRQS.lock();
-    match t.iter_mut().find(|r| !r.used) {
-        Some(r) => { r.used = true; r.irq = irq; r.handler = handler; r.dev_id = dev_id; }
-        None => return -12,
-    }
-    crate::println!("irq: handler registered for line {} (delivery not yet wired; poll your device)", irq);
-    0
+pub unsafe extern "C" fn request_irq(irq: u32, _handler: u64, _flags: u64, _name: *const u8, _dev_id: u64) -> i32 {
+    // No IRQ delivery yet (no IOAPIC/MSI routing; Slop IRQ core is future
+    // work). Report ENOSYS so drivers fail probe cleanly instead of hanging
+    // forever waiting for interrupts that can never arrive. Returning success
+    // here would be a dangerous lie.
+    crate::println!("irq: request_irq {} denied (no delivery yet); driver must poll or fail probe", irq);
+    -38 // -ENOSYS
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_irq(_irq: u32, dev_id: u64) {
@@ -519,8 +593,51 @@ pub unsafe extern "C" fn k_strncpy(d: *mut u8, s: *const u8, n: usize) -> *mut u
     d
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_sprintf(_buf: *mut u8, _fmt: *const u8) -> i32 { 0 }
+pub unsafe extern "C" fn k_sprintf(buf: *mut u8, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+    k_snprintf(buf, usize::MAX / 2, fmt, a, b, c, d, e, f)
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_snprintf(_buf: *mut u8, _n: usize, _fmt: *const u8) -> i32 { 0 }
+pub unsafe extern "C" fn k_snprintf(buf: *mut u8, n: usize, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+    if buf.is_null() || n == 0 {
+        // Length-probe path: compute full length without writing.
+        let mut tmp = [0u8; 1];
+        let t = format_into(&mut tmp, fmt, [a, b, c, d, e, f]);
+        // format_into with 1-byte buf still counts full length (capped at 4096 loop bound).
+        let _ = t;
+        // Re-run with a scratch buffer to get the true total (no cap interference).
+        // Simpler: call with a large stack buffer once.
+        let mut big = [0u8; 2048];
+        return format_into(&mut big, fmt, [a, b, c, d, e, f]) as i32;
+    }
+    let cap = core::cmp::min(n, 4096);
+    let dst = unsafe { core::slice::from_raw_parts_mut(buf, cap) };
+    let total = format_into(dst, fmt, [a, b, c, d, e, f]);
+    // Ensure NUL termination within n.
+    if cap > 0 {
+        let w = core::cmp::min(total, cap - 1);
+        unsafe { *buf.add(w) = 0; }
+    }
+    total as i32
+}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_vsnprintf(_buf: *mut u8, _n: usize, _fmt: *const u8) -> i32 { 0 }
+pub unsafe extern "C" fn k_vsnprintf(buf: *mut u8, n: usize, fmt: *const u8, ap: *const u8) -> i32 {
+    // va_list (x86-64 SysV): {gp_offset:u32, fp_offset:u32, overflow:ptr, reg_save:ptr}.
+    // Extract up to 6 GP regs; stack-passed varargs read as zero (documented cap).
+    let mut args = [0u64; 6];
+    if !ap.is_null() {
+        unsafe {
+            let gp = core::ptr::read_unaligned(ap as *const u32) as usize;
+            let reg = core::ptr::read_unaligned((ap as *const u8).add(16) as *const *const u8);
+            if !reg.is_null() {
+                // args[k] = reg_save[gp/8 + k]; beyond 6 GP regs read as zero.
+                for k in 0..6 {
+                    let idx = gp / 8 + k;
+                    args[k] = if idx < 6 {
+                        core::ptr::read_unaligned(reg.add(idx * 8) as *const u64)
+                    } else { 0 };
+                }
+            }
+        }
+    }
+    k_snprintf(buf, n, fmt, args[0], args[1], args[2], args[3], args[4], args[5])
+}
