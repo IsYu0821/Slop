@@ -132,7 +132,7 @@ fn cstr<'a>(tab: &'a [u8], off: usize) -> Result<&'a str, &'static str> {
 
 /* ---- Kernel symbol exports for .ko undefined symbols ---- */
 struct Export { name: &'static str, addr: u64 }
-fn export_table() -> [Export; 84] {
+fn export_table() -> [Export; 94] {
     use crate::linux_compat as lc;
     let e = |n: &'static str, a: u64| Export { name: n, addr: a };
     [
@@ -198,6 +198,16 @@ fn export_table() -> [Export; 84] {
         e("__fentry__", lc::ret_thunk_addr()),
         e("__x86_return_thunk", lc::ret_thunk_addr()),
         e("__stack_chk_fail", lc::stack_chk_fail as usize as u64),
+        e("__ubsan_handle_out_of_bounds", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_type_mismatch_v1", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_add_overflow", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_sub_overflow", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_mul_overflow", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_negate_overflow", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_shift_out_of_bounds", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_load_invalid_value", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_nonnull_arg", lc::ubsan_trap as usize as u64),
+        e("__ubsan_handle_null", lc::ubsan_trap as usize as u64),
         e("memset", lc::k_memset as usize as u64),
         e("memcpy", lc::k_memcpy as usize as u64),
         e("memmove", lc::k_memmove as usize as u64),

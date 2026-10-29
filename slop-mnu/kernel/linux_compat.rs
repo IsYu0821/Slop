@@ -3,7 +3,7 @@
 //! string/memory helpers modules expect. Addresses in this file are exported
 //! to .ko objects via `module::export_table`.
 //!
-//! Scope discipline (what this is NOT yet): no DMA API, no MSI/MSI-X routing
+//! Scope discipline (what this is NOT yet): no MSI/MSI-X routing
 //! (IRQ registration is accepted and stored; delivery is not wired yet —
 //! drivers must poll), no full `struct pci_dev` (vendor/device filled, the
 //! rest zeroed; real HW drivers needing irq/resource fields come later).
@@ -11,90 +11,288 @@ use crate::sync::IrqSpinLock;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 /* ================= printk ================= */
-// Minimal format engine: %s %d %i %u %x %X %p %c %% and literal text.
-// The caller passes up to 6 register varargs (SysV: rsi..r9); stack varargs
-// are not read (documented limitation; test drivers avoid them).
+// Bounded format engine: %d %i %u %o %x %X %p %c %s %% with flags
+// ('-', '0'), width (digits or '*'), precision ('.' digits or '*');
+// lengths are accepted and ignored (args are already u64). %n is
+// rejected (emitted literally, never stores through the pointer).
+// The caller passes up to 6 register varargs (SysV: rsi..r9); stack
+// varargs read as zero (documented limitation).
+// Safety: the format string and every %s argument are copied through
+// page-present checks (FMT_MAX/STR_MAX caps), so bad or stale
+// (post-unload) pointers fail safe as "(bad fmt)"/"(bad ptr)" instead
+// of faulting or over-reading module memory. %s precision truncation
+// never splits a UTF-8 sequence. Width/precision saturate at
+// FIELD_MAX (fail-safe truncation, documented).
+const FMT_MAX: usize = 1024;
+const STR_MAX: usize = 256;
+const FIELD_MAX: usize = 512;
+
+fn va_page_present(va: u64) -> bool {
+    let hi = va >> 48;
+    if hi != 0 && hi != 0xFFFF { return false; }
+    crate::arch::x86_64::phys::virt_to_phys_full(va & !4095) != 0
+}
+
+/// Copy a NUL-terminated string at `src` into `dst` (up to `max` bytes,
+/// never past `dst.len()`). Stops at unmapped pages. Returns bytes copied.
+fn copy_cstr(dst: &mut [u8], src: *const u8, max: usize) -> usize {
+    let cap = core::cmp::min(max, dst.len());
+    let mut n = 0usize;
+    let mut i = 0usize;
+    while i < cap {
+        let va = (src as u64).wrapping_add(i as u64);
+        if i % 4096 == 0 && !va_page_present(va) { break; }
+        let b = unsafe { core::ptr::read_volatile(src.wrapping_add(i)) };
+        if b == 0 { break; }
+        dst[n] = b;
+        n += 1;
+        i += 1;
+    }
+    n
+}
+
+/// Largest `k <= max` such that `b[..k]` ends on a UTF-8 boundary.
+fn utf8_trunc_len(b: &[u8], max: usize) -> usize {
+    let cut = core::cmp::min(max, b.len());
+    let mut pos = 0usize;
+    while pos < cut {
+        let c = b[pos];
+        let l = if c & 0x80 == 0 {
+            1
+        } else if c >> 5 == 0b110 {
+            2
+        } else if c >> 4 == 0b1110 {
+            3
+        } else if c >> 3 == 0b11110 {
+            4
+        } else {
+            1 // invalid byte: pass through singly, never hang
+        };
+        if pos + l > cut {
+            return pos;
+        }
+        // Multi-byte lead must be followed by continuation bytes.
+        let mut k = 1usize;
+        while k < l {
+            if b[pos + k] & 0xC0 != 0x80 {
+                return pos;
+            }
+            k += 1;
+        }
+        pos += l;
+    }
+    pos
+}
+
 #[unsafe(no_mangle)]
 fn format_into(out: &mut [u8], fmt: *const u8, args_in: [u64; 6]) -> usize {
-    if fmt.is_null() { return 0; }
     let mut args = args_in;
     let mut ai = 0usize;
-    let mut out = [0u8; 512];
     let mut n = 0usize;
-    let mut p = fmt;
-    let next_arg = |args: &mut [u64; 6], ai: &mut usize| -> u64 {
+    let mut total = 0usize;
+    macro_rules! push {
+        ($by:expr) => {{
+            total += 1;
+            if n < out.len() {
+                out[n] = $by;
+                n += 1;
+            }
+        }};
+    }
+    if fmt.is_null() || !va_page_present(fmt as u64) {
+        for &b in b"(bad fmt)" {
+            push!(b);
+        }
+        return total;
+    }
+    // Copy the format string through page checks first, so the parse loop
+    // below can never run past mapped memory.
+    let mut fbuf = [0u8; FMT_MAX + 1];
+    let flen = copy_cstr(&mut fbuf, fmt, FMT_MAX);
+    let mut next_arg = |args: &mut [u64; 6], ai: &mut usize| -> u64 {
         let v = if *ai < 6 { args[*ai] } else { 0 };
         *ai += 1;
         v
     };
-    // total counts the full length (for snprintf return); n counts written.
-    let mut total = 0usize;
-    let mut push = |out: &mut [u8; 512], n: &mut usize, total: &mut usize, by: u8| {
-        *total += 1;
-        if *n < out.len() { out[*n] = by; *n += 1; }
-    };
-    let push_u64 = |out: &mut [u8; 512], n: &mut usize, total: &mut usize, mut v: u64, base: u64, upper: bool| {
-        if v == 0 { push(out, n, &mut *total, b'0'); return; }
-        let mut tmp = [0u8; 20];
-        let mut l = 0usize;
-        while v > 0 { let r = (v % base) as u8; tmp[l] = if r < 10 { b'0' + r } else { (if upper { b'A' } else { b'a' }) + r - 10 }; l += 1; v /= base; }
-        while l > 0 { l -= 1; push(out, n, &mut *total, tmp[l]); }
-    };
-    loop {
-        let ch = unsafe { core::ptr::read_volatile(p) };
-        if ch == 0 { break; }
-        p = unsafe { p.add(1) };
-        if ch != b'%' { push(&mut out, &mut n, &mut total, ch); continue; }
-        let s = unsafe { core::ptr::read_volatile(p) };
-        if s == 0 { break; }
-        p = unsafe { p.add(1) };
+    let mut i = 0usize;
+    // Stop at NUL too: fbuf is NUL-padded, so this is robust even if flen
+    // ever overshoots the terminator.
+    while i < flen && fbuf[i] != 0 {
+        let ch = fbuf[i];
+        i += 1;
+        if ch != b'%' {
+            push!(ch);
+            continue;
+        }
+        if i >= flen {
+            push!(b'%');
+            break;
+        }
+        // Flags.
+        let mut left = false;
+        let mut zero = false;
+        while i < flen {
+            if fbuf[i] == b'-' { left = true; i += 1; }
+            else if fbuf[i] == b'0' { zero = true; i += 1; }
+            else { break; }
+        }
+        // Width.
+        let mut width: usize = 0;
+        let mut width_set = false;
+        if i < flen && fbuf[i] == b'*' {
+            i += 1;
+            let w = next_arg(&mut args, &mut ai) as i32;
+            if w < 0 { left = true; width = (-(w as i64) as u64).min(FIELD_MAX as u64) as usize; }
+            else { width = (w as u64).min(FIELD_MAX as u64) as usize; }
+            width_set = true;
+        } else {
+            while i < flen && fbuf[i].is_ascii_digit() {
+                width_set = true;
+                width = width.saturating_mul(10).saturating_add((fbuf[i] - b'0') as usize).min(FIELD_MAX);
+                i += 1;
+            }
+        }
+        // Precision.
+        let mut prec: Option<usize> = None;
+        if i < flen && fbuf[i] == b'.' {
+            i += 1;
+            if i < flen && fbuf[i] == b'*' {
+                i += 1;
+                let p = next_arg(&mut args, &mut ai) as i32;
+                if p >= 0 { prec = Some((p as u64).min(FIELD_MAX as u64) as usize); }
+            } else {
+                let mut p: usize = 0;
+                while i < flen && fbuf[i].is_ascii_digit() {
+                    p = p.saturating_mul(10).saturating_add((fbuf[i] - b'0') as usize).min(FIELD_MAX);
+                    i += 1;
+                }
+                prec = Some(p);
+            }
+        }
+        // Lengths: C varargs promote int->32bit; only l/ll (and j/z/t
+        // 64-bit) keep full 64 bits. h/hh narrow further. Correct sizing
+        // matters: a negative int arrives zero-extended in the low 32.
+        let mut wide = false; // l, ll, j, z, t
+        while i < flen && matches!(fbuf[i], b'h' | b'l' | b'j' | b'z' | b't' | b'L') {
+            if matches!(fbuf[i], b'l' | b'j' | b'z' | b't') { wide = true; }
+            i += 1;
+        }
+        if i >= flen {
+            push!(b'%');
+            break;
+        }
+        let s = fbuf[i];
+        i += 1;
         match s {
-            b'%' => push(&mut out, &mut n, &mut total, b'%'),
-            b'c' => push(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai) as u8),
+            b'%' => {
+                let w = if width_set { width } else { 0 };
+                if !left { for _ in 0..w { push!(b' '); } }
+                push!(b'%');
+                if left { for _ in 0..w { push!(b' '); } }
+            }
+            b'c' => {
+                let v = next_arg(&mut args, &mut ai) as u32 as u8;
+                let w = if width_set { width } else { 0 };
+                if !left { for _ in 0..w.saturating_sub(1) { push!(b' '); } }
+                push!(v);
+                if left { for _ in 0..w.saturating_sub(1) { push!(b' '); } }
+            }
             b's' => {
                 let sp = next_arg(&mut args, &mut ai) as *const u8;
-                if !sp.is_null() {
-                    for i in 0..256 {
-                        let by = unsafe { core::ptr::read_volatile(sp.add(i)) };
-                        if by == 0 { break; }
-                        push(&mut out, &mut n, &mut total, by);
-                    }
+                let mut sbuf = [0u8; STR_MAX];
+                let slen = if sp.is_null() {
+                    sbuf[..6].copy_from_slice(b"(null)");
+                    6
+                } else if !va_page_present(sp as u64) {
+                    sbuf[..9].copy_from_slice(b"(bad ptr)");
+                    9
                 } else {
-                    for by in b"(null)".iter() { push(&mut out, &mut n, &mut total, *by); }
-                }
-            }
-            b'd' | b'i' => {
-                let v = next_arg(&mut args, &mut ai) as i64;
-                if v < 0 { push(&mut out, &mut n, &mut total, b'-'); push_u64(&mut out, &mut n, &mut total, (-v) as u64, 10, false); }
-                else { push_u64(&mut out, &mut n, &mut total, v as u64, 10, false); }
-            }
-            b'u' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 10, false),
-            b'x' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, false),
-            b'X' => push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, true),
-            b'p' => {
-                push(&mut out, &mut n, &mut total, b'0'); push(&mut out, &mut n, &mut total, b'x');
-                push_u64(&mut out, &mut n, &mut total, next_arg(&mut args, &mut ai), 16, false);
-            }
-            b'l' => {
-                // %l[dux]: consume length, treat as 64-bit.
-                let s2 = unsafe { core::ptr::read_volatile(p) };
-                if s2 == b'd' || s2 == b'u' || s2 == b'x' {
-                    p = unsafe { p.add(1) };
-                    let v = next_arg(&mut args, &mut ai);
-                    match s2 {
-                        b'd' => {
-                            let v = v as i64;
-                            if v < 0 { push(&mut out, &mut n, &mut total, b'-'); push_u64(&mut out, &mut n, &mut total, (-v) as u64, 10, false); }
-                            else { push_u64(&mut out, &mut n, &mut total, v as u64, 10, false); }
-                        }
-                        b'x' => push_u64(&mut out, &mut n, &mut total, v, 16, false),
-                        _ => push_u64(&mut out, &mut n, &mut total, v, 10, false),
+                    copy_cstr(&mut sbuf, sp, STR_MAX)
+                };
+                // Field bytes first (truncate + UTF-8-safe), then pad.
+                // Count is derived from the final field length only.
+                let mut flen2 = slen;
+                if let Some(p) = prec {
+                    let t = utf8_trunc_len(&sbuf[..slen], p);
+                    if t < flen2 {
+                        flen2 = t;
                     }
-                } else { push(&mut out, &mut n, &mut total, b'%'); push(&mut out, &mut n, &mut total, b'l'); }
+                }
+                let w = if width_set { width } else { 0 };
+                if !left {
+                    let mut k = flen2;
+                    while k < w {
+                        push!(b' ');
+                        k += 1;
+                    }
+                }
+                {
+                    let mut k = 0;
+                    while k < flen2 {
+                        push!(sbuf[k]);
+                        k += 1;
+                    }
+                }
+                if left {
+                    let mut k = flen2;
+                    while k < w {
+                        push!(b' ');
+                        k += 1;
+                    }
+                }
+                // DIAG-UTF8: remove after root-cause confirmed.
+                crate::println!("DIAG sflen={} plen={} flen2={}", slen, prec.unwrap_or(9999), flen2);
             }
-            _ => { push(&mut out, &mut n, &mut total, b'%'); push(&mut out, &mut n, &mut total, s); }
+            b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'p' => {
+                let raw = next_arg(&mut args, &mut ai);
+                // Narrow to declared width first (C promotion semantics).
+                let v: u64 = if s == b'p' || wide { raw } else { raw as u32 as u64 };
+                let (neg, base, upper) = match s {
+                    b'd' | b'i' => {
+                        let sv = if s == b'p' || wide { raw as i64 } else { (raw as u32 as i32) as i64 };
+                        (sv < 0, 10, false)
+                    }
+                    b'o' => (false, 8, false),
+                    b'x' => (false, 16, false),
+                    b'X' => (false, 16, true),
+                    b'p' => (false, 16, false),
+                    _ => (false, 10, false),
+                };
+                let mut mag = if neg { (-((if wide || s == b'p' { raw as i64 } else { (raw as u32 as i32) as i64 }))) as u64 } else { v };
+                // digits, reversed
+                let mut tmp = [0u8; 32];
+                let mut dl = 0usize;
+                if mag == 0 {
+                    // C: precision 0 suppresses the '0' digit (except %p keeps one).
+                    if prec != Some(0) || s == b'p' { tmp[0] = b'0'; dl = 1; }
+                } else {
+                    while mag > 0 {
+                        let r = (mag % base) as u8;
+                        tmp[dl] = if r < 10 { b'0' + r } else { (if upper { b'A' } else { b'a' }) + r - 10 };
+                        dl += 1;
+                        mag /= base;
+                    }
+                }
+                let mut ndig = dl;
+                if let Some(p) = prec { ndig = core::cmp::max(ndig, core::cmp::min(p, FIELD_MAX)); }
+                let content = ndig + if neg { 1 } else { 0 } + if s == b'p' { 2 } else { 0 };
+                let w = if width_set { width } else { 0 };
+                // Zero padding only without precision, not left-justified (standard).
+                let zpad = zero && !left && prec.is_none();
+                if !left && !zpad { for _ in 0..w.saturating_sub(content) { push!(b' '); } }
+                if s == b'p' { push!(b'0'); push!(b'x'); }
+                if neg { push!(b'-'); }
+                if !left && zpad { for _ in 0..w.saturating_sub(content) { push!(b'0'); } }
+                for _ in 0..ndig.saturating_sub(dl) { push!(b'0'); }
+                let mut k = dl;
+                while k > 0 { k -= 1; push!(tmp[k]); }
+                if left { for _ in 0..w.saturating_sub(content) { push!(b' '); } }
+                let _ = content;
+            }
+            // %n (store-back) and anything unknown: emit literally, consume
+            // no argument. Safe by construction.
+            _ => { push!(b'%'); push!(s); }
         }
-        if total >= 4096 { break; }
     }
     // NUL-terminate if room (snprintf semantics; printk ignores the NUL).
     if n < out.len() { out[n] = 0; }
@@ -109,7 +307,13 @@ pub unsafe extern "sysv64" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: 
     n_full as i32
 }
 
-/* ================= kmalloc family (page-granular via kheap) ================= */
+/* UBSAN toolchain traps: normally-built .ko may carry -fsanitize
+   instrumentation. Log the violation and continue (fail-safe: the guest
+   stays alive and the offending check is visible in the log). */
+#[unsafe(no_mangle)]
+pub unsafe extern "sysv64" fn ubsan_trap(_data: *const u8) {
+    crate::println!("ubsan: violation trapped (continuing)");
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn kmalloc(size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kmalloc(size) }
 #[unsafe(no_mangle)]
@@ -625,13 +829,7 @@ pub unsafe extern "sysv64" fn k_sprintf(buf: *mut u8, fmt: *const u8, a: u64, b:
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn k_snprintf(buf: *mut u8, n: usize, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
     if buf.is_null() || n == 0 {
-        // Length-probe path: compute full length without writing.
-        let mut tmp = [0u8; 1];
-        let t = format_into(&mut tmp, fmt, [a, b, c, d, e, f]);
-        // format_into with 1-byte buf still counts full length (capped at 4096 loop bound).
-        let _ = t;
-        // Re-run with a scratch buffer to get the true total (no cap interference).
-        // Simpler: call with a large stack buffer once.
+        // Length-probe path: full length via a scratch buffer.
         let mut big = [0u8; 2048];
         return format_into(&mut big, fmt, [a, b, c, d, e, f]) as i32;
     }

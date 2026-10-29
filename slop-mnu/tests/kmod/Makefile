@@ -3,5 +3,5 @@ obj-m := slotest.o
 # in range because Slop maps modules within 256MB of the kernel image.
 # Retpoline thunks conflict with large model; test driver opts out (the
 # loader provides its own __x86_return_thunk stub anyway).
-ccflags-y := -fno-stack-protector -fno-pic -fno-pie -mcmodel=large -fpatchable-function-entry=0 -mno-indirect-branch-register -mfunction-return=keep
+ccflags-y := -fno-stack-protector -fno-pic -fno-pie -mcmodel=large -fpatchable-function-entry=0 -mno-indirect-branch-register -mfunction-return=keep -mpreferred-stack-boundary=4 -mno-red-zone
 KBUILD_CFLAGS := $(filter-out -mindirect-branch=thunk-extern -mfunction-return=thunk-extern,$(KBUILD_CFLAGS))
