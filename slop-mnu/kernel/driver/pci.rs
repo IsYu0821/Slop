@@ -576,6 +576,99 @@ pub fn msi_disable(bdf: Bdf) {
     }
 }
 
+/* ---- MSI vector pool (Slop-owned allocation for real PCI drivers) ----
+   8 vectors (0x50..0x57), each with its own IDT gate/stub dispatching
+   through the shared IRQ core. Ownership is per-BDF (dedup: re-request
+   returns the same vector); free MSI-programs off + releases. */
+use crate::sync::IrqSpinLock;
+struct MsiAlloc { used: bool, bdf_packed: u32 }
+const NO_MSI: MsiAlloc = MsiAlloc { used: false, bdf_packed: 0 };
+static MSI_ALLOCS: IrqSpinLock<[MsiAlloc; 8]> = IrqSpinLock::new([NO_MSI; 8]);
+fn pack_bdf(bdf: Bdf) -> u32 { ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32) }
+/// Allocate (or return existing) MSI vector for `bdf`. Programs MSI at the
+/// current CPU. Returns vector 0x50..0x57 or negative errno.
+pub fn msi_alloc_vector(bdf: Bdf) -> i32 {
+    let want = pack_bdf(bdf);
+    {
+        let t = MSI_ALLOCS.lock();
+        for (i, a) in t.iter().enumerate() {
+            if a.used && a.bdf_packed == want {
+                return crate::arch::x86_64::apic::MSI_VECTOR_BASE as i32 + i as i32;
+            }
+        }
+    }
+    let idx = {
+        let mut t = MSI_ALLOCS.lock();
+        match t.iter_mut().position(|a| !a.used) {
+            Some(i) => {
+                t[i].used = true;
+                t[i].bdf_packed = want;
+                i
+            }
+            None => return -12, // -ENOMEM
+        }
+    };
+    let vec = crate::arch::x86_64::apic::MSI_VECTOR_BASE + idx as u8;
+    let me = crate::arch::x86_64::apic::apic_id() as u8;
+    if msi_program(bdf, vec, me) != 0 {
+        let mut t = MSI_ALLOCS.lock();
+        t[idx] = NO_MSI;
+        return -19; // -ENODEV
+    }
+    // DIAG-MSI: verify programming took (read back).
+    {
+        let acc = Cam;
+        if let Some((off, is64, _)) = find_msi(bdf) {
+            let c = acc.read32(bdf, off + 2) & 0xffff;
+            let a = acc.read32(bdf, off + 4);
+            let d = if is64 { acc.read32(bdf, off + 12) } else { acc.read32(bdf, off + 8) };
+            crate::println!("pci: msi verify {:02x}:{:02x}.{} vec={} en={} addr={:#x} data={:#x}", bdf.bus, bdf.device, bdf.function, vec, c & 1, a, d);
+        }
+    }
+    vec as i32
+}
+/// Release the vector owned by `bdf` (MSI off). Safe no-op if none.
+pub fn msi_free_vector(bdf: Bdf) {
+    let want = pack_bdf(bdf);
+    let mut t = MSI_ALLOCS.lock();
+    for a in t.iter_mut() {
+        if a.used && a.bdf_packed == want {
+            *a = NO_MSI;
+            msi_disable(bdf);
+            return;
+        }
+    }
+}
+
+/* ---- Legacy INTx routing (fallback when MSI is absent) ----
+   Root-bus only: INTx pin A-D maps to GSI 16-19 on q35 (no _PRT parsing
+   yet; hotplug/bridges unsupported). Returns the programmed GSI. */
+pub const CFG_INT_PIN: u16 = 0x3d;
+pub fn legacy_gsi(bdf: Bdf) -> Option<u32> {
+    if bdf.segment != 0 || bdf.bus != 0 {
+        return None;
+    }
+    let acc = Cam;
+    // Interrupt Pin is byte 1 of the dword at 0x3c (do aligned reads).
+    let pin = ((acc.read32(bdf, 0x3c) >> 8) & 0xff) as u8;
+    if pin < 1 || pin > 4 {
+        return None;
+    }
+    // q35 root complex: INTx swizzle (pin + dev) % 4 onto PIRQ A-D,
+    // which land on GSIs 20-23. Full _PRT parsing is future work.
+    Some(20 + (((pin - 1 + bdf.device) % 4) as u32))
+}
+pub fn legacy_route(bdf: Bdf, vector: u8) -> Result<u32, &'static str> {
+    let gsi = legacy_gsi(bdf).ok_or("no legacy pin/route")?;
+    crate::arch::x86_64::apic::route_gsi_low(gsi, vector)?;
+    Ok(gsi)
+}
+pub fn legacy_unroute(bdf: Bdf) {
+    if let Some(gsi) = legacy_gsi(bdf) {
+        crate::arch::x86_64::apic::unroute_gsi(gsi);
+    }
+}
+
 /* MSI self-test: walk all PCI devices, report MSI/MSI-X caps, and for the
    first MSI-capable device, program TEST_VECTOR2 for self-delivery, verify
    by readback, then disable. No device event needed (programming path only;

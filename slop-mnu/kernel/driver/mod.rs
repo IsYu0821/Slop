@@ -15,8 +15,11 @@ pub fn init(){
   Ok(cap)=>crate::println!("blk: virtio-blk up capacity={} sectors",cap),
   Err(e)=>crate::println!("blk: virtio-blk unavailable: {}",e),
  }
- // Slop IRQ core self-test: register → IPI → dispatch → handler → unregister.
- crate::irq::selftest_irq_dispatch();
+  // Slop IRQ core self-test: register → IPI → dispatch → handler → unregister.
+  crate::irq::selftest_irq_dispatch();
+  // MSI/INTx vector gate self-tests (self-IPI, no hardware).
+  crate::irq::selftest_msi_dispatch();
+  crate::irq::selftest_intx_dispatch();
  // Linux IRQ adapter self-test over the Slop core (no module needed).
  crate::linux_compat::selftest_linux_irq();
  // Slop DMA core self-test (coherent + streaming + mask + leak check).

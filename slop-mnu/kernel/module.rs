@@ -132,7 +132,7 @@ fn cstr<'a>(tab: &'a [u8], off: usize) -> Result<&'a str, &'static str> {
 
 /* ---- Kernel symbol exports for .ko undefined symbols ---- */
 struct Export { name: &'static str, addr: u64 }
-fn export_table() -> [Export; 98] {
+fn export_table() -> [Export; 102] {
     use crate::linux_compat as lc;
     let e = |n: &'static str, a: u64| Export { name: n, addr: a };
     [
@@ -176,7 +176,11 @@ fn export_table() -> [Export; 98] {
         e("iowrite16", lc::iowrite16 as usize as u64),
         e("iowrite32", lc::iowrite32 as usize as u64),
         e("request_irq", lc::request_irq as usize as u64),
+        e("request_threaded_irq", lc::request_threaded_irq as usize as u64),
         e("free_irq", lc::free_irq as usize as u64),
+        e("pci_alloc_irq_vectors", lc::pci_alloc_irq_vectors as usize as u64),
+        e("pci_irq_vector", lc::pci_irq_vector as usize as u64),
+        e("pci_free_irq_vectors", lc::pci_free_irq_vectors as usize as u64),
         e("capable", lc::capable as usize as u64),
         e("test_u64_arg", lc::test_u64_arg as usize as u64),
         e("test_store_addr", lc::test_store_addr as usize as u64),

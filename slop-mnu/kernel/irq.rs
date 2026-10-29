@@ -141,9 +141,27 @@ pub fn stats(vector: u8) -> (u64, u64) {
 }
 
 static TEST_FIRED: AtomicU64 = AtomicU64::new(0);
+static MSI_FIRED: AtomicU64 = AtomicU64::new(0);
+static INTX_FIRED: AtomicU64 = AtomicU64::new(0);
 fn test_handler(vector: u8, _dev: u64) -> bool {
     if vector == crate::arch::x86_64::apic::TEST_VECTOR {
         TEST_FIRED.store(0x4952515445535455, Ordering::SeqCst); // "IRQTESTU"
+        return true;
+    }
+    false
+}
+fn msi_test_handler(vector: u8, _dev: u64) -> bool {
+    if vector >= crate::arch::x86_64::apic::MSI_VECTOR_BASE
+        && vector < crate::arch::x86_64::apic::MSI_VECTOR_BASE + crate::arch::x86_64::apic::MSI_VECTOR_COUNT
+    {
+        MSI_FIRED.store(0x4d534954455354, Ordering::SeqCst); // "MSITEST"
+        return true;
+    }
+    false
+}
+fn intx_test_handler(vector: u8, _dev: u64) -> bool {
+    if vector == crate::arch::x86_64::apic::INTX_VECTOR {
+        INTX_FIRED.store(0x494e545855545354, Ordering::SeqCst); // "INTXUTST"
         return true;
     }
     false
@@ -186,5 +204,78 @@ pub fn selftest_irq_dispatch() {
         crate::println!("irq: selftest PASS (handled={} spurious={})", handled, spurious);
     } else {
         crate::println!("irq: selftest FAIL no dispatch (handled={} spurious={})", handled, spurious);
+    }
+}
+
+/// MSI IDT/stub self-test: self-IPI to MSI_VECTOR_BASE proves the new
+/// gates dispatch through the shared core (no hardware needed).
+pub fn selftest_msi_dispatch() {
+    use crate::arch::x86_64::apic;
+    let flags: u64;
+    unsafe { core::arch::asm!("pushfq; pop {}", out(reg) flags, options(nomem)) };
+    let was_clear = flags & (1 << 9) == 0;
+    if was_clear { unsafe { core::arch::asm!("sti", options(nomem, nostack, preserves_flags)) }; }
+    MSI_FIRED.store(0, Ordering::SeqCst);
+    if register(apic::MSI_VECTOR_BASE, msi_test_handler, 0x5a5a5b1, b"msitest\0", false) != 0 {
+        crate::println!("irq: msi selftest register failed");
+        if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+        return;
+    }
+    let me = apic::apic_id();
+    if !apic::send_fixed_ipi(me, apic::MSI_VECTOR_BASE) {
+        crate::println!("irq: msi selftest IPI send failed");
+        unregister(apic::MSI_VECTOR_BASE, 0x5a5a5b1);
+        if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+        return;
+    }
+    let mut spins = 0u32;
+    while MSI_FIRED.load(Ordering::SeqCst) != 0x4d534954455354 {
+        core::hint::spin_loop();
+        spins += 1;
+        if spins > 50_000_000 { break; }
+    }
+    let (handled, spurious) = stats(apic::MSI_VECTOR_BASE);
+    unregister(apic::MSI_VECTOR_BASE, 0x5a5a5b1);
+    if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+    if MSI_FIRED.load(Ordering::SeqCst) == 0x4d534954455354 {
+        crate::println!("irq: msi selftest PASS (handled={} spurious={})", handled, spurious);
+    } else {
+        crate::println!("irq: msi selftest FAIL no dispatch (handled={} spurious={})", handled, spurious);
+    }
+}
+
+/// INTx vector gate check: self-IPI to 0x58 through the shared core.
+pub fn selftest_intx_dispatch() {
+    use crate::arch::x86_64::apic;
+    let flags: u64;
+    unsafe { core::arch::asm!("pushfq; pop {}", out(reg) flags, options(nomem)) };
+    let was_clear = flags & (1 << 9) == 0;
+    if was_clear { unsafe { core::arch::asm!("sti", options(nomem, nostack, preserves_flags)) }; }
+    INTX_FIRED.store(0, Ordering::SeqCst);
+    if register(apic::INTX_VECTOR, intx_test_handler, 0x5a5a5c1, b"intxtest\0", false) != 0 {
+        crate::println!("irq: intx selftest register failed");
+        if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+        return;
+    }
+    let me = apic::apic_id();
+    if !apic::send_fixed_ipi(me, apic::INTX_VECTOR) {
+        crate::println!("irq: intx selftest IPI send failed");
+        unregister(apic::INTX_VECTOR, 0x5a5a5c1);
+        if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+        return;
+    }
+    let mut spins = 0u32;
+    while INTX_FIRED.load(Ordering::SeqCst) != 0x494e545855545354 {
+        core::hint::spin_loop();
+        spins += 1;
+        if spins > 50_000_000 { break; }
+    }
+    let (handled, spurious) = stats(apic::INTX_VECTOR);
+    unregister(apic::INTX_VECTOR, 0x5a5a5c1);
+    if was_clear { unsafe { core::arch::asm!("cli", options(nomem, nostack, preserves_flags)) }; }
+    if INTX_FIRED.load(Ordering::SeqCst) == 0x494e545855545354 {
+        crate::println!("irq: intx selftest PASS (handled={} spurious={})", handled, spurious);
+    } else {
+        crate::println!("irq: intx selftest FAIL no dispatch (handled={} spurious={})", handled, spurious);
     }
 }

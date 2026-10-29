@@ -10,6 +10,11 @@ pub const RESCHED_VECTOR: u8 = 0x41;
 pub const TEST_VECTOR: u8 = 0x42;
 pub const TEST_VECTOR2: u8 = 0x43;
 pub const SPURIOUS_VECTOR: u8 = 0xff;
+/* MSI vector pool for real PCI devices (Slop-owned allocation, Linux
+   adapters consume via pci_alloc_irq_vectors). 0x50..0x57, each with its
+   own IDT gate/stub that dispatches through the shared Slop IRQ core. */
+pub const MSI_VECTOR_BASE: u8 = 0x50;
+pub const MSI_VECTOR_COUNT: u8 = 8;
 
 static mut LAPIC: u64 = 0;
 static TICKS: AtomicU64 = AtomicU64::new(0);
@@ -62,6 +67,7 @@ pub unsafe fn init(info: InterruptInfo) -> Result<(), &'static str> {
     if info.ioapic == 0 {
         return Err("IOAPIC missing");
     }
+    unsafe { SAVED_INFO = Some(info); }
     unsafe {
         mask_pic();
         LAPIC = super::phys::phys_to_virt(info.lapic);
@@ -174,6 +180,68 @@ pub fn self_test() -> Result<u64, &'static str> {
         }
     }
     Err("Local APIC timer did not fire")
+}
+
+static mut SAVED_INFO: Option<InterruptInfo> = None;
+
+/// Route an arbitrary GSI (e.g. PCI INTx) to a Slop vector, level-triggered
+/// high-polarity physical-destination unmasked. Used for INTx fallback;
+/// PIRQ swizzle/_PRT parsing is future work (callers pass platform GSIs).
+pub fn route_gsi(gsi: u32, vector: u8) -> Result<(), &'static str> {
+    route_gsi_pol(gsi, vector, false)
+}
+/// Like route_gsi but with explicit active-low polarity (PCI INTx# is
+/// active-low; ISA IRQs are active-high).
+pub fn route_gsi_low(gsi: u32, vector: u8) -> Result<(), &'static str> {
+    route_gsi_pol(gsi, vector, true)
+}
+fn route_gsi_pol(gsi: u32, vector: u8, active_low: bool) -> Result<(), &'static str> {
+    let info = unsafe { SAVED_INFO.ok_or("no interrupt info")? };
+    if vector < 0x20 {
+        return Err("invalid vector");
+    }
+    if gsi < info.ioapic_gsi {
+        return Err("GSI below IOAPIC base");
+    }
+    let pin = gsi - info.ioapic_gsi;
+    let ioapic = unsafe { super::phys::phys_to_virt(info.ioapic) };
+    let max = ((unsafe { io_read(ioapic, 1) } >> 16) & 0xff) as u32;
+    if pin > max {
+        return Err("GSI outside IOAPIC");
+    }
+    // Level-triggered (bit15), fixed delivery, physical destination = BSP.
+    // Bit 13 set iff active-low.
+    let low = (vector as u32) | (1 << 15) | if active_low { 1 << 13 } else { 0 };
+    let dest = unsafe { read(0x20) } & 0xff00_0000;
+    unsafe {
+        io_write(ioapic, 0x10 + pin as u8 * 2, low);
+        io_write(ioapic, 0x11 + pin as u8 * 2, dest);
+        let rl = io_read(ioapic, 0x10 + pin as u8 * 2);
+        let rh = io_read(ioapic, 0x11 + pin as u8 * 2);
+        crate::println!("apic: route gsi={} pin={} vec={:#x} rte={:#x}:{:#x}", gsi, pin, vector, rh, rl);
+    }
+    Ok(())
+}
+/// Mask (disable) a GSI redirection entry. Safe no-op if out of range.
+pub fn unroute_gsi(gsi: u32) {
+    let info = match unsafe { SAVED_INFO } {
+        Some(i) => i,
+        None => return,
+    };
+    if gsi < info.ioapic_gsi {
+        return;
+    }
+    let pin = gsi - info.ioapic_gsi;
+    let ioapic = unsafe { super::phys::phys_to_virt(info.ioapic) };
+    let max = unsafe { ((io_read(ioapic, 1) >> 16) & 0xff) as u32 };
+    if pin > max {
+        return;
+    }
+    unsafe {
+        let off = 0x10 + pin as u8 * 2;
+        let cur = io_read(ioapic, off);
+        io_write(ioapic, off, cur | (1 << 16));
+    }
 }
 
 pub unsafe fn route_isa(info: InterruptInfo, irq: u8, vector: u8, masked: bool) -> Result<(), &'static str> {
@@ -386,6 +454,47 @@ pub extern "sysv64" fn irq_test_rust() {
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn irq_test2_rust() {
     crate::irq::dispatch(TEST_VECTOR2);
+    unsafe { write(0xb0, 0) }
+}
+
+/* MSI dispatch entries: one per pool vector, shared Slop core + EOI.
+   Real device delivery (not self-IPI): the device raises the programmed
+   vector, the stub lands here, dispatch runs registered handlers. */
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi0_rust() {
+    static HIT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+    let n = HIT.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+    // Log first few dispatches (boot self-IPI + real MSI); floods iff storm.
+    if n < 4 {
+        crate::println!("irq: MSI0 dispatch #{}", n);
+    }
+    crate::irq::dispatch(MSI_VECTOR_BASE);
+    unsafe { write(0xb0, 0) }
+}
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi1_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 1); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi2_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 2); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi3_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 3); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi4_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 4); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi5_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 5); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi6_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 6); unsafe { write(0xb0, 0) } }
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_msi7_rust() { crate::irq::dispatch(MSI_VECTOR_BASE + 7); unsafe { write(0xb0, 0) } }
+/* INTx legacy dispatch (level-triggered via IOAPIC, vector 0x58). */
+pub const INTX_VECTOR: u8 = 0x58;
+#[unsafe(no_mangle)]
+pub extern "sysv64" fn irq_intx_rust() {
+    static HIT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+    let n = HIT.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+    if n < 4 {
+        crate::println!("irq: INTX dispatch #{}", n);
+    }
+    crate::irq::dispatch(INTX_VECTOR);
     unsafe { write(0xb0, 0) }
 }
 

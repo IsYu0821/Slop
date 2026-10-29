@@ -399,7 +399,10 @@ pub struct PciDev {
     pub vendor: u16,
     pub device: u16,
     pub bdf: u32,      // bus<<16 | dev<<8 | func (Slop-private)
-    _pad1: u32,
+    pub msi_base: u8,  // MSI pool base vector (0 if none)
+    pub msi_count: u8, // MSI vectors allocated
+    pub intx_vec: u8,  // INTx vector (0 if none; level-triggered via IOAPIC)
+    pub _pad1: u8,
     pub drvdata: u64,  // Slop-private (pci_set/get_drvdata)
     _rest: [u8; 432],
 }
@@ -468,11 +471,46 @@ fn slop_pci_probe_shim(bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, o
     if rc != 0 {
         crate::println!("pci: linux probe {:04x}:{:04x} rc={}", vendor, device, rc);
         crate::kheap::kfree(mem);
+    } else {
+        track_linux_pci_bound(opaque, bdf, pd as u64);
     }
-    // NOTE: bound dev buffer intentionally leaked while bound (remove path
-    // frees once unbind tracking lands; today delete_module drops the
-    // registration but the dev stays alive, which is safe if never touched).
+    // NOTE: bound dev buffer lives until remove/unregister (freed there,
+    // fixing the old intentional leak); see unbind_linux_pci_dev.
     rc
+}
+
+/* Bound-device tracking: (driver, bdf, dev ptr). unregister/remove walks
+   this to invoke Linux remove, free MSI vectors, and kfree the dev struct
+   (leak-free unload; in-flight IRQ waits in the Slop core). */
+struct BoundPci { used: bool, drv: u64, bdf: u32, dev: u64 }
+const NO_BOUND: BoundPci = BoundPci { used: false, drv: 0, bdf: 0, dev: 0 };
+static LINUX_PCI_BOUND: IrqSpinLock<[BoundPci; 16]> = IrqSpinLock::new([NO_BOUND; 16]);
+fn track_linux_pci_bound(drv: u64, bdf: crate::driver::pci::Bdf, dev: u64) {
+    let packed = ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32);
+    let mut t = LINUX_PCI_BOUND.lock();
+    if t.iter().any(|b| b.used && b.drv == drv && b.bdf == packed) { return; }
+    if let Some(s) = t.iter_mut().find(|s| !s.used) {
+        *s = BoundPci { used: true, drv, bdf: packed, dev };
+    }
+}
+fn unbind_linux_pci_dev(dev: u64) {
+    let slot = {
+        let mut t = LINUX_PCI_BOUND.lock();
+        match t.iter_mut().find(|b| b.used && b.dev == dev) {
+            Some(b) => { let out = (b.drv, b.bdf); *b = NO_BOUND; Some(out) }
+            None => None,
+        }
+    };
+    if slot.is_none() { return; }
+    // Free MSI vectors owned by this device (disables MSI at the device).
+    let pd = dev as *mut PciDev;
+    let bdf = unsafe {
+        let b = (*pd).bdf;
+        crate::driver::pci::Bdf { segment: 0, bus: ((b >> 16) & 0xff) as u8, device: ((b >> 8) & 0xff) as u8, function: (b & 0xff) as u8 }
+    };
+    crate::driver::pci::msi_free_vector(bdf);
+    unsafe { (*pd).msi_base = 0; (*pd).msi_count = 0; }
+    crate::kheap::kfree(dev as *mut u8);
 }
 
 #[unsafe(no_mangle)]
@@ -508,6 +546,30 @@ pub unsafe extern "sysv64" fn pci_register_driver(drv: u64) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn pci_unregister_driver(drv: u64) {
     if drv == 0 { return; }
+    // Invoke Linux remove for every bound device first (driver cleanup:
+    // free_irq/DMA/bar-unmap run here), then free vectors + dev structs,
+    // then drop the Slop registration. Safe if remove is missing.
+    let targets: [(u64, u32); 16] = {
+        let t = LINUX_PCI_BOUND.lock();
+        let mut out = [(0u64, 0u32); 16];
+        let mut n = 0usize;
+        for b in t.iter() {
+            if b.used && b.drv == drv && n < 16 { out[n] = (b.dev, b.bdf); n += 1; }
+        }
+        out
+    };
+    let lp = unsafe { &*(drv as *const PciDriver) };
+    for (dev, _) in targets.iter() {
+        if *dev == 0 { continue; }
+        if let Some(remove) = lp.remove {
+            unsafe { remove(*dev as *mut PciDev); }
+        }
+        unbind_linux_pci_dev(*dev);
+    }
+    {
+        let mut t = LINUX_PCI_DRVS.lock();
+        for d in t.iter_mut() { if *d == drv { *d = 0; } }
+    }
     // Slop core drops all registrations carrying this opaque cookie.
     crate::driver::pci::unregister_slop_driver(drv);
 }
@@ -622,7 +684,10 @@ fn linux_irq_trampoline(vec: u8, dev_id: u64) -> bool {
         let t = LINUX_IRQS.lock();
         match t.iter().find(|r| r.used && r.vec == vec && r.dev_id == dev_id) {
             Some(r) => r.handler,
-            None => return false,
+            None => {
+                crate::println!("irq: trampoline MISS vec={} dev={:#x}", vec, dev_id);
+                return false;
+            }
         }
     };
     if h == 0 { return false; }
@@ -634,9 +699,71 @@ fn linux_irq_trampoline(vec: u8, dev_id: u64) -> bool {
 }
 
 pub const IRQF_SHARED: u64 = 0x80;
+// Linux pci_alloc_irq_vectors flags (only MSI wired; INTx needs IOAPIC
+// routing which is future work — request without MSI fails safe).
+pub const PCI_IRQ_MSI: u32 = 1 << 1;
+pub const PCI_IRQ_LEGACY: u32 = 1 << 0;
+
+#[unsafe(no_mangle)]
+pub unsafe extern "sysv64" fn pci_alloc_irq_vectors(dev: *mut PciDev, min_vecs: u32, max_vecs: u32, flags: u32) -> i32 {
+    if dev.is_null() || min_vecs == 0 || max_vecs == 0 || min_vecs > max_vecs { return -22; }
+    if unsafe { (*dev).msi_base } != 0 || unsafe { (*dev).msi_count } != 0 { return -16; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    // MSI first (single vector); INTx legacy via IOAPIC if requested.
+    if flags & PCI_IRQ_MSI != 0 {
+        if crate::driver::pci::find_msi(bdf).is_none() {
+            if flags & PCI_IRQ_LEGACY == 0 { return -19; }
+        } else {
+            if min_vecs != 1 { return -22; }
+            let v = crate::driver::pci::msi_alloc_vector(bdf);
+            if v < 0 { return v as i32; }
+            unsafe { (*dev).msi_base = v as u8; (*dev).msi_count = 1; }
+            return 1;
+        }
+    }
+    if flags & PCI_IRQ_LEGACY == 0 { return -22; }
+    // Legacy INTx: root-bus PIRQ->GSI via IOAPIC (level-triggered).
+    // Dedicated vector 0x58 (outside the MSI pool) with its own IDT gate.
+    if min_vecs != 1 { return -22; }
+    const INTX_VECTOR: u8 = 0x58;
+    if crate::driver::pci::legacy_route(bdf, INTX_VECTOR).is_err() { return -19; }
+    unsafe { (*dev).intx_vec = INTX_VECTOR; }
+    1
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "sysv64" fn pci_irq_vector(dev: *mut PciDev, n: u32) -> u32 {
+    if dev.is_null() { return 0; }
+    let base = unsafe { (*dev).msi_base };
+    let cnt = unsafe { (*dev).msi_count };
+    if base != 0 && n < cnt as u32 { return base.wrapping_add(n as u8) as u32; }
+    let iv = unsafe { (*dev).intx_vec };
+    if iv != 0 && n == 0 { return iv as u32; }
+    0
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "sysv64" fn pci_free_irq_vectors(dev: *mut PciDev) {
+    if dev.is_null() { return; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    crate::driver::pci::msi_free_vector(bdf);
+    if unsafe { (*dev).intx_vec } != 0 {
+        crate::driver::pci::legacy_unroute(bdf);
+        unsafe { (*dev).intx_vec = 0; }
+    }
+    unsafe { (*dev).msi_base = 0; (*dev).msi_count = 0; }
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn request_irq(irq: u32, handler: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
+    linux_request_irq(irq, handler, flags, name, dev_id)
+}
+/// Real Linux entry: threaded handler unsupported (fail safe if non-NULL);
+/// NULL thread_fn behaves exactly like request_irq.
+#[unsafe(no_mangle)]
+pub unsafe extern "sysv64" fn request_threaded_irq(irq: u32, handler: u64, thread_fn: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
+    if thread_fn != 0 { return -22; }
+    linux_request_irq(irq, handler, flags, name, dev_id)
+}
+fn linux_request_irq(irq: u32, handler: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
     if irq >= 256 || handler == 0 { return -22; }
     let mut nm = [0u8; 32];
     if !name.is_null() {
@@ -1011,9 +1138,10 @@ pub fn force_unregister_all_pci() {
         for d in t.iter_mut() { *d = 0; }
         out
     };
+    // Route through the full unregister (Linux remove + vector/dev free).
     for drv in drvs.iter() {
         if *drv != 0 {
-            crate::driver::pci::unregister_slop_driver(*drv);
+            unsafe { pci_unregister_driver(*drv); }
         }
     }
 }
