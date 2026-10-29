@@ -240,8 +240,6 @@ fn format_into(out: &mut [u8], fmt: *const u8, args_in: [u64; 6]) -> usize {
                         k += 1;
                     }
                 }
-                // DIAG-UTF8: remove after root-cause confirmed.
-                crate::println!("DIAG sflen={} plen={} flen2={}", slen, prec.unwrap_or(9999), flen2);
             }
             b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'p' => {
                 let raw = next_arg(&mut args, &mut ai);
