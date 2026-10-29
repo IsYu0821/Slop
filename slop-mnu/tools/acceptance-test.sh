@@ -38,7 +38,7 @@ for text in \
   'resources: fd accounting self-test passed' \
   'resources: mmap ledger self-test passed' \
   'scheduler: context, FS base and zombie reap self-test passed' \
-  'resources: tasks active=1 zombies=0 unused=7' \
+  'resources: tasks active=1 zombies=0 unused=31' \
   'vfs: path lookup and file read self-test passed' \
   'vfs: tmpfs mount and namespace self-test passed' \
   'execve: committed /bin/hello' \
