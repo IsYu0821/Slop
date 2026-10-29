@@ -477,15 +477,45 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             }
         }
     }
+    // DIAG-ABI: verify .data content via module VA (catch copy/mapping bugs).
+    // Reads through the EXEC mapping (same path CPU fetches), not direct map.
+    for i in 0..shnum {
+        if !secs[i].used { continue; }
+        let sh = read_shdr(img, shoff, shentsize, i)?;
+        if let Ok(nm) = cstr(shstrtab, sh.name as usize) {
+            if nm == ".data" {
+                let v = unsafe { core::ptr::read_volatile(secs[i].va as *const u64) };
+                let f = match sec_bytes(img, &sh) {
+                    Ok(b) if b.len() >= 8 => u64::from_le_bytes(b[..8].try_into().unwrap_or([0u8; 8])),
+                    _ => 0xffff_ffff_ffff_ffff,
+                };
+                if v != f {
+                    crate::println!("module: .data MISMATCH va={:#x} mem={:#x} file={:#x}", secs[i].va, v, f);
+                } else {
+                    crate::println!("module: .data VA-OK {:#x}", v);
+                }
+                // Also compare direct-map read at same PA (alias coherence).
+                let wptr = module_write_ptr(base, &frames, secs[i].va);
+                let w = unsafe { core::ptr::read_volatile(wptr as *const u64) };
+                if w != v {
+                    crate::println!("module: ALIAS MISMATCH va={:#x} vs direct={:#x}", v, w);
+                }
+            }
+        }
+    }
     // Call init: returns 0 on success, negative errno on failure.
     // DIAG: mask local APIC timer across init to rule out entry/exit clobber.
     unsafe {
         let lvt: u32 = crate::arch::x86_64::apic::read(0x320);
         crate::arch::x86_64::apic::write(0x320, lvt | 0x10000);
     }
+    // DIAG-ABI infra (HW break + TF step) retained dormant; arm only when
+    // chasing a call-ABI fault. The Win64/SysV mismatch is fixed (sysv64
+    // exports), so normal loads run without tracing.
     let rc: i32 = unsafe {
         let f: unsafe extern "C" fn() -> i32 = core::mem::transmute(init as usize);
-        f()
+        let r = f();
+        r
     };
     unsafe {
         let lvt: u32 = crate::arch::x86_64::apic::read(0x320);
@@ -643,5 +673,118 @@ pub fn sys_delete_module(name_ptr: usize, _flags: u64) -> i64 {
     match unload(name) {
         Ok(()) => 0,
         Err(e) => crate::errno::neg(-e),
+    }
+}
+
+// DIAG-ABI: TF single-step tracer for module init (RDI fault isolation).
+// Arms before the init call; the #DB handler logs RIP+RDI per step while
+// RIP stays in [STEP_BASE, STEP_END) and steps remain. Distinguishes
+// movabs-broken (RDI wrong right after movabs) from call-broken.
+static mut STEP_ARMED: u64 = 0;
+static mut STEP_BASE: u64 = 0;
+static mut STEP_END: u64 = 0;
+static mut STEP_LEFT: u64 = 0;
+pub fn dbg_step_arm(base: u64, end: u64, n: u64) {
+    unsafe { STEP_BASE = base; STEP_END = end; STEP_LEFT = n; STEP_ARMED = 0; }
+}
+/// Called from the HW-break handler at init entry: starts stepping.
+/// Returns true (handler must SET TF in saved RFLAGS before IRET).
+pub fn dbg_step_start() -> bool {
+    unsafe {
+        if STEP_BASE == 0 || STEP_LEFT == 0 { return false; }
+        STEP_ARMED = 1;
+        true
+    }
+}
+pub fn dbg_step_disarm() {
+    unsafe { STEP_ARMED = 0; STEP_BASE = 0; }
+}
+/// Called from the #DB handler. Returns true to keep TF set (continue
+/// stepping), false to clear TF (done). Logs RIP + saved RDI per step.
+/// Two-phase: ARMED=1 waits (RIP outside module, keep TF, no log);
+/// ARMED=2 traces (RIP inside, log); leaving the module while tracing
+/// disarms (the call into the kernel is the last traced step).
+pub fn dbg_step_fire(frame: u64, rip: u64) -> bool {
+    unsafe {
+        if STEP_ARMED == 0 { return false; }
+        if STEP_LEFT == 0 { STEP_ARMED = 0; return false; }
+        let in_mod = rip >= STEP_BASE && rip < STEP_END;
+        if !in_mod {
+            if STEP_ARMED == 2 {
+                // Trace into the kernel callee (find where RDI is lost).
+                // Keep stepping until LEFT exhausts (no disarm here).
+                let rdi = core::ptr::read_volatile(frame.wrapping_sub(320) as *const u64);
+                let rax = core::ptr::read_volatile(frame.wrapping_sub(280) as *const u64);
+                let left = STEP_LEFT;
+                crate::println!("step OUT rip={:#x} rdi={:#x} rax={:#x} left={}", rip, rdi, rax, left);
+                if STEP_LEFT == 0 { STEP_ARMED = 0; return false; }
+                STEP_LEFT -= 1;
+                return true;
+            }
+            STEP_LEFT -= 1;
+            return true;
+        }
+        STEP_ARMED = 2;
+        STEP_LEFT -= 1;
+        let rdi = core::ptr::read_volatile(frame.wrapping_sub(320) as *const u64);
+        let rax = core::ptr::read_volatile(frame.wrapping_sub(280) as *const u64);
+        let left = STEP_LEFT;
+        crate::println!("step rip={:#x} rdi={:#x} rax={:#x} left={}", rip, rdi, rax, left);
+        if STEP_LEFT == 0 { STEP_ARMED = 0; return false; }
+        true
+    }
+}
+
+// DIAG-ABI: hardware breakpoint probe to verify post-movabs RDI.
+static mut DBG_BP_HIT: u64 = 0;
+static mut DBG_BP_RIP: u64 = 0;
+static mut DBG_BP_RDI: u64 = 0;
+static mut DBG_BP_ARMED: u64 = 0;
+
+pub fn dbg_arm_hwbreak(va: u64) {
+    unsafe {
+        DBG_BP_HIT = 0;
+        DBG_BP_ARMED = 1;
+        core::arch::asm!("mov dr0, {0}", in(reg) va, options(nostack, preserves_flags));
+        // DR7: L0=1 (local enable BP0), RW0=00 (exec), LEN0=00 (1 byte).
+        core::arch::asm!("mov dr7, {0}", in(reg) 0x1u64, options(nostack, preserves_flags));
+    }
+}
+pub fn dbg_disarm_hwbreak() {
+    unsafe {
+        DBG_BP_ARMED = 0;
+        core::arch::asm!("mov dr7, {0}", in(reg) 0u64, options(nostack, preserves_flags));
+    }
+}
+pub fn dbg_hwbreak_hit() -> (u64, u64) {
+    unsafe { (DBG_BP_HIT, (DBG_BP_RIP, DBG_BP_RDI).0) }
+}
+#[allow(dead_code)]
+pub fn dbg_hwbreak_vals() -> (u64, u64, u64) {
+    unsafe { (DBG_BP_HIT, DBG_BP_RIP, DBG_BP_RDI) }
+}
+/// Called from the #DB handler when DR6.BS0 is set and a probe is armed.
+/// `frame` is the IRET-frame base (RIP slot); saved RDI is 320 bytes below it.
+/// If single-step tracing was armed (STEP_BASE set), starts it and returns
+/// true so the handler sets TF (steps from init entry). Else false (clear TF).
+pub fn dbg_hwbreak_fire(frame: u64) -> bool {
+    unsafe {
+        if DBG_BP_ARMED == 0 { return false; }
+        // Read DR6 to confirm HW break (BS0). We clear it by rewriting.
+        let dr6: u64;
+        core::arch::asm!("mov {}, dr6", out(reg) dr6, options(nostack, preserves_flags));
+        if dr6 & 1 == 0 { return false; }
+        // Saved RDI lives 320 bytes below the RIP slot (entry pushes 15 GPRs).
+        let rdi = core::ptr::read_volatile((frame.wrapping_sub(320)) as *const u64);
+        let rip = core::ptr::read_volatile(frame as *const u64);
+        DBG_BP_HIT = 1;
+        DBG_BP_RIP = rip;
+        DBG_BP_RDI = rdi;
+        // Acknowledge + disarm so IRET re-executes once, cleanly.
+        core::arch::asm!("mov dr6, {0}", in(reg) 0xffff0ff0u64, options(nostack, preserves_flags));
+        core::arch::asm!("mov dr7, {0}", in(reg) 0u64, options(nostack, preserves_flags));
+        DBG_BP_ARMED = 0;
+        // Start single-step tracing from init entry (handler sets TF).
+        dbg_step_start()
     }
 }

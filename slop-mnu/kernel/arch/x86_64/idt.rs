@@ -6,7 +6,31 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
  /* #DB from the A2 stop trap: the interrupted user task single-stepped
     here so its pending stop runs on its own kernel stack (IST handlers
     cannot schedule). Clear TF first so the resume does not re-trap. */
- if vector==1{
+  if vector==1{
+   /* DIAG-ABI: hardware breakpoint probe (module execution verification).
+      Runs before TF clear so a code breakpoint does not disturb stops. */
+   crate::module::dbg_hwbreak_fire(frame);
+   if unsafe { crate::module::dbg_hwbreak_hit().0 } != 0 {
+       // Probed and disarmed; resume cleanly without stop logic.
+       // If single-step tracing started, SET TF (step from here).
+       unsafe{let rf=frame as *mut u64;let r=rf.add(2);
+           // dbg_hwbreak_fire started stepping iff STEP was armed; re-check
+           // via a fresh call is racy, so: TF set only when tracing live.
+           // (step_fire returns true while tracing; use it to decide.)
+           if crate::module::dbg_step_fire(frame, rip) {
+               r.write_volatile(r.read_volatile()|0x100);
+           } else {
+               r.write_volatile(r.read_volatile()&!0x100);
+           }
+       }
+       return;
+   }
+   /* DIAG-ABI: TF single-step tracer for module init. Keeps TF set while
+      RIP stays in the module range (logs RIP+RDI per step). */
+   if crate::module::dbg_step_fire(frame, rip) {
+       unsafe{let rf=frame as *mut u64;let r=rf.add(2);r.write_volatile(r.read_volatile()|0x100);}
+       return;
+   }
   unsafe{let rf=frame as *mut u64;let r=rf.add(2);r.write_volatile(r.read_volatile()&!0x100);}
   if cs&3==3&&crate::task::has_current_process(){
    if let Some(sig)=crate::task::stop_requested(){crate::task::stop_current(sig);}

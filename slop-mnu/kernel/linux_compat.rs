@@ -101,7 +101,7 @@ fn format_into(out: &mut [u8], fmt: *const u8, args_in: [u64; 6]) -> usize {
     total
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+pub unsafe extern "sysv64" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
     let mut out = [0u8; 512];
     let n_full = format_into(&mut out, fmt, [a, b, c, d, e, f]);
     let n = core::cmp::min(n_full, 511);
@@ -111,15 +111,15 @@ pub unsafe extern "C" fn printk(fmt: *const u8, a: u64, b: u64, c: u64, d: u64, 
 
 /* ================= kmalloc family (page-granular via kheap) ================= */
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kmalloc(size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kmalloc(size) }
+pub unsafe extern "sysv64" fn kmalloc(size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kmalloc(size) }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kzalloc(size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kzalloc(size) }
+pub unsafe extern "sysv64" fn kzalloc(size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kzalloc(size) }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kcalloc(n: usize, size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kcalloc(n, size) }
+pub unsafe extern "sysv64" fn kcalloc(n: usize, size: usize, _gfp: u32) -> *mut u8 { crate::kheap::kcalloc(n, size) }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kmemdup(src: *const u8, len: usize, _gfp: u32) -> *mut u8 { crate::kheap::kmemdup(src, len) }
+pub unsafe extern "sysv64" fn kmemdup(src: *const u8, len: usize, _gfp: u32) -> *mut u8 { crate::kheap::kmemdup(src, len) }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn krealloc(ptr: *mut u8, size: usize, _gfp: u32) -> *mut u8 {
+pub unsafe extern "sysv64" fn krealloc(ptr: *mut u8, size: usize, _gfp: u32) -> *mut u8 {
     if ptr.is_null() { return crate::kheap::kmalloc(size); }
     if size == 0 { crate::kheap::kfree(ptr); return core::ptr::null_mut(); }
     let old = crate::kheap::ksize(ptr);
@@ -131,9 +131,9 @@ pub unsafe extern "C" fn krealloc(ptr: *mut u8, size: usize, _gfp: u32) -> *mut 
     np
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kfree(ptr: *mut u8) { crate::kheap::kfree(ptr) }
+pub unsafe extern "sysv64" fn kfree(ptr: *mut u8) { crate::kheap::kfree(ptr) }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ksize(ptr: *mut u8) -> usize { crate::kheap::ksize(ptr) }
+pub unsafe extern "sysv64" fn ksize(ptr: *mut u8) -> usize { crate::kheap::ksize(ptr) }
 
 /* ================= sleeps / jiffies ================= */
 pub const HZ: u64 = 1000;
@@ -141,7 +141,7 @@ static JIFFIES: AtomicU64 = AtomicU64::new(0);
 pub fn jiffies_addr() -> u64 { &JIFFIES as *const _ as u64 }
 pub fn tick_jiffies() { JIFFIES.fetch_add(1, Ordering::Relaxed); }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn msleep(ms: u32) {
+pub unsafe extern "sysv64" fn msleep(ms: u32) {
     let t0 = JIFFIES.load(Ordering::Relaxed);
     while JIFFIES.load(Ordering::Relaxed).wrapping_sub(t0) < ms as u64 {
         core::hint::spin_loop();
@@ -151,20 +151,20 @@ pub unsafe extern "C" fn msleep(ms: u32) {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mdelay(ms: u32) {
+pub unsafe extern "sysv64" fn mdelay(ms: u32) {
     // Busy loop calibrated roughly: ~1e6 spins per ms on TCG.
     for _ in 0..(ms as u64 * 1_000_000) { core::hint::spin_loop(); }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn udelay(us: u32) {
+pub unsafe extern "sysv64" fn udelay(us: u32) {
     for _ in 0..(us as u64 * 1000) { core::hint::spin_loop(); }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __const_udelay(us: u32) { unsafe { udelay(us) } }
+pub unsafe extern "sysv64" fn __const_udelay(us: u32) { unsafe { udelay(us) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __udelay(us: u64) { unsafe { udelay(us as u32) } }
+pub unsafe extern "sysv64" fn __udelay(us: u64) { unsafe { udelay(us as u32) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn usleep_range(_min: u64, _max: u64) { msleep(1); }
+pub unsafe extern "sysv64" fn usleep_range(_min: u64, _max: u64) { msleep(1); }
 
 /* ================= PCI registry + ops ================= */
 // Linux struct layouts (64-bit, host kernel 7.x): verified against headers.
@@ -183,8 +183,8 @@ pub struct PciDeviceId {
 pub struct PciDriver {
     pub name: *const u8,
     pub id_table: *const PciDeviceId,
-    pub probe: Option<unsafe extern "C" fn(*mut PciDev, *const PciDeviceId) -> i32>,
-    pub remove: Option<unsafe extern "C" fn(*mut PciDev)>,
+    pub probe: Option<unsafe extern "sysv64" fn(*mut PciDev, *const PciDeviceId) -> i32>,
+    pub remove: Option<unsafe extern "sysv64" fn(*mut PciDev)>,
     // (further fields ignored: suspend/remove/shutdown/... not called by us)
 }
 // Minimal pci_dev: real prefix (bus_list/bus/subordinate/sysdata/procent/
@@ -271,7 +271,7 @@ fn slop_pci_probe_shim(bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, o
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_register_driver(drv: u64) -> i32 {
+pub unsafe extern "sysv64" fn pci_register_driver(drv: u64) -> i32 {
     if drv == 0 { return -22; } // -EINVAL
     let p = unsafe { &*(drv as *const PciDriver) };
     if p.id_table.is_null() || p.probe.is_none() { return -22; }
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn pci_register_driver(drv: u64) -> i32 {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_unregister_driver(drv: u64) {
+pub unsafe extern "sysv64" fn pci_unregister_driver(drv: u64) {
     if drv == 0 { return; }
     // Slop core drops all registrations carrying this opaque cookie.
     crate::driver::pci::unregister_slop_driver(drv);
@@ -320,7 +320,7 @@ fn pci_cmd_set(bdf: crate::driver::pci::Bdf, bits: u16, on: bool) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_enable_device(dev: *mut PciDev) -> i32 {
+pub unsafe extern "sysv64" fn pci_enable_device(dev: *mut PciDev) -> i32 {
     if dev.is_null() { return -22; }
     let bdf = unsafe { (*dev).bdf_of() };
     use crate::driver::pci::{CMD_IO, CMD_MEM};
@@ -328,45 +328,45 @@ pub unsafe extern "C" fn pci_enable_device(dev: *mut PciDev) -> i32 {
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_disable_device(dev: *mut PciDev) {
+pub unsafe extern "sysv64" fn pci_disable_device(dev: *mut PciDev) {
     if dev.is_null() { return; }
     let bdf = unsafe { (*dev).bdf_of() };
     use crate::driver::pci::{CMD_IO, CMD_MEM, CMD_BUS_MASTER};
     pci_cmd_set(bdf, CMD_IO | CMD_MEM | CMD_BUS_MASTER, false);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_request_regions(_dev: *mut PciDev, _name: *const u8) -> i32 {
+pub unsafe extern "sysv64" fn pci_request_regions(_dev: *mut PciDev, _name: *const u8) -> i32 {
     // No BAR reservation table yet (PCI subsystem step): accept, since Slop
     // owns all BARs on this single-enumeration platform and hands them out
     // read-only from config space. Revisit with resource management.
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_release_regions(_dev: *mut PciDev) {}
+pub unsafe extern "sysv64" fn pci_release_regions(_dev: *mut PciDev) {}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_set_master(dev: *mut PciDev) {
+pub unsafe extern "sysv64" fn pci_set_master(dev: *mut PciDev) {
     if dev.is_null() { return; }
     let bdf = unsafe { (*dev).bdf_of() };
     pci_cmd_set(bdf, crate::driver::pci::CMD_BUS_MASTER, true);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_clear_master(dev: *mut PciDev) {
+pub unsafe extern "sysv64" fn pci_clear_master(dev: *mut PciDev) {
     if dev.is_null() { return; }
     let bdf = unsafe { (*dev).bdf_of() };
     pci_cmd_set(bdf, crate::driver::pci::CMD_BUS_MASTER, false);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_set_drvdata(dev: *mut PciDev, data: u64) {
+pub unsafe extern "sysv64" fn pci_set_drvdata(dev: *mut PciDev, data: u64) {
     if dev.is_null() { return; }
     unsafe { (*dev).drvdata = data; }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_get_drvdata(dev: *mut PciDev) -> u64 {
+pub unsafe extern "sysv64" fn pci_get_drvdata(dev: *mut PciDev) -> u64 {
     if dev.is_null() { return 0; }
     unsafe { (*dev).drvdata }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_ioremap_bar(_dev: *mut PciDev, nr: u64) -> u64 {
+pub unsafe extern "sysv64" fn pci_ioremap_bar(_dev: *mut PciDev, nr: u64) -> u64 {
     // No MMIO mapping yet (needs UC mappings + BAR resource management from
     // the Slop PCI core). Return NULL so drivers fail probe cleanly instead
     // of dereferencing a bogus direct-map alias with wrong caching.
@@ -374,11 +374,11 @@ pub unsafe extern "C" fn pci_ioremap_bar(_dev: *mut PciDev, nr: u64) -> u64 {
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_iounmap(_dev: *mut PciDev, _addr: u64) {}
+pub unsafe extern "sysv64" fn pci_iounmap(_dev: *mut PciDev, _addr: u64) {}
 
 /* ================= MMIO ================= */
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ioremap(phys: u64, _size: u64) -> u64 {
+pub unsafe extern "sysv64" fn ioremap(phys: u64, _size: u64) -> u64 {
     // Direct-map aliases are WB-cached RAM mappings; using them for MMIO
     // silently corrupts device interaction. Until the Slop PCI/DMA core
     // provides real UC mappings, fail closed so drivers error out cleanly.
@@ -386,19 +386,19 @@ pub unsafe extern "C" fn ioremap(phys: u64, _size: u64) -> u64 {
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn iounmap(_addr: u64) {}
+pub unsafe extern "sysv64" fn iounmap(_addr: u64) {}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ioread8(addr: u64) -> u8 { unsafe { core::ptr::read_volatile(addr as *const u8) } }
+pub unsafe extern "sysv64" fn ioread8(addr: u64) -> u8 { unsafe { core::ptr::read_volatile(addr as *const u8) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ioread16(addr: u64) -> u16 { unsafe { core::ptr::read_volatile(addr as *const u16) } }
+pub unsafe extern "sysv64" fn ioread16(addr: u64) -> u16 { unsafe { core::ptr::read_volatile(addr as *const u16) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ioread32(addr: u64) -> u32 { unsafe { core::ptr::read_volatile(addr as *const u32) } }
+pub unsafe extern "sysv64" fn ioread32(addr: u64) -> u32 { unsafe { core::ptr::read_volatile(addr as *const u32) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn iowrite8(v: u8, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u8, v) } }
+pub unsafe extern "sysv64" fn iowrite8(v: u8, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u8, v) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn iowrite16(v: u16, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u16, v) } }
+pub unsafe extern "sysv64" fn iowrite16(v: u16, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u16, v) } }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn iowrite32(v: u32, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u32, v) } }
+pub unsafe extern "sysv64" fn iowrite32(v: u32, addr: u64) { unsafe { core::ptr::write_volatile(addr as *mut u32, v) } }
 
 /* ================= IRQ (accepted, delivery not yet wired) ================= */
 /* ================= IRQ: thin adapter over Slop IRQ core ================= */
@@ -419,7 +419,7 @@ fn linux_irq_trampoline(vec: u8, dev_id: u64) -> bool {
     };
     if h == 0 { return false; }
     let r: i32 = unsafe {
-        let f: unsafe extern "C" fn(i32, u64) -> i32 = core::mem::transmute(h as usize);
+        let f: unsafe extern "sysv64" fn(i32, u64) -> i32 = core::mem::transmute(h as usize);
         f(vec as i32, dev_id)
     };
     r == 1 // IRQ_HANDLED
@@ -428,7 +428,7 @@ fn linux_irq_trampoline(vec: u8, dev_id: u64) -> bool {
 pub const IRQF_SHARED: u64 = 0x80;
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn request_irq(irq: u32, handler: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
+pub unsafe extern "sysv64" fn request_irq(irq: u32, handler: u64, flags: u64, name: *const u8, dev_id: u64) -> i32 {
     if irq >= 256 || handler == 0 { return -22; }
     let mut nm = [0u8; 32];
     if !name.is_null() {
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn request_irq(irq: u32, handler: u64, flags: u64, name: *
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_irq(irq: u32, dev_id: u64) {
+pub unsafe extern "sysv64" fn free_irq(irq: u32, dev_id: u64) {
     if irq >= 256 { return; }
     // Slop core waits out in-flight handlers (safe unload).
     let _ = crate::irq::unregister(irq as u8, dev_id);
@@ -492,7 +492,7 @@ pub struct AbiExpect {
 }
 static mut ABI_GOT: AbiExpect = AbiExpect { a0: 0, a1: 0, a2: 0, a3: 0, a4: 0, a5: 0, s0: 0, s1: 0 };
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn abi_probe_6(a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) {
+pub unsafe extern "sysv64" fn abi_probe_6(a0: u64, a1: u64, a2: u64, a3: u64, a4: u64, a5: u64) {
     unsafe {
         ABI_GOT.a0 = a0;
         ABI_GOT.a1 = a1;
@@ -503,7 +503,7 @@ pub unsafe extern "C" fn abi_probe_6(a0: u64, a1: u64, a2: u64, a3: u64, a4: u64
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn abi_verify() -> i32 {
+pub unsafe extern "sysv64" fn abi_verify() -> i32 {
     unsafe {
         let exp = &*(&raw const TEST_STORE as *const AbiExpect);
         let got = &*(&raw const ABI_GOT as *const AbiExpect);
@@ -518,13 +518,13 @@ pub unsafe extern "C" fn abi_verify() -> i32 {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn test_u64_arg(a: u64, b: u64) -> u64 {
-    crate::println!("module: test_u64 got {:#x} {:#x}", a, b);
-    a.wrapping_add(b)
+pub unsafe extern "sysv64" fn test_u64_arg(x: u64) -> u64 {
+    crate::println!("module: test_u64 got {:#x}", x);
+    x.wrapping_add(1)
 }
 pub static mut TEST_STORE: [u64; 8] = [0; 8];
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn test_store_addr() -> u64 { unsafe { &raw const TEST_STORE as u64 } }
+pub unsafe extern "sysv64" fn test_store_addr() -> u64 { unsafe { &raw const TEST_STORE as u64 } }
 /* Simple PCI registration for drivers that cannot pass structs by value
    (workaround path): module fills TEST_STORE layout then calls this. */
 #[repr(C)]
@@ -535,7 +535,7 @@ pub struct SimplePciDrv {
     pub remove: u64,
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pci_register_simple() -> i32 {
+pub unsafe extern "sysv64" fn pci_register_simple() -> i32 {
     let s = unsafe { &*((&raw const TEST_STORE as *const u64) as *const SimplePciDrv) };
     let v = s.vendor;
     let d = s.device;
@@ -550,9 +550,9 @@ pub unsafe extern "C" fn pci_register_simple() -> i32 {
 }
 /* ================= misc ================= */
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn capable(_cap: i32) -> bool { true }
+pub unsafe extern "sysv64" fn capable(_cap: i32) -> bool { true }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn stack_chk_fail() -> ! {
+pub unsafe extern "sysv64" fn stack_chk_fail() -> ! {
     crate::println!("module: stack protector violation; halting CPU");
     loop { core::hint::spin_loop(); unsafe { core::arch::asm!("hlt", options(nomem, nostack)) } }
 }
@@ -564,28 +564,28 @@ pub fn ret_thunk_addr() -> u64 { &RET_BYTE as *const u8 as u64 }
 
 /* ================= string/memory helpers (modules may not link libgcc) ================= */
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
+pub unsafe extern "sysv64" fn k_memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
     for i in 0..n { unsafe { core::ptr::write_volatile(s.add(i), c as u8) } }
     s
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_memcpy(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
+pub unsafe extern "sysv64" fn k_memcpy(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
     unsafe { core::ptr::copy_nonoverlapping(s, d, n) };
     d
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_memmove(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
+pub unsafe extern "sysv64" fn k_memmove(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
     unsafe { core::ptr::copy(s, d, n) };
     d
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_strlen(s: *const u8) -> usize {
+pub unsafe extern "sysv64" fn k_strlen(s: *const u8) -> usize {
     let mut n = 0usize;
     while unsafe { core::ptr::read_volatile(s.add(n)) } != 0 { n += 1; }
     n
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_strcmp(a: *const u8, b: *const u8) -> i32 {
+pub unsafe extern "sysv64" fn k_strcmp(a: *const u8, b: *const u8) -> i32 {
     let mut i = 0usize;
     loop {
         let x = unsafe { core::ptr::read_volatile(a.add(i)) };
@@ -595,7 +595,7 @@ pub unsafe extern "C" fn k_strcmp(a: *const u8, b: *const u8) -> i32 {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_strncmp(a: *const u8, b: *const u8, n: usize) -> i32 {
+pub unsafe extern "sysv64" fn k_strncmp(a: *const u8, b: *const u8, n: usize) -> i32 {
     for i in 0..n {
         let x = unsafe { core::ptr::read_volatile(a.add(i)) };
         let y = unsafe { core::ptr::read_volatile(b.add(i)) };
@@ -604,7 +604,7 @@ pub unsafe extern "C" fn k_strncmp(a: *const u8, b: *const u8, n: usize) -> i32 
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_strncpy(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
+pub unsafe extern "sysv64" fn k_strncpy(d: *mut u8, s: *const u8, n: usize) -> *mut u8 {
     for i in 0..n {
         let b = unsafe { core::ptr::read_volatile(s.add(i)) };
         unsafe { core::ptr::write_volatile(d.add(i), b) };
@@ -613,11 +613,11 @@ pub unsafe extern "C" fn k_strncpy(d: *mut u8, s: *const u8, n: usize) -> *mut u
     d
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_sprintf(buf: *mut u8, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+pub unsafe extern "sysv64" fn k_sprintf(buf: *mut u8, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
     k_snprintf(buf, usize::MAX / 2, fmt, a, b, c, d, e, f)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_snprintf(buf: *mut u8, n: usize, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
+pub unsafe extern "sysv64" fn k_snprintf(buf: *mut u8, n: usize, fmt: *const u8, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64) -> i32 {
     if buf.is_null() || n == 0 {
         // Length-probe path: compute full length without writing.
         let mut tmp = [0u8; 1];
@@ -640,7 +640,7 @@ pub unsafe extern "C" fn k_snprintf(buf: *mut u8, n: usize, fmt: *const u8, a: u
     total as i32
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn k_vsnprintf(buf: *mut u8, n: usize, fmt: *const u8, ap: *const u8) -> i32 {
+pub unsafe extern "sysv64" fn k_vsnprintf(buf: *mut u8, n: usize, fmt: *const u8, ap: *const u8) -> i32 {
     // va_list (x86-64 SysV): {gp_offset:u32, fp_offset:u32, overflow:ptr, reg_save:ptr}.
     // Extract up to 6 GP regs; stack-passed varargs read as zero (documented cap).
     let mut args = [0u64; 6];
@@ -669,7 +669,7 @@ static mut TEST_IDS: [PciDeviceId; 2] = [
     PciDeviceId { vendor: 0x8086, device: 0x29C0, subvendor: 0, subdevice: 0, class: 0, class_mask: 0, driver_data: 0, override_only: 0 },
 ];
 static mut TEST_DRV: PciDriver = PciDriver { name: 0 as *const u8, id_table: 0 as *const PciDeviceId, probe: None, remove: None };
-unsafe extern "C" fn test_probe(_d: *mut PciDev, _id: *const PciDeviceId) -> i32 {
+unsafe extern "sysv64" fn test_probe(_d: *mut PciDev, _id: *const PciDeviceId) -> i32 {
     crate::println!("pci: test probe ran (adapter works)");
     0
 }
@@ -684,7 +684,7 @@ pub fn selftest_pci_adapter() {
 }
 
 static LINUX_TEST_FIRED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
-unsafe extern "C" fn linux_test_handler(_irq: i32, dev: u64) -> i32 {
+unsafe extern "sysv64" fn linux_test_handler(_irq: i32, dev: u64) -> i32 {
     if dev == 0x5a5a5a6 {
         LINUX_TEST_FIRED.store(0x4c495251_51524551, core::sync::atomic::Ordering::SeqCst);
         return 1; // IRQ_HANDLED
@@ -731,7 +731,7 @@ pub fn selftest_linux_irq() {
 /* ================= DMA: thin adapters over Slop DMA core ================= */
 // dma_mask is u64 max (device-specific masks are future work with real BARs).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_alloc_coherent(_dev: u64, size: usize, dma_handle: *mut u64, _gfp: u32) -> *mut u8 {
+pub unsafe extern "sysv64" fn dma_alloc_coherent(_dev: u64, size: usize, dma_handle: *mut u64, _gfp: u32) -> *mut u8 {
     if dma_handle.is_null() || size == 0 || size > 4 * 1024 * 1024 { return core::ptr::null_mut(); }
     match crate::dma::alloc_coherent(size) {
         Some((va, pa)) => {
@@ -742,39 +742,39 @@ pub unsafe extern "C" fn dma_alloc_coherent(_dev: u64, size: usize, dma_handle: 
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_free_coherent(_dev: u64, size: usize, vaddr: *mut u8, bus: u64) {
+pub unsafe extern "sysv64" fn dma_free_coherent(_dev: u64, size: usize, vaddr: *mut u8, bus: u64) {
     if vaddr.is_null() { return; }
     let _ = vaddr;
     crate::dma::free_coherent(0, bus, size);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_map_single(_dev: u64, ptr: *mut u8, size: usize, dir: u32) -> u64 {
+pub unsafe extern "sysv64" fn dma_map_single(_dev: u64, ptr: *mut u8, size: usize, dir: u32) -> u64 {
     if ptr.is_null() || size == 0 { return crate::dma::DMA_MAPPING_ERROR; }
     // Slop DMA core validates contiguity via page tables (no casts) and
     // enforces a full 64-bit mask here; per-device masks ride with BARs later.
     crate::dma::map_single(ptr as u64, size, dir, u64::MAX)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_unmap_single(_dev: u64, bus: u64, size: usize, dir: u32) {
+pub unsafe extern "sysv64" fn dma_unmap_single(_dev: u64, bus: u64, size: usize, dir: u32) {
     crate::dma::unmap_single(bus, size, dir);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_sync_single_for_cpu(_dev: u64, bus: u64, size: usize, dir: u32) {
+pub unsafe extern "sysv64" fn dma_sync_single_for_cpu(_dev: u64, bus: u64, size: usize, dir: u32) {
     crate::dma::sync_single(bus, size, dir);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_sync_single_for_device(_dev: u64, bus: u64, size: usize, dir: u32) {
+pub unsafe extern "sysv64" fn dma_sync_single_for_device(_dev: u64, bus: u64, size: usize, dir: u32) {
     crate::dma::sync_single(bus, size, dir);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_map_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) -> i32 {
+pub unsafe extern "sysv64" fn dma_map_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) -> i32 {
     // Scatter-gather needs exact struct scatterlist layout pinning
     // (CONFIG_NEED_SG_DMA_* dependent); fail safe until then.
     crate::println!("dma: map_sg not yet wired (needs sg layout); returning 0");
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dma_unmap_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) {}
+pub unsafe extern "sysv64" fn dma_unmap_sg(_dev: u64, _sgl: u64, _nents: u32, _dir: u32) {}
 
 /* Force-drop every Linux-side IRQ registration (module unload / init-failure
    safety net). Slop core waits out in-flight handlers, so no use-after-free.
