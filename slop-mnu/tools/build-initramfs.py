@@ -1,40 +1,75 @@
 #!/usr/bin/env python3
+"""Build the NSAR initramfs + COFF .rdata wrapper linked into the EFI image.
+
+Module-test selection via env: INITRAMFS_INIT=modtest boots /bin/modtest
+(Linux .ko load/unload + EDU device vertical) instead of /bin/hello.
+Requires tests/musl/modtest + tests/kmod/slotest-strip.ko (see tests/kmod/).
+
+NOTE: entries stay one-per-line tuples because test scripts
+(smp/stop/heap/differential/busybox/ext4-test/ext4-write-test) inject
+their own entries by string-matching the hello-net line below. Keep that
+line byte-identical when editing.
+"""
 from pathlib import Path
 import struct
-out=bytearray(b'NSAR0001')
-musl_lib=Path('tests/musl/lib/libc.so').read_bytes()
-entries=[('/bin',b'',0o040755),('/etc',b'',0o040755),('/lib',b'',0o040755),('/init',Path('build/minimal-linux.elf').read_bytes(),0o100755),('/lib/libc.so',musl_lib,0o100755),('/lib/ld-musl-x86_64.so.1',musl_lib,0o100755),('/lib/vdso.so',Path('build/vdso.so').read_bytes(),0o100755),('/bin/hello-dyn',Path('tests/musl/hello-dyn').read_bytes(),0o100755),('/bin/hello-thread',Path('tests/musl/hello-thread').read_bytes(),0o100755),('/bin/hello-socket',Path('tests/musl/hello-socket').read_bytes(),0o100755),('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),('/bin/hello',Path('build/hello-linux.elf').read_bytes(),0o100755),('/bin/hello-c',Path('build/hello-c.elf').read_bytes(),0o100755),('/bin/hello-posix',Path('build/hello-posix.elf').read_bytes(),0o100755),('/bin/hello-signal',Path('build/hello-signal.elf').read_bytes(),0o100755),('/bin/hello-file',Path('build/hello-file.elf').read_bytes(),0o100755),('/bin/hello-syscall',Path('build/hello-syscall.elf').read_bytes(),0o100755),('/etc/motd',b'Slop/MNU initramfs\n',0o100444)]
-out += struct.pack('<I',len(entries))
-for name,data,mode in entries:
-    b=name.encode(); out += struct.pack('<HHI',len(b),mode,len(data)); out += b; out += bytes((-len(out))&7); out += data; out += bytes((-len(out))&7)
+import os
+out = bytearray(b'NSAR0001')
+musl_lib = Path('tests/musl/lib/libc.so').read_bytes()
+init_variant = os.environ.get('INITRAMFS_INIT', 'hello')
+init_elf = 'build/minimal-linux-modtest.elf' if init_variant == 'modtest' else 'build/minimal-linux.elf'
+entries = [('/bin', b'', 0o040755),
+    ('/etc', b'', 0o040755),
+    ('/lib', b'', 0o040755),
+    ('/init', Path(init_elf).read_bytes(), 0o100755),
+    ('/lib/libc.so', musl_lib, 0o100755),
+    ('/lib/ld-musl-x86_64.so.1', musl_lib, 0o100755),
+    ('/lib/vdso.so', Path('build/vdso.so').read_bytes(), 0o100755),
+    ('/bin/hello-dyn', Path('tests/musl/hello-dyn').read_bytes(), 0o100755),
+    ('/bin/hello-thread', Path('tests/musl/hello-thread').read_bytes(), 0o100755),
+    ('/bin/hello-socket', Path('tests/musl/hello-socket').read_bytes(), 0o100755),
+    ('/bin/hello-net',Path('tests/musl/hello-net').read_bytes(),0o100755),
+    ('/bin/hello', Path('build/hello-linux.elf').read_bytes(), 0o100755),
+    ('/bin/hello-c', Path('build/hello-c.elf').read_bytes(), 0o100755),
+    ('/bin/hello-posix', Path('build/hello-posix.elf').read_bytes(), 0o100755),
+    ('/bin/hello-signal', Path('build/hello-signal.elf').read_bytes(), 0o100755),
+    ('/bin/hello-file', Path('build/hello-file.elf').read_bytes(), 0o100755),
+    ('/bin/hello-syscall', Path('build/hello-syscall.elf').read_bytes(), 0o100755),
+    ('/bin/modtest', Path('tests/musl/modtest').read_bytes(), 0o100755),
+    ('/lib/slotest.ko', Path('tests/kmod/slotest-strip.ko').read_bytes(), 0o100644),
+    ('/etc/motd', b'Slop/MNU initramfs\n', 0o100444)]
+names = [n for n, _, _ in entries]
+assert len(names) == len(set(names)), 'duplicate initramfs entry'
+out += struct.pack('<I', len(entries))
+for name, data, mode in entries:
+    b = name.encode(); out += struct.pack('<HHI', len(b), mode, len(data)); out += b; out += bytes((-len(out)) & 7); out += data; out += bytes((-len(out)) & 7)
 Path('build/initramfs.nsar').write_bytes(out)
 
-def coff_rdata(data,symbols):
+def coff_rdata(data, symbols):
     # Minimal COFF-x86-64 relocatable object with one .rdata section.
-    dataoff=64
-    symoff=(dataoff+len(data)+3)&~3
-    strtab=bytearray(struct.pack('<I',0))
-    names=[]
-    for name,_ in symbols:
-        b=name.encode()
-        if len(b)<=8:
-            names.append((b.ljust(8,b'\0'),None))
+    dataoff = 64
+    symoff = (dataoff+len(data)+3) & ~3
+    strtab = bytearray(struct.pack('<I', 0))
+    names = []
+    for name, _ in symbols:
+        b = name.encode()
+        if len(b) <= 8:
+            names.append((b.ljust(8, b'\0'), None))
         else:
-            names.append((b'\0\0\0\0'+struct.pack('<I',len(strtab)),len(strtab)))
-            strtab+=b+b'\0'
-    struct.pack_into('<I',strtab,0,len(strtab))
-    header=struct.pack('<HHIIIHH',0x8664,1,0,symoff,len(symbols),0,0)
-    section=struct.pack('<8sIIIIIIHHI',b'.rdata',0,0,len(data),dataoff,0,0,0,0,0x40500040)
-    obj=bytearray(header+section)
-    obj+=bytes(dataoff-len(obj))+data
-    obj+=bytes(symoff-len(obj))
-    for (nm,_),(_,value) in zip(names,symbols):
-        obj+=struct.pack('<8sIHHBB',nm,value,1,0,2,0)
-    obj+=strtab
+            names.append((b'\0\0\0\0'+struct.pack('<I', len(strtab)), len(strtab)))
+            strtab += b+b'\0'
+    struct.pack_into('<I', strtab, 0, len(strtab))
+    header = struct.pack('<HHIIIHH', 0x8664, 1, 0, symoff, len(symbols), 0, 0)
+    section = struct.pack('<8sIIIIIIHHI', b'.rdata', 0, 0, len(data), dataoff, 0, 0, 0, 0, 0x40500040)
+    obj = bytearray(header+section)
+    obj += bytes(dataoff-len(obj))+data
+    obj += bytes(symoff-len(obj))
+    for (nm, _), (_, value) in zip(names, symbols):
+        obj += struct.pack('<8sIHHBB', nm, value, 1, 0, 2, 0)
+    obj += strtab
     return bytes(obj)
 
-blob=bytes(out)
-syms=[('_binary_build_initramfs_nsar_start',0),('_binary_build_initramfs_nsar_end',len(blob)),('_binary_build_initramfs_nsar_size',len(blob))]
-Path('build/initramfs.obj').write_bytes(coff_rdata(blob,syms))
-print(f'created build/initramfs.nsar with {len(entries)} entries, {len(out)} bytes')
+blob = bytes(out)
+syms = [('_binary_build_initramfs_nsar_start', 0), ('_binary_build_initramfs_nsar_end', len(blob)), ('_binary_build_initramfs_nsar_size', len(blob))]
+Path('build/initramfs.obj').write_bytes(coff_rdata(blob, syms))
+print(f'created build/initramfs.nsar with {len(entries)} entries, {len(out)} bytes (init={init_variant})')
 print(f'created build/initramfs.obj, {len(blob)} bytes of .rdata')

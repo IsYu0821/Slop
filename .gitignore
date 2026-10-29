@@ -1,2 +1,20 @@
 /slop-mnu/target/
 /slop-mnu/build/
+# kbuild artifacts from tests/kmod (rebuilt via tests/kmod/Makefile).
+/slop-mnu/tests/kmod/*.o
+/slop-mnu/tests/kmod/*.ko
+/slop-mnu/tests/kmod/*.mod
+/slop-mnu/tests/kmod/*.mod.c
+/slop-mnu/tests/kmod/*.mod.o
+/slop-mnu/tests/kmod/Module.symvers
+/slop-mnu/tests/kmod/modules.order
+/slop-mnu/tests/kmod/.*.cmd
+/slop-mnu/tests/kmod/.tmp_versions/
+/slop-mnu/tests/kmod/modtest-loop
+# Freestanding test binaries built from committed sources.
+/slop-mnu/tests/musl/modtest
+/slop-mnu/tests/musl/ext2-mini
+/slop-mnu/tests/musl/ext4-mini
+/slop-mnu/tests/musl/tcp-mini2
+/slop-mnu/tests/musl/tcp-mini3
+/slop-mnu/tests/musl/tcp-mini4
