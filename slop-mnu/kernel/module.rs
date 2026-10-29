@@ -91,6 +91,45 @@ fn module_write_ptr(base: u64, frames: &[u64; 256], va: u64) -> *mut u8 {
     let pa = frames[pi];
     (crate::arch::x86_64::phys::phys_to_virt(pa) + po as u64) as *mut u8
 }
+/* Frames are scattered physical pages: a single spanning copy from one
+   page's direct-map address would overflow into unrelated physical memory
+   (and leave later pages unwritten). All multi-byte accesses go through
+   these page-by-page helpers. */
+fn module_write_bytes(base: u64, frames: &[u64; 256], mut va: u64, buf: &[u8]) {
+    let mut o = 0usize;
+    while o < buf.len() {
+        let po = (va & 4095) as usize;
+        let chunk = core::cmp::min(4096 - po, buf.len() - o);
+        let dst = module_write_ptr(base, frames, va);
+        unsafe { core::ptr::copy_nonoverlapping(buf.as_ptr().add(o), dst, chunk) };
+        va += chunk as u64;
+        o += chunk;
+    }
+}
+fn module_zero(base: u64, frames: &[u64; 256], mut va: u64, mut len: u64) {
+    while len > 0 {
+        let po = (va & 4095) as usize;
+        let chunk = core::cmp::min(4096 - po, len as usize);
+        let dst = module_write_ptr(base, frames, va);
+        unsafe { core::ptr::write_bytes(dst, 0, chunk) };
+        va += chunk as u64;
+        len -= chunk as u64;
+    }
+}
+fn module_read_u64(base: u64, frames: &[u64; 256], va: u64) -> u64 {
+    let mut b = [0u8; 8];
+    let mut o = 0usize;
+    let mut v = va;
+    while o < 8 {
+        let po = (v & 4095) as usize;
+        let chunk = core::cmp::min(4096 - po, 8 - o);
+        let src = module_write_ptr(base, frames, v) as *const u8;
+        unsafe { core::ptr::copy_nonoverlapping(src.add(0), b.as_mut_ptr().add(o), chunk) };
+        v += chunk as u64;
+        o += chunk;
+    }
+    u64::from_le_bytes(b)
+}
 
 /* Read a section header field block. shoff/shentsize/shnum/shstrndx drive it. */
 struct Shdr {
@@ -356,12 +395,13 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
         cur += secs[i].size;
         let sh = read_shdr(img, shoff, shentsize, i)?;
         // Copy content via direct map (NOBITS stays zeroed; frames may be dirty).
-        let dst = module_write_ptr(base, &frames, secs[i].va);
-        unsafe { core::ptr::write_bytes(dst, 0, secs[i].size as usize) };
+        // Page-by-page: frames are scattered, a spanning copy would corrupt
+        // unrelated physical memory past the first page.
+        module_zero(base, &frames, secs[i].va, secs[i].size);
         let sh = read_shdr(img, shoff, shentsize, i)?;
         if sh.stype != SHT_NOBITS && sh.size > 0 {
             let src = sec_bytes(img, &sh)?;
-            unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len()) };
+            module_write_bytes(base, &frames, secs[i].va, src);
         }
     }
     // Apply RELA sections.
@@ -407,26 +447,24 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             let loc = secs[tgt].va + offset;
             let p = loc;
             match typ {
-                R_64 => unsafe {
+                R_64 => {
                     let v = sva.wrapping_add(addend as u64);
-                    let wptr = module_write_ptr(base, &frames, loc);
-                    core::ptr::write_unaligned(wptr as *mut u64, v);
+                    module_write_bytes(base, &frames, loc, &v.to_le_bytes());
                     // Read-back verification: catches mapping/aliasing bugs
                     // where the write lands elsewhere than the fetch path.
-                    let back = core::ptr::read_volatile(wptr as *const u64);
+                    let back = module_read_u64(base, &frames, loc);
                     if back != v {
                         crate::println!("module: RELOC MISMATCH loc={:#x} wrote={:#x} read={:#x}", loc, v, back);
                         return Err("reloc verify failed");
                     }
                 },
-                R_32 | R_32S => unsafe {
-                    let wptr = module_write_ptr(base, &frames, loc);
-                    core::ptr::write_unaligned(wptr as *mut u32, sva.wrapping_add(addend as u64) as u32)
+                R_32 | R_32S => {
+                    let v = sva.wrapping_add(addend as u64) as u32;
+                    module_write_bytes(base, &frames, loc, &v.to_le_bytes());
                 }
-                R_PC32 | R_PLT32 => unsafe {
+                R_PC32 | R_PLT32 => {
                     let v = (sva.wrapping_add(addend as u64)).wrapping_sub(p) as u32;
-                    let wptr = module_write_ptr(base, &frames, loc);
-                    core::ptr::write_unaligned(wptr as *mut u32, v)
+                    module_write_bytes(base, &frames, loc, &v.to_le_bytes());
                 }
                 _ => return Err("unsupported reloc"),
             }

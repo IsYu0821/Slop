@@ -361,8 +361,15 @@ pub unsafe extern "sysv64" fn mdelay(ms: u32) {
 pub unsafe extern "sysv64" fn udelay(us: u32) {
     for _ in 0..(us as u64 * 1000) { core::hint::spin_loop(); }
 }
+// Linux x86 headers fold constant udelay(n) into __const_udelay(n*4295):
+// the argument is ALREADY scaled (UDELAY_MULT), so it must be executed
+// as a raw delay-loop count, NOT re-scaled as microseconds (doing so
+// spins n*4295*1000 and stalls for minutes under KVM pause-exits).
+// Approximation: raw pause spins, no wall-clock guarantee under TCG/KVM.
 #[unsafe(no_mangle)]
-pub unsafe extern "sysv64" fn __const_udelay(us: u32) { unsafe { udelay(us) } }
+pub unsafe extern "sysv64" fn __const_udelay(xloops: u32) {
+    for _ in 0..xloops { core::hint::spin_loop(); }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn __udelay(us: u64) { unsafe { udelay(us as u32) } }
 #[unsafe(no_mangle)]

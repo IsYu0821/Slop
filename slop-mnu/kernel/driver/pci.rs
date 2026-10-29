@@ -314,6 +314,34 @@ use crate::arch::x86_64::phys::{Identity, KIMAGE_BASE};
 const MMIO_BASE: u64 = KIMAGE_BASE + 0x2000_0000; // +512 MiB, clear of kernel+modules
 const MMIO_END: u64 = MMIO_BASE + 0x400_0000; // 64 MiB window
 static MMIO_NEXT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(MMIO_BASE);
+// Freed VA ranges for reuse (exact-size match, else bump). Without this
+// the bump allocator exhausts the 64 MiB window on repeated load/unload.
+struct FreeVa { used: bool, va: u64, len: u64 }
+const NO_FREE: FreeVa = FreeVa { used: false, va: 0, len: 0 };
+static MMIO_FREE: crate::sync::IrqSpinLock<[FreeVa; 16]> = crate::sync::IrqSpinLock::new([NO_FREE; 16]);
+fn mmio_alloc_va(len: u64) -> u64 {
+    {
+        let mut t = MMIO_FREE.lock();
+        if let Some(f) = t.iter_mut().find(|f| f.used && f.len == len) {
+            let va = f.va;
+            *f = NO_FREE;
+            return va;
+        }
+    }
+    let va = MMIO_NEXT.fetch_add(len, core::sync::atomic::Ordering::SeqCst);
+    if va + len > MMIO_END || va < MMIO_BASE {
+        0
+    } else {
+        va
+    }
+}
+fn mmio_free_va(va: u64, len: u64) {
+    let mut t = MMIO_FREE.lock();
+    if let Some(f) = t.iter_mut().find(|f| !f.used) {
+        *f = FreeVa { used: true, va, len };
+    }
+    // Full table: leak the VA (bump allocator covers it until window ends).
+}
 
 struct MmioMap { used: bool, va: u64, len: u64, bdf_packed: u32, nr: u8 }
 const NO_MAP: MmioMap = MmioMap { used: false, va: 0, len: 0, bdf_packed: 0, nr: 0 };
@@ -363,8 +391,8 @@ pub fn ioremap_bar(bdf: Bdf, nr: u8) -> u64 {
     }
     if reserve_bar(base, len, &tag).is_err() { return 0; }
     crate::println!("pci: ioremap {:02x}:{:02x}.{}[{}] phys={:#x} size={:#x}", bdf.bus, bdf.device, bdf.function, nr, base, size);
-    let va = MMIO_NEXT.fetch_add(len, core::sync::atomic::Ordering::SeqCst);
-    if va + len > MMIO_END || va < MMIO_BASE {
+    let va = mmio_alloc_va(len);
+    if va == 0 {
         release_bar(base, len);
         return 0;
     }
@@ -456,7 +484,7 @@ pub fn iounmap_bar(va: u64) {
             if sz != 0 { release_bar(base, ((sz + 4095) / 4096) * 4096); }
         }
     }
-    let _ = len;
+    mmio_free_va(va, len);
 }
 
 /* Boot self-test: map the first MMIO BAR found, read a dword (must not
