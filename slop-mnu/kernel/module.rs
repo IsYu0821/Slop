@@ -8,6 +8,17 @@
 //! text and RW data (W^X). Unresolved symbols fail the load, except
 //! `module_layout` (a version CRC meaningless here: we are deliberately not
 //! the kernel the module was built for; vermagic mismatch only warns).
+//!
+//! -mcmodel=large (absolute 64-bit) is the current tested path. Stock
+//! `-mcmodel=kernel` emits R_X86_64_32/32S absolute data refs, which need
+//! sign-extended high addresses (0xffffffff80000000+); Slop at 0xffff9000…
+//! cannot satisfy both that *and* ±2 GiB PC32 reachability at once. The
+//! compatible end-state is a high-half kernel alias (map the image a second
+//! time at 0xffffffff80000000, export the alias VAs, load modules nearby):
+//! then PC32 stays in range *and* 32-bit abs sign-extends correctly. That
+//! move is intentionally deferred until the RDI call-ABI fault (see ABI
+//! battery) is root-caused, since no .ko can be meaningfully validated
+//! before argument passing works.
 use crate::arch::x86_64::paging::{PageTableRoot, PRESENT, WRITABLE, NX, ADDR};
 use crate::arch::x86_64::phys::{Identity, KIMAGE_BASE};
 use crate::memory::{alloc_frame, free_frame};
@@ -435,6 +446,37 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             None => return Err("too many modules"),
         }
     };
+    // DIAG-ABI: dump .init.text bytes via direct map to verify loader wrote file content.
+    for i in 0..shnum {
+        if !secs[i].used { continue; }
+        let sh = read_shdr(img, shoff, shentsize, i)?;
+        if let Ok(nm) = cstr(shstrtab, sh.name as usize) {
+            if nm == ".init.text" {
+                let basep = module_write_ptr(base, &frames, secs[i].va) as *const u8;
+                let mut hb = [0u8; 32];
+                for k in 0..32 {
+                    hb[k] = unsafe { core::ptr::read_volatile(basep.add(k)) };
+                }
+                crate::println!("module: init.text+0 {:02x?}", &hb[..]);
+                break;
+            }
+        }
+    }
+    // DIAG-ABI: dump .data first 16 bytes to verify copy.
+    for i in 0..shnum {
+        if !secs[i].used { continue; }
+        let sh = read_shdr(img, shoff, shentsize, i)?;
+        if let Ok(nm) = cstr(shstrtab, sh.name as usize) {
+            if nm == ".data" {
+                let basep = module_write_ptr(base, &frames, secs[i].va) as *const u64;
+                for k in 0..2usize {
+                    let v = unsafe { core::ptr::read_unaligned(basep.add(k)) };
+                    crate::println!("module: .data[{}]={:#x}", k, v);
+                }
+                break;
+            }
+        }
+    }
     // Call init: returns 0 on success, negative errno on failure.
     // DIAG: mask local APIC timer across init to rule out entry/exit clobber.
     unsafe {
