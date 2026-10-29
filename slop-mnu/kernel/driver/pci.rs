@@ -362,6 +362,7 @@ pub fn ioremap_bar(bdf: Bdf, nr: u8) -> u64 {
         tag[..n].copy_from_slice(&s[..n]);
     }
     if reserve_bar(base, len, &tag).is_err() { return 0; }
+    crate::println!("pci: ioremap {:02x}:{:02x}.{}[{}] phys={:#x} size={:#x}", bdf.bus, bdf.device, bdf.function, nr, base, size);
     let va = MMIO_NEXT.fetch_add(len, core::sync::atomic::Ordering::SeqCst);
     if va + len > MMIO_END || va < MMIO_BASE {
         release_bar(base, len);

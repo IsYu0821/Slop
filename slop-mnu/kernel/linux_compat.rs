@@ -263,7 +263,10 @@ fn slop_pci_probe_shim(bdf: crate::driver::pci::Bdf, vendor: u16, device: u16, o
         (*pd).bdf = ((bdf.bus as u32) << 16) | ((bdf.device as u32) << 8) | (bdf.function as u32);
     }
     let rc = unsafe { probe(pd, matched) };
-    if rc != 0 { crate::kheap::kfree(mem); }
+    if rc != 0 {
+        crate::println!("pci: linux probe {:04x}:{:04x} rc={}", vendor, device, rc);
+        crate::kheap::kfree(mem);
+    }
     // NOTE: bound dev buffer intentionally leaked while bound (remove path
     // frees once unbind tracking lands; today delete_module drops the
     // registration but the dev stays alive, which is safe if never touched).
@@ -275,6 +278,7 @@ pub unsafe extern "sysv64" fn pci_register_driver(drv: u64) -> i32 {
     if drv == 0 { return -22; } // -EINVAL
     let p = unsafe { &*(drv as *const PciDriver) };
     if p.id_table.is_null() || p.probe.is_none() { return -22; }
+    crate::println!("pci: drv={:#x} name={:#x} idtab={:#x} probe={}", drv, p.name as u64, p.id_table as u64, p.probe.is_some());
     let name = drv_name(drv);
     // Expand the Linux ID table into one Slop registration per entry.
     // The Slop core owns enumeration/matching; this adapter only translates.
@@ -289,6 +293,7 @@ pub unsafe extern "sysv64" fn pci_register_driver(drv: u64) -> i32 {
         }
         let v = if e.vendor == 0xffff_ffff || e.vendor == 0xffff { 0xffff } else { (e.vendor & 0xffff) as u16 };
         let d = if e.device == 0xffff_ffff || e.device == 0xffff { 0xffff } else { (e.device & 0xffff) as u16 };
+        crate::println!("pci: linux drv register {:x}:{:x} (raw v={:#x} d={:#x})", v, d, e.vendor, e.device);
         let r = crate::driver::pci::register_slop_driver(&name, v, d, slop_pci_probe_shim, drv);
         if r != 0 { return r; }
         count += 1;
@@ -366,15 +371,16 @@ pub unsafe extern "sysv64" fn pci_get_drvdata(dev: *mut PciDev) -> u64 {
     unsafe { (*dev).drvdata }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "sysv64" fn pci_ioremap_bar(_dev: *mut PciDev, nr: u64) -> u64 {
-    // No MMIO mapping yet (needs UC mappings + BAR resource management from
-    // the Slop PCI core). Return NULL so drivers fail probe cleanly instead
-    // of dereferencing a bogus direct-map alias with wrong caching.
-    crate::println!("pci: ioremap_bar{} denied (no UC mapping yet)", nr);
-    0
+pub unsafe extern "sysv64" fn pci_ioremap_bar(dev: *mut PciDev, nr: u64) -> u64 {
+    if dev.is_null() || nr >= 6 { return 0; }
+    let bdf = unsafe { (*dev).bdf_of() };
+    // Slop PCI core provides real UC mappings (fail-closed 0 on conflict).
+    crate::driver::pci::ioremap_bar(bdf, nr as u8)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "sysv64" fn pci_iounmap(_dev: *mut PciDev, _addr: u64) {}
+pub unsafe extern "sysv64" fn pci_iounmap(_dev: *mut PciDev, addr: u64) {
+    crate::driver::pci::iounmap_bar(addr);
+}
 
 /* ================= MMIO ================= */
 #[unsafe(no_mangle)]
