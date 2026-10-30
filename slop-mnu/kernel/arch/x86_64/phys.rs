@@ -30,7 +30,7 @@ pub fn virt_to_phys_full(va:u64)->u64{
     let t1=unsafe{acc.table(e0&ADDR)};
     let e1=t1[((va>>30)&511)as usize];
     if e1&PRESENT==0{return 0}
-    if e1&(1<<7)!=0{return (e1&ADDR)|(va&0x1f_ffff)}
+    if e1&(1<<7)!=0{return (e1&ADDR)|(va&0x3fff_ffff)}
     let t2=unsafe{acc.table(e1&ADDR)};
     let e2=t2[((va>>21)&511)as usize];
     if e2&PRESENT==0{return 0}
@@ -38,7 +38,7 @@ pub fn virt_to_phys_full(va:u64)->u64{
     let t3=unsafe{acc.table(e2&ADDR)};
     let e3=t3[((va>>12)&511)as usize];
     if e3&PRESENT==0{return 0}
-    e3&ADDR
+    (e3&ADDR)|(va&0xfff)
 }
 pub struct Identity;
 impl PhysAccess for Identity {
