@@ -2,6 +2,8 @@ pub mod pci;
 pub mod virtio;
 pub mod virtio_net;
 pub mod virtio_blk;
+pub mod blk;
+pub mod nvme;
 pub trait Driver:Sync { fn name(&self)->&'static str; fn probe(&self,dev:&Device)->bool; fn attach(&self,dev:&Device)->Result<(),()>; }
 pub enum Bus{Pci,Platform,Virtio} pub struct Device{pub bus:Bus,pub vendor:u32,pub device:u32,pub class:u32}
 pub fn init(){
@@ -15,6 +17,12 @@ pub fn init(){
   Ok(cap)=>crate::println!("blk: virtio-blk up capacity={} sectors",cap),
   Err(e)=>crate::println!("blk: virtio-blk unavailable: {}",e),
  }
+
+ match nvme::init(){
+  Ok(cap)=>crate::println!("blk: nvme up capacity={} sectors",cap),
+  Err(e)=>crate::println!("blk: nvme unavailable: {}",e),
+ }
+ nvme::selftest();
   // Slop IRQ core self-test: register → IPI → dispatch → handler → unregister.
   crate::irq::selftest_irq_dispatch();
   // MSI/INTx vector gate self-tests (self-IPI, no hardware).

@@ -23,10 +23,10 @@ pub fn is_ext4_ino(ino: u64) -> bool {
     ino >= INO_BASE && ino < INO_END
 }
 pub fn ready() -> bool {
-    crate::driver::virtio_blk::ready()
+    crate::driver::blk::ready()
 }
 fn read_bytes(off: u64, dst: &mut [u8]) -> Result<(), i64> {
-    let cap = crate::driver::virtio_blk::capacity() * 512;
+    let cap = crate::driver::blk::capacity() * 512;
     if off as usize + dst.len() > cap as usize {
         return Err(errno::EINVAL);
     }
@@ -36,7 +36,7 @@ fn read_bytes(off: u64, dst: &mut [u8]) -> Result<(), i64> {
         let soff = (off as usize + done) % 512;
         let n = core::cmp::min(dst.len() - done, 512 - soff);
         let mut frame = [0u8; 512];
-        if crate::driver::virtio_blk::read_sector(sec as u64, &mut frame).is_err() {
+        if crate::driver::blk::read_sector(sec as u64, &mut frame).is_err() {
             return Err(errno::EIO);
         }
         dst[done..done + n].copy_from_slice(&frame[soff..soff + n]);
@@ -525,7 +525,7 @@ pub fn nlink(inum: u32) -> u32 {
 /* ---------- write path (overwrite within EOF; no allocation yet) ---------- */
 
 fn write_bytes_at(off: u64, src: &[u8]) -> Result<(), i64> {
-    let cap = crate::driver::virtio_blk::capacity() * 512;
+    let cap = crate::driver::blk::capacity() * 512;
     if off as usize + src.len() > cap as usize {
         return Err(errno::EINVAL);
     }
@@ -536,12 +536,12 @@ fn write_bytes_at(off: u64, src: &[u8]) -> Result<(), i64> {
         let n = core::cmp::min(src.len() - done, 512 - soff);
         let mut frame = [0u8; 512];
         if soff != 0 || n < 512 {
-            if crate::driver::virtio_blk::read_sector(sec as u64, &mut frame).is_err() {
+            if crate::driver::blk::read_sector(sec as u64, &mut frame).is_err() {
                 return Err(crate::errno::EIO);
             }
         }
         frame[soff..soff + n].copy_from_slice(&src[done..done + n]);
-        if crate::driver::virtio_blk::write_sector(sec as u64, &frame).is_err() {
+        if crate::driver::blk::write_sector(sec as u64, &frame).is_err() {
             return Err(crate::errno::EIO);
         }
         done += n;

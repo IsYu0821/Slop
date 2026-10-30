@@ -42,6 +42,27 @@ static MOUNT_REGISTRY:SpinLock<MountRegistry>=SpinLock::new(MountRegistry{entrie
 
 fn current_mount_ns()->u64{crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1)}
 fn path_has_prefix(path:&str,prefix:&str)->bool{path==prefix||(path.starts_with(prefix)&&(prefix=="/"||path.as_bytes().get(prefix.len())==Some(&b'/')))}
+/* Which filesystem (if any) lives on the legacy virtio-blk/NVMe disk.
+   Probed once from the superblock magic and cached: QEMU disks do not
+   change under a running guest. 0 = unknown, 1 = none, 2 = ext2, 3 = ext4.
+   Device readiness alone is NOT enough (a blank disk must not capture
+   /mnt and break tmpfs mounts). */
+static LEGACY_FS:AtomicU64=AtomicU64::new(0);
+fn legacy_fs_kind()->u64{
+ let v=LEGACY_FS.load(Ordering::Relaxed);
+ if v!=0{return v}
+ let k=if crate::ext4::probe(){3}else{
+  let mut b=[0u8;512];
+  let mut ok=false;
+  if crate::driver::blk::capacity()>2&&crate::driver::blk::read_sector(2,&mut b).is_ok(){
+   let m=u16::from_le_bytes([b[56],b[57]]);
+   ok=m==0xef53;
+  }
+  if ok{2}else{1}
+ };
+ LEGACY_FS.store(k,Ordering::Relaxed);
+ k
+}
 fn route_path(path:&str,ns:u64)->PathRoute{
  let mut route=PathRoute{kind:None,fs_id:0,target:[0;128],tlen:0,relative:[0;128],rlen:0,ro:false};
  let mut best:Option<MountEntry>=None;
@@ -62,8 +83,11 @@ fn route_path(path:&str,ns:u64)->PathRoute{
  /* Keep the legacy virtio disk mount visible unless an explicit mount shadows it.
     The image can be ext2 or ext4 (same 0xEF53 magic); ext4 wins when the
     superblock carries the extents incompat flag. */
- if crate::ext2::ready()&&path_has_prefix(path,"/mnt"){
-  let kind=if crate::ext4::probe(){MountKind::Ext4}else{MountKind::Ext2};
+ if path_has_prefix(path,"/mnt"){
+  // Claim /mnt only when the legacy disk actually holds a filesystem
+  // (a blank disk must not capture the mount point and break tmpfs).
+  let kind=match legacy_fs_kind(){3=>Some(MountKind::Ext4),2=>Some(MountKind::Ext2),_=>None};
+  if let Some(kind)=kind{
   route.kind=Some(kind);route.target[..4].copy_from_slice(b"/mnt");route.tlen=4;
   /* The legacy disk mount carries no flags: ext4 stays read-only here
      (the read-only battery asserts EROFS on every mutation), while ext2
@@ -73,6 +97,7 @@ fn route_path(path:&str,ns:u64)->PathRoute{
   let suffix=&path[4..];let relative=if suffix.is_empty(){"/"}else{suffix};
   route.rlen=relative.len().min(127);route.relative[..route.rlen].copy_from_slice(&relative.as_bytes()[..route.rlen]);
   return route
+  }
  }
  route.rlen=path.len().min(127);route.relative[..route.rlen].copy_from_slice(&path.as_bytes()[..route.rlen]);
  route
@@ -113,21 +138,21 @@ pub fn unmount_filesystem(target:&str,flags:u64,ns:u64)->Result<()>{
 pub fn mount_self_test()->bool{
  const NS_A:u64=0xffff_ffff_ffff_ff01;const NS_B:u64=0xffff_ffff_ffff_ff02;
  const TARGET:&str="/mnt";const PATH:&str="/mnt/.slop-tmpfs-check";
- if mount_filesystem("tmpfs",TARGET,"tmpfs",0,NS_A).is_err(){return false}
+ match mount_filesystem("tmpfs",TARGET,"tmpfs",0,NS_A){Ok(())=>{},Err(e)=>{crate::println!("vfs: diag mount t0 err={}",e);return false}}
  let route=route_path(PATH,NS_A);let relative=match core::str::from_utf8(&route.relative[..route.rlen]){Ok(v)=>v,Err(_)=>return false};
  let result=(||->Result<bool>{
-  let inode=tmpfs_add_node(route.fs_id,relative,PATH,S_IFREG|0o600,0,None)?;
-  write_off(inode,0,b"mount")?;
-  let mut bytes=[0u8;5];if read_off(inode,0,&mut bytes)?!=5||&bytes!=b"mount"{return Ok(false)}
-  if lookup_in_namespace(PATH,NS_B).is_ok(){return Ok(false)}
-  clone_mount_namespace(NS_A,NS_B)?;
+  let inode=tmpfs_add_node(route.fs_id,relative,PATH,S_IFREG|0o600,0,None).map_err(|e|{crate::println!("vfs: diag mount t1 {:?}", e as i64); e})?;
+  write_off(inode,0,b"mount").map_err(|e|{crate::println!("vfs: diag mount t2 {:?}", e as i64); e})?;
+  let mut bytes=[0u8;5];if read_off(inode,0,&mut bytes)?!=5||&bytes!=b"mount"{crate::println!("vfs: diag mount t3");return Ok(false)}
+  if lookup_in_namespace(PATH,NS_B).is_ok(){crate::println!("vfs: diag mount t4");return Ok(false)}
+  clone_mount_namespace(NS_A,NS_B).map_err(|e|{crate::println!("vfs: diag mount t5 {:?}", e as i64); e})?;
   let inherited=lookup_in_namespace(PATH,NS_B)?;
   if inherited.size!=5{return Ok(false)}
-  tmpfs_unlink(route.fs_id,relative,PATH)?;
-  if lookup_in_namespace(PATH,NS_B).is_ok(){return Ok(false)}
-  unmount_filesystem(TARGET,0,NS_A)?;
-  if lookup_in_namespace(TARGET,NS_B).is_err(){return Ok(false)}
-  unmount_filesystem(TARGET,0,NS_B)?;
+  tmpfs_unlink(route.fs_id,relative,PATH).map_err(|e|{crate::println!("vfs: diag mount t6 {:?}", e as i64); e})?;
+  if lookup_in_namespace(PATH,NS_B).is_ok(){crate::println!("vfs: diag mount t7");return Ok(false)}
+  unmount_filesystem(TARGET,0,NS_A).map_err(|e|{crate::println!("vfs: diag mount t8 {:?}", e as i64); e})?;
+  if lookup_in_namespace(TARGET,NS_B).is_err(){crate::println!("vfs: diag mount t9");return Ok(false)}
+  unmount_filesystem(TARGET,0,NS_B).map_err(|e|{crate::println!("vfs: diag mount t10 {:?}", e as i64); e})?;
   Ok(true)
  })();
  if result.is_err()||result==Ok(false){let _=tmpfs_unlink(route.fs_id,relative,PATH);let _=unmount_filesystem(TARGET,0,NS_A);let _=unmount_filesystem(TARGET,0,NS_B);return false}

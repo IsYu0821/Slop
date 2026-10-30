@@ -33,7 +33,7 @@ pub fn ioctl(major:u32,minor:u32,cmd:u64,arg:u64)->i64{
    match cmd{
     0x80081272=>{ // BLKGETSIZE64
      if arg==0{return errno::neg(errno::EFAULT)}
-     let size=crate::driver::virtio_blk::capacity().saturating_mul(512);
+     let size=crate::driver::blk::capacity().saturating_mul(512);
      if let Err(e)=crate::usercopy::copy_to_user(arg as usize,&size.to_ne_bytes()){return errno::neg(e)}
      0
     }
@@ -72,12 +72,13 @@ pub fn init_devtmpfs(){
   let _=crate::vfs::mknod(p,0o020000|mode,dev);
  }
  if crate::driver::virtio_blk::ready(){let _=crate::vfs::mknod("/dev/vda",0o060660,(254u64<<8)|0);}
+ if crate::driver::nvme::ready(){let _=crate::vfs::mknod("/dev/nvme0n1",0o060660,(259u64<<8)|0);}
 }
 
 pub fn blk_read(major:u32,minor:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
  let _=(major,minor);
- if !crate::driver::virtio_blk::ready(){return Err(errno::ENODEV)}
- let cap=crate::driver::virtio_blk::capacity()*512;
+ if !crate::driver::blk::ready(){return Err(errno::ENODEV)}
+ let cap=crate::driver::blk::capacity()*512;
  if off>=cap{return Ok(0)}
  let mut done=0usize;
  let mut sector=off/512;
@@ -93,8 +94,8 @@ pub fn blk_read(major:u32,minor:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{
 }
 pub fn blk_write(major:u32,minor:u32,off:u64,src:&[u8])->Result<usize,i64>{
  let _=(major,minor);
- if !crate::driver::virtio_blk::ready(){return Err(errno::ENODEV)}
- let cap=crate::driver::virtio_blk::capacity()*512;
+ if !crate::driver::blk::ready(){return Err(errno::ENODEV)}
+ let cap=crate::driver::blk::capacity()*512;
  if off as usize+src.len() > cap as usize{return Err(errno::ENOSPC)}
  let mut done=0usize;
  let mut sector=off/512;
@@ -103,11 +104,11 @@ pub fn blk_write(major:u32,minor:u32,off:u64,src:&[u8])->Result<usize,i64>{
   // read-modify-write if partial
   let mut buf=[0u8;512];
   if pos!=0 || src.len()-done <512 {
-   if crate::driver::virtio_blk::read_sector(sector,&mut buf).is_err(){return if done==0{Err(errno::EIO)}else{Ok(done)}}
+   if crate::driver::blk::read_sector(sector,&mut buf).is_err(){return if done==0{Err(errno::EIO)}else{Ok(done)}}
   }
   let n=core::cmp::min(512-pos as usize,src.len()-done);
   buf[pos as usize..pos as usize+n].copy_from_slice(&src[done..done+n]);
-  if crate::driver::virtio_blk::write_sector(sector,&buf).is_err(){return if done==0{Err(errno::EIO)}else{Ok(done)}}
+  if crate::driver::blk::write_sector(sector,&buf).is_err(){return if done==0{Err(errno::EIO)}else{Ok(done)}}
   done+=n; pos=0; sector+=1;
  }
  Ok(done)

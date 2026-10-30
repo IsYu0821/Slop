@@ -24,6 +24,24 @@ impl ConfigAccess for Cam{
 }
 
 pub struct Found{pub bdf:Bdf,pub vendor:u16,pub device:u16,pub class:u8,pub bars:[Bar;6]}
+
+/* Sub-dword config access. CAM I/O ports transfer whole dwords at aligned
+   addresses; a raw read32/write32 at an odd half offset silently hits the
+   WRONG bytes (read) or clobbers neighbors (write). MSI/MSI-X control
+   registers live at +2, so they must go through these. */
+pub fn cfg_read16(bdf: Bdf, off: u16) -> u16 {
+    let acc = Cam;
+    let v = acc.read32(bdf, off & !3);
+    ((v >> ((off & 3) * 8)) & 0xffff) as u16
+}
+pub fn cfg_write16(bdf: Bdf, off: u16, val: u16) {
+    let acc = Cam;
+    let aligned = off & !3;
+    let shift = (off & 3) * 8;
+    let cur = acc.read32(bdf, aligned);
+    let mask = !(0xffffu32 << shift);
+    acc.write32(bdf, aligned, (cur & mask) | ((val as u32) << shift));
+}
 impl Found{
  pub fn enable(&self,acc:&dyn ConfigAccess){
   let base=acc.read32(self.bdf,CFG_COMMAND)as u16;
@@ -319,7 +337,8 @@ static MMIO_NEXT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64:
 struct FreeVa { used: bool, va: u64, len: u64 }
 const NO_FREE: FreeVa = FreeVa { used: false, va: 0, len: 0 };
 static MMIO_FREE: crate::sync::IrqSpinLock<[FreeVa; 16]> = crate::sync::IrqSpinLock::new([NO_FREE; 16]);
-fn mmio_alloc_va(len: u64) -> u64 {
+fn mmio_alloc_va(len: u64) -> u64 { let r = mmio_alloc_va_inner(len); crate::println!("pci: mmio_alloc len={:#x} -> {:#x}", len, r); r }
+fn mmio_alloc_va_inner(len: u64) -> u64 {
     {
         let mut t = MMIO_FREE.lock();
         if let Some(f) = t.iter_mut().find(|f| f.used && f.len == len) {
@@ -396,6 +415,7 @@ pub fn ioremap_bar(bdf: Bdf, nr: u8) -> u64 {
         release_bar(base, len);
         return 0;
     }
+    crate::println!("pci: ioremap -> va={:#x}", va);
     let root = PageTableRoot { pml4: cur_cr3() };
     let acc2 = Identity;
     let mut off2 = 0u64;
@@ -485,6 +505,7 @@ pub fn iounmap_bar(va: u64) {
         }
     }
     mmio_free_va(va, len);
+    crate::println!("pci: iounmap_bar va={:#x}", va);
 }
 
 /* Boot self-test: map the first MMIO BAR found, read a dword (must not
@@ -553,7 +574,7 @@ pub fn find_msi(bdf: Bdf) -> Option<(u16, bool, u8)> {
     let mut out = None;
     walk_caps(bdf, |off, id| {
         if id == CAP_ID_MSI {
-            let ctrl = (acc.read32(bdf, off + 2) & 0xffff) as u16;
+            let ctrl = cfg_read16(bdf, off + 2);
             let is64 = (ctrl >> 7) & 1 == 1;
             let mmc = ((ctrl >> 1) & 7) as u8;
             out = Some((off, is64, mmc));
@@ -578,9 +599,9 @@ pub fn msi_program(bdf: Bdf, vector: u8, dest_apic: u8) -> i32 {
     // MSI data: vector[7:0], delivery mode 0 (fixed), level 0, trigger 0 (edge).
     let data: u32 = vector as u32;
     // Disable first (avoid torn programming), then program.
-    let mut ctrl = acc.read32(bdf, off + 2) & 0xffff;
-    ctrl &= !1u32;
-    acc.write32(bdf, off + 2, ctrl);
+    let mut ctrl = cfg_read16(bdf, off + 2);
+    ctrl &= !1;
+    cfg_write16(bdf, off + 2, ctrl);
     acc.write32(bdf, off + 4, addr);
     if is64 {
         acc.write32(bdf, off + 8, 0);
@@ -589,18 +610,17 @@ pub fn msi_program(bdf: Bdf, vector: u8, dest_apic: u8) -> i32 {
         acc.write32(bdf, off + 8, data);
     }
     // Enable, single message (MME=0).
-    let mut ctrl2 = acc.read32(bdf, off + 2) & 0xffff;
+    let mut ctrl2 = cfg_read16(bdf, off + 2);
     ctrl2 = (ctrl2 & !(0x70 | 1)) | 1;
-    acc.write32(bdf, off + 2, ctrl2);
+    cfg_write16(bdf, off + 2, ctrl2);
     0
 }
 
 /// Disable MSI (clear enable bit). Safe no-op if absent.
 pub fn msi_disable(bdf: Bdf) {
     if let Some((off, _, _)) = find_msi(bdf) {
-        let acc = Cam;
-        let ctrl = acc.read32(bdf, off + 2) & 0xffff;
-        acc.write32(bdf, off + 2, ctrl & !1);
+        let ctrl = cfg_read16(bdf, off + 2);
+        cfg_write16(bdf, off + 2, ctrl & !1);
     }
 }
 
@@ -647,7 +667,7 @@ pub fn msi_alloc_vector(bdf: Bdf) -> i32 {
     {
         let acc = Cam;
         if let Some((off, is64, _)) = find_msi(bdf) {
-            let c = acc.read32(bdf, off + 2) & 0xffff;
+            let c = cfg_read16(bdf, off + 2) as u32;
             let a = acc.read32(bdf, off + 4);
             let d = if is64 { acc.read32(bdf, off + 12) } else { acc.read32(bdf, off + 8) };
             crate::println!("pci: msi verify {:02x}:{:02x}.{} vec={} en={} addr={:#x} data={:#x}", bdf.bus, bdf.device, bdf.function, vec, c & 1, a, d);
@@ -667,6 +687,83 @@ pub fn msi_free_vector(bdf: Bdf) {
         }
     }
 }
+
+/* ---- MSI-X enable + pool allocation (no per-symbol hacks) ----
+   MSI-X delivery targets the same IDT gates as MSI (0x50..0x57), so
+   vectors come from the shared pool. Unlike MSI, programming lives in
+   the MMIO MSI-X table (owned by the driver), not in config space, so
+   allocation here never touches any capability. Enable/disable flips
+   only the MSI-X control bits. */
+
+/// Enable MSI-X on `bdf` (set Enable, clear Function Mask). Returns the
+/// table location for the driver to program. Idempotent.
+pub fn msix_enable(bdf: Bdf) -> Result<MsixInfo, &'static str> {
+    let info = find_msix(bdf).ok_or("no MSI-X cap")?;
+    let acc = Cam;
+    let mut done = false;
+    walk_caps(bdf, |off, id| {
+        if id == CAP_ID_MSIX && !done {
+            let ctrl = cfg_read16(bdf, off + 2);
+            cfg_write16(bdf, off + 2, (ctrl | MSIX_ENABLE) & !MSIX_FMASK);
+            let back = cfg_read16(bdf, off + 2); crate::println!("pci: msix cap {:#x} ctrl {:#x} -> {:#x}", off, ctrl, back);
+            done = true;
+            return false;
+        }
+        true
+    });
+    if !done { return Err("msix enable failed"); }
+    Ok(info)
+}
+/// Disable MSI-X on `bdf`. Safe to call without a prior enable.
+pub fn msix_disable(bdf: Bdf) {
+    let acc = Cam;
+    walk_caps(bdf, |off, id| {
+        if id == CAP_ID_MSIX {
+            let ctrl = cfg_read16(bdf, off + 2);
+            cfg_write16(bdf, off + 2, ctrl & !MSIX_ENABLE);
+            return false;
+        }
+        true
+    });
+}
+/// Allocate (or return existing) pool vector for `bdf` for MSI-X use.
+/// Never programs the MSI capability. Returns 0x50..0x57 or negative errno.
+pub fn msix_alloc_vector(bdf: Bdf) -> i32 {
+    let want = pack_bdf(bdf);
+    {
+        let t = MSI_ALLOCS.lock();
+        for (i, a) in t.iter().enumerate() {
+            if a.used && a.bdf_packed == want {
+                return crate::arch::x86_64::apic::MSI_VECTOR_BASE as i32 + i as i32;
+            }
+        }
+    }
+    let idx = {
+        let mut t = MSI_ALLOCS.lock();
+        match t.iter_mut().position(|a| !a.used) {
+            Some(i) => {
+                t[i].used = true;
+                t[i].bdf_packed = want;
+                i
+            }
+            None => return -12, // -ENOMEM
+        }
+    };
+    crate::arch::x86_64::apic::MSI_VECTOR_BASE as i32 + idx as i32
+}
+/// Release the pool vector owned by `bdf` (MSI-X path). Safe no-op.
+pub fn msix_free_vector(bdf: Bdf) {
+    let want = pack_bdf(bdf);
+    let mut t = MSI_ALLOCS.lock();
+    for a in t.iter_mut() {
+        if a.used && a.bdf_packed == want {
+            *a = NO_MSI;
+            return;
+        }
+    }
+}
+const MSIX_ENABLE: u16 = 0x8000;
+const MSIX_FMASK: u16 = 0x4000;
 
 /* ---- Legacy INTx routing (fallback when MSI is absent) ----
    Root-bus only: INTx pin A-D maps to GSI 16-19 on q35 (no _PRT parsing
@@ -738,7 +835,7 @@ pub fn selftest_msi() {
                     }
                     // Read back address/data/enable.
                     if let Some((off, is64, _)) = find_msi(bdf) {
-                        let ctrl = acc.read32(bdf, off + 2) & 0xffff;
+                        let ctrl = cfg_read16(bdf, off + 2) as u32;
                         let addr = acc.read32(bdf, off + 4);
                         let want_addr = 0xfee0_0000 | ((me as u32) << 12);
                         let data_off = if is64 { off + 12 } else { off + 8 };
@@ -772,7 +869,7 @@ pub fn find_msix(bdf: Bdf) -> Option<MsixInfo> {
     let mut out = None;
     walk_caps(bdf, |off, id| {
         if id == CAP_ID_MSIX {
-            let ctrl = acc.read32(bdf, off + 2);
+            let ctrl = cfg_read16(bdf, off + 2) as u32;
             let tbl = acc.read32(bdf, off + 4);
             let pba = acc.read32(bdf, off + 8);
             out = Some(MsixInfo {

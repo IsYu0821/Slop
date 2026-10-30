@@ -1,9 +1,9 @@
-//! Minimal read-only ext2 filesystem on the first virtio-blk device.
+//! Minimal read-only ext2 filesystem on the first block backend (virtio-blk, else NVMe).
 use crate::{errno, vfs};
 const EXT2_MAGIC:u16=0xEF53;
-pub fn ready()->bool{ crate::driver::virtio_blk::ready() }
+pub fn ready()->bool{ crate::driver::blk::ready() }
 fn read_bytes(off:u64,dst:&mut[u8])->Result<(),i64>{
- let cap=crate::driver::virtio_blk::capacity()*512;
+ let cap=crate::driver::blk::capacity()*512;
  if off as usize+dst.len() > cap as usize {return Err(errno::EINVAL)}
  let mut done=0usize;
  while done<dst.len(){
@@ -14,7 +14,7 @@ fn read_bytes(off:u64,dst:&mut[u8])->Result<(),i64>{
   // read sector
   let mut frame=[0u8;512];
   // virtio_blk read_sector needs 512 dst
-  if crate::driver::virtio_blk::read_sector(sec as u64,&mut frame).is_err(){return Err(errno::EIO)}
+  if crate::driver::blk::read_sector(sec as u64,&mut frame).is_err(){return Err(errno::EIO)}
   dst[done..done+n].copy_from_slice(&frame[soff..soff+n]);
   done+=n;
  }
@@ -26,7 +26,7 @@ fn read_block(block:u64,blksize:usize,buf:&mut [u8])->Result<(),i64>{
  read_bytes(off,&mut buf[..blksize])
 }
 fn write_bytes(off:u64,src:&[u8])->Result<(),i64>{
- let cap=crate::driver::virtio_blk::capacity()*512;
+ let cap=crate::driver::blk::capacity()*512;
  if off as usize+src.len() > cap as usize {return Err(errno::EINVAL)}
  let mut done=0usize;
  while done<src.len(){
@@ -34,9 +34,9 @@ fn write_bytes(off:u64,src:&[u8])->Result<(),i64>{
   let soff=(off as usize+done)%512;
   let n=core::cmp::min(src.len()-done,512-soff);
   let mut frame=[0u8;512];
-  crate::driver::virtio_blk::read_sector(sec as u64,&mut frame)?;
+  crate::driver::blk::read_sector(sec as u64,&mut frame)?;
   frame[soff..soff+n].copy_from_slice(&src[done..done+n]);
-  crate::driver::virtio_blk::write_sector(sec as u64,&frame).map_err(|_|errno::EIO)?;
+  crate::driver::blk::write_sector(sec as u64,&frame).map_err(|_|errno::EIO)?;
   done+=n;
  }
  Ok(())
@@ -238,10 +238,10 @@ fn write_block(block:u64,blksize:usize,buf:&[u8])->Result<(),i64>{
    if nn==0{break}
    if n<512{
     /* Read-modify-write the tail sector so neighboring bytes survive. */
-    crate::driver::virtio_blk::read_sector((off/512) as u64,&mut full)?;
+    crate::driver::blk::read_sector((off/512) as u64,&mut full)?;
    }
    full[..nn].copy_from_slice(&sec[s*512..s*512+nn]);
-   crate::driver::virtio_blk::write_sector((off/512) as u64,&full)?;
+   crate::driver::blk::write_sector((off/512) as u64,&full)?;
    off+=512;
   }
   done+=n;

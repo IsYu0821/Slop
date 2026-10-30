@@ -39,6 +39,7 @@ fi
 : "${OVMF_VARS_TEMPLATE:?no OVMF vars template found}"
 : "${SERIAL_LOG:=build/profile-serial.log}"
 : "${EFI_DIR:=build/efi}"
+: "${NVME_IMG:=build/nvme-disk.img}"
 mkdir -p build
 VARS=$(mktemp "${TMPDIR:-/tmp}/slop-vars.XXXXXX.fd")
 trap 'rm -f "$VARS"' EXIT INT TERM
@@ -63,12 +64,14 @@ case "$PROFILE" in
       -device virtio-net-pci,netdev=net0 -netdev user,id=net0
     ;;
   B)
-    # Generic PC: NVMe system disk, xHCI with keyboard+mouse, e1000e NIC.
+    # Generic PC: NVMe system disk + xHCI (+usb-kbd/mouse) + e1000e NIC.
     # No virtio, no EDU. Drives are created on demand (see below).
-    [ -f build/nvme-disk.img ] || qemu-img create -f raw build/nvme-disk.img 64M
+    [ -f "$NVME_IMG" ] || qemu-img create -f raw "$NVME_IMG" 64M
     set -- "$@" \
-      -drive file=build/nvme-disk.img,format=raw,if=none,id=nvme0 \
-      -device nvme,drive=nvme0,serial=nvme-generic-pc \
+      -drive file="$NVME_IMG",format=raw,if=none,id=nvme0 \
+      -device nvme-subsys,id=nvmesubsys0 \
+      -device nvme,subsys=nvmesubsys0,serial=nvme-generic-pc \
+      -device nvme-ns,drive=nvme0 \
       -device qemu-xhci,id=xhci \
       -device usb-kbd -device usb-mouse \
       -device e1000e,netdev=net0 -netdev user,id=net0
@@ -86,10 +89,10 @@ case "$PROFILE" in
     ;;
   D)
     # IOMMU variant of the generic PC (Intel VT-d + interrupt remapping).
-    [ -f build/nvme-disk.img ] || qemu-img create -f raw build/nvme-disk.img 64M
+    [ -f "$NVME_IMG" ] || qemu-img create -f raw "$NVME_IMG" 64M
     set -- "$@" \
       -device intel-iommu,intremap=on \
-      -drive file=build/nvme-disk.img,format=raw,if=none,id=nvme0 \
+      -drive file="$NVME_IMG",format=raw,if=none,id=nvme0 \
       -device nvme,drive=nvme0,serial=nvme-generic-pc \
       -device qemu-xhci,id=xhci \
       -device usb-kbd -device usb-mouse \
