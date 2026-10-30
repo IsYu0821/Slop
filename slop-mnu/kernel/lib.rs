@@ -52,6 +52,9 @@ static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
 static mut BOOT_RSDP:u64=0;
 static mut BOOT_INITRD:(u64,u64)=(0,0);
+static mut BOOT_IMAGE_SIZE:u64=0;
+/// Byte size of the loaded kernel image (for the high-half alias map).
+pub fn boot_image_size()->u64{unsafe{BOOT_IMAGE_SIZE}}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
@@ -64,7 +67,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let pages=match memory::init(regions){Ok(n)=>n,Err(e)=>{println!("memory init failed: {}",e);arch::halt()}};
     let features=match unsafe { arch::x86_64::cpu::init() }{Ok(v)=>v,Err(e)=>{println!("CPU init failed: {}",e);arch::halt()}};
     let irq_info=match unsafe { acpi::interrupt_info(bi.rsdp) }{Ok(v)=>v,Err(e)=>{println!("ACPI interrupt discovery failed: {}",e);arch::halt()}};
-    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); }
+    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); BOOT_IMAGE_SIZE=bi.image_size; }
     if !features.page_1g { println!("kernel requires 1 GiB pages for the direct map"); arch::halt(); }
     /* Clone the firmware root into a kernel-owned PML4 (firmware tables are
        mapped read-only), install the direct map, then copy the image to

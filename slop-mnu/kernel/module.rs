@@ -4,21 +4,23 @@
 //! Design notes (why not the direct map): `-mcmodel=kernel` objects use
 //! R_X86_64_PC32/PLT32 (±2 GiB). The direct map (PHYS_BASE) is ~16 TiB from
 //! the kernel image, so PC32 overflows. Modules are therefore mapped in a
-//! reserved area 256 MiB above KIMAGE_BASE (well within ±2 GiB), with RX
-//! text and RW data (W^X). Unresolved symbols fail the load, except
+//! reserved high-half alias window (ALIAS_MBASE, 64 MiB, RX text and RW
+//! data with W^X); kernel exports resolve through the aliased image
+//! (ALIAS_KBASE), so PC32 stays in range and 32-bit absolute refs
+//! sign-extend correctly. Unresolved symbols fail the load, except
 //! `module_layout` (a version CRC meaningless here: we are deliberately not
-//! the kernel the module was built for; vermagic mismatch only warns).
+//! the kernel the module was built for). vermagic must match the pinned
+//! profile exactly; anything else is refused with the reason logged.
 //!
-//! -mcmodel=large (absolute 64-bit) is the current tested path. Stock
-//! `-mcmodel=kernel` emits R_X86_64_32/32S absolute data refs, which need
-//! sign-extended high addresses (0xffffffff80000000+); Slop at 0xffff9000…
-//! cannot satisfy both that *and* ±2 GiB PC32 reachability at once. The
-//! compatible end-state is a high-half kernel alias (map the image a second
-//! time at 0xffffffff80000000, export the alias VAs, load modules nearby):
-//! then PC32 stays in range *and* 32-bit abs sign-extends correctly. That
-//! move is intentionally deferred until the RDI call-ABI fault (see ABI
-//! battery) is root-caused, since no .ko can be meaningfully validated
-//! before argument passing works.
+//! Both `-mcmodel=large` (absolute 64-bit) and stock `-mcmodel=kernel`
+//! modules load here. Kernel-model objects emit R_X86_64_32/32S absolute
+//! data refs, which need sign-extended high addresses
+//! (0xffffffff80000000+); Slop itself runs at 0xffff9000…, so modules load
+//! into a high-half alias window (ALIAS_MBASE) and kernel exports resolve
+//! to the aliased image (ALIAS_KBASE): PC32 stays in range *and* 32-bit
+//! abs sign-extends correctly, exactly like real Linux. Overflow in any
+//! 32-bit reloc refuses the load with the symbol logged; R_64 and PC32
+//! work in both models.
 use crate::arch::x86_64::paging::{PageTableRoot, PRESENT, WRITABLE, NX, ADDR};
 use crate::arch::x86_64::phys::{Identity, KIMAGE_BASE};
 use crate::memory::{alloc_frame, free_frame};
@@ -26,6 +28,10 @@ use crate::sync::IrqSpinLock;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 /* ---- ELF ET_REL constants (Section Headers, not Program Headers) ---- */
+// Pinned compatibility profile (docs/normal-ko-profile.md): only modules
+// built for this exact Linux version string load. NOTE: the kernel
+// VERMAGIC_STRING ends with a space; compare raw, no trimming.
+const EXPECT_VERMAGIC: &str = "7.0.0-38-generic SMP preempt mod_unload modversions ";
 const ET_REL: u16 = 1;
 const EM_X86_64: u16 = 62;
 const SHT_NULL: u32 = 0;
@@ -34,6 +40,7 @@ const SHT_RELA: u32 = 4;
 const SHF_ALLOC: u64 = 2;
 const SHF_EXECINSTR: u64 = 4;
 const STB_GLOBAL: u8 = 1;
+const STB_WEAK: u8 = 2;
 const STT_NOTYPE: u8 = 0;
 const STT_OBJECT: u8 = 1;
 const STT_FUNC: u8 = 2;
@@ -49,10 +56,70 @@ const R_32: u32 = 10;
 const R_32S: u32 = 11;
 const R_GOTPCREL: u32 = 9;
 
-/* Module area: 256 MiB above the kernel image, 64 MiB window, bump-allocated. */
-const MODULE_BASE: u64 = KIMAGE_BASE + 0x1000_0000;
+/* High-half alias for normal `-mcmodel=kernel` modules.
+   R_32S absolute relocs sign-extend their stored low 32 bits, so module
+   addresses and the kernel exports they reference must live in the
+   negative 2 GiB (0xffffffff80000000..0xffffffffffffffff), exactly like
+   real Linux (kernel 0xffffffff80000000+, modules 0xffffffffa0000000+).
+   Slop itself runs at 0xffff9000...; the alias maps the same frames a
+   second time: the kernel image at ALIAS_KBASE+offset, modules in the
+   64 MiB ALIAS_MBASE window (+256 MiB above the kernel alias, mirroring
+   the real layout). Same physical pages, same permission bits, so there
+   is no cache-aliasing hazard; RX text stays RX and RW data stays RW+NX.
+   PC32 between an alias module and an alias export stays well inside the
+   +/-2 GiB range, and R_32S sign-extends back to the alias address.
+   The kernel half of the alias is installed once (first module load)
+   and never changes afterwards; module pages are unmapped from the
+   alias on unload through the same path as before. Slop keeps calling
+   into modules and resolving exports the same way; only the virtual
+   addresses both sides use move into the alias. Stack traces therefore
+   show alias VAs (subtract ALIAS_KBASE-KIMAGE_BASE to recover the link
+   address shown in build/kernel.map). */
+pub const ALIAS_KBASE: u64 = 0xffff_ffff_8000_0000;
+pub const ALIAS_MBASE: u64 = 0xffff_ffff_9000_0000;
+/* Module area: 256 MiB above the kernel alias, 64 MiB window. */
+const MODULE_BASE: u64 = ALIAS_MBASE;
 const MODULE_END: u64 = MODULE_BASE + 0x400_0000;
 static MODULE_NEXT: AtomicU64 = AtomicU64::new(MODULE_BASE);
+/// Translate a kernel-image VA to its high-half alias. Only valid for
+/// addresses inside the loaded image; anything else is left alone (its
+/// R_32S relocs will then honestly refuse to load).
+fn aliased(va: u64) -> u64 {
+    let size = crate::boot_image_size();
+    if size > 0 && va >= KIMAGE_BASE && va < KIMAGE_BASE + size {
+        va.wrapping_sub(KIMAGE_BASE).wrapping_add(ALIAS_KBASE)
+    } else {
+        va
+    }
+}
+static ALIAS_DONE: AtomicU64 = AtomicU64::new(0);
+/// Map the kernel image a second time at ALIAS_KBASE (same frames, same
+/// permission bits). Idempotent; installed once before any module that
+/// needs it loads.
+fn ensure_kernel_alias() -> Result<(), &'static str> {
+    if ALIAS_DONE.load(Ordering::SeqCst) != 0 {
+        return Ok(());
+    }
+    let size = crate::boot_image_size();
+    if size == 0 {
+        return Err("no image size");
+    }
+    let root = PageTableRoot { pml4: cur_cr3() };
+    let acc = Identity;
+    let pages = (size + 4095) / 4096;
+    let mut i = 0u64;
+    while i < pages {
+        let va = KIMAGE_BASE + i * 4096;
+        let (pa, flags) = root.query(&acc, va).ok_or("alias query")?;
+        let perm = flags & (WRITABLE | NX);
+        root.map_page(&acc, ALIAS_KBASE + i * 4096, pa & !4095u64, PRESENT | perm)
+            .map_err(|_| "alias map")?;
+        i += 1;
+    }
+    ALIAS_DONE.store(1, Ordering::SeqCst);
+    crate::println!("module: kernel high alias installed ({} pages)", pages);
+    Ok(())
+}
 
 const MAX_MODS: usize = 32;
 struct LoadedMod {
@@ -173,7 +240,9 @@ fn cstr<'a>(tab: &'a [u8], off: usize) -> Result<&'a str, &'static str> {
 struct Export { name: &'static str, addr: u64 }
 fn export_table() -> [Export; 102] {
     use crate::linux_compat as lc;
-    let e = |n: &'static str, a: u64| Export { name: n, addr: a };
+    // Exports resolve to the high-half alias so normal `-mcmodel=kernel`
+    // relocs (R_32S sign extension, PC32 range) validate against them.
+    let e = |n: &'static str, a: u64| Export { name: n, addr: aliased(a) };
     [
         e("printk", lc::printk as usize as u64),
         e("_printk", lc::printk as usize as u64),
@@ -283,10 +352,23 @@ struct LoadedSec { used: bool, va: u64, size: u64 }
 
 pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
     if img.len() < 64 { return Err("too small"); }
+    // Compressed distro modules (.ko.zst/.ko.xz/.ko.gz) have no in-kernel
+    // decompressor; refuse explicitly instead of a cryptic bad-magic.
+    if img.len() >= 4
+        && (img[0..4] == *b"\x28\xb5\x2f\xfd"
+            || img[0..4] == *b"\xfd7zX\x00"
+            || (img[0] == 0x1f && img[1] == 0x8b))
+    {
+        crate::println!("module: compressed image refused (decompress first)");
+        return Err("compressed module");
+    }
     if img[0..4] != *b"\x7fELF" { return Err("bad magic"); }
     if img[4] != 2 || img[5] != 1 || img[6] != 1 { return Err("not ELF64 LE v1"); }
     if u16at(img, 16)? != ET_REL { return Err("not ET_REL"); }
     if u16at(img, 18)? != 62 { return Err("wrong machine"); }
+    // Normal kernel-model modules reference kernel exports through the
+    // high-half alias; install it before resolving anything.
+    ensure_kernel_alias()?;
     let shoff = u64at(img, 40)?;
     let shentsize = u16at(img, 58)? as usize;
     let shnum = u16at(img, 60)? as usize;
@@ -319,8 +401,12 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
     let syms = sec_bytes(img, &symsec)?;
     let strs = sec_bytes(img, &strsec)?;
     let nsym = syms.len() / 24;
-    // modinfo: name + vermagic (warn only).
+    // modinfo: name + vermagic + license + depends. The compatibility
+    // profile is pinned (docs/normal-ko-profile.md): only an exact
+    // vermagic match loads; anything else is refused with the reason
+    // logged (never forced, never silently accepted).
     let mut modname = "unnamed";
+    let mut vermagic_ok = false;
     if let Some(mi) = modinfo {
         let msec = read_shdr(img, shoff, shentsize, mi)?;
         let mbytes = sec_bytes(img, &msec)?;
@@ -331,10 +417,39 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             if let Ok(s) = core::str::from_utf8(&mbytes[p..e]) {
                 if let Some(n) = s.strip_prefix("name=") { modname = n; }
                 if let Some(v) = s.strip_prefix("vermagic=") {
-                    crate::println!("module: vermagic {} (accepted, tainted)", v);
+                    // Pinned compat profile: Ubuntu 7.0.0-38-generic kbuild.
+                    if v == EXPECT_VERMAGIC {
+                        vermagic_ok = true;
+                    } else {
+                        crate::println!("module: vermagic mismatch got='{}' want='{}'", v, EXPECT_VERMAGIC);
+                        return Err("vermagic mismatch");
+                    }
+                }
+                if let Some(l) = s.strip_prefix("license=") {
+                    crate::println!("module: license={}", l);
+                }
+                if let Some(d) = s.strip_prefix("depends=") {
+                    if !d.is_empty() {
+                        crate::println!("module: depends='{}' (dependency resolution not implemented)", d);
+                        return Err("unresolved dependency");
+                    }
                 }
             }
             p = e + 1;
+        }
+    }
+    if !vermagic_ok {
+        crate::println!("module: missing vermagic (refused)");
+        return Err("missing vermagic");
+    }
+    // Module parameters (__param section) have no Slop support; refuse
+    // rather than silently ignoring them.
+    for i in 0..shnum {
+        if let Ok(nm) = secname(i) {
+            if nm == "__param" {
+                crate::println!("module: parameters unsupported (refused)");
+                return Err("module parameters unsupported");
+            }
         }
     }
     // Duplicate load?
@@ -404,12 +519,19 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             module_write_bytes(base, &frames, secs[i].va, src);
         }
     }
-    // Apply RELA sections.
+    // Apply RELA sections. Relocations against non-allocated sections
+    // (debug info etc.) are skipped: they never execute. Every applied
+    // relocation is range-checked; overflow refuses the load with the
+    // symbol and relocation logged instead of silently truncating.
     for i in 0..shnum {
         let sh = read_shdr(img, shoff, shentsize, i)?;
         if sh.stype != SHT_RELA { continue; }
         let tgt = sh.info as usize; // section index this rela applies to
-        if tgt >= 128 || !secs[tgt].used { return Err("bad rela target"); }
+        if tgt >= 128 { return Err("bad rela target"); }
+        if !secs[tgt].used {
+            continue; // debug/non-allocated target: nothing to relocate
+        }
+        let tgt_sh = read_shdr(img, shoff, shentsize, tgt)?;
         let rela = sec_bytes(img, &sh)?;
         if rela.len() % 24 != 0 { return Err("bad rela size"); }
         for r in 0..rela.len() / 24 {
@@ -426,12 +548,12 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             let sbind = syms.get(so + 4).copied().unwrap_or(0) >> 4;
             let sshndx = u16at(syms, so + 6)?;
             let sval = u64at(syms, so + 8)?;
-            let _ = sbind;
             let sva = if sshndx == SHN_UNDEF {
                 let nm = cstr(strs, sname as usize)?;
                 match export_lookup(nm) {
                     Some(0) => 0, // module_layout / ignored
                     Some(a) => a,
+                    None if sbind == STB_WEAK => 0, // weak undef: resolve to zero
                     None => {
                         crate::println!("module: unresolved symbol '{}'", nm);
                         return Err("unresolved symbol");
@@ -446,6 +568,21 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
             };
             let loc = secs[tgt].va + offset;
             let p = loc;
+            // Place must land inside the target section's file content.
+            let width = match typ {
+                R_64 => 8,
+                R_32 | R_32S | R_PC32 | R_PLT32 => 4,
+                _ => {
+                    let nm = cstr(strs, sname as usize).unwrap_or("?");
+                    crate::println!("module: unsupported reloc {} sym='{}'", typ, nm);
+                    return Err("unsupported reloc");
+                }
+            };
+            if offset.checked_add(width).map(|e| e > tgt_sh.size).unwrap_or(true) {
+                let nm = cstr(strs, sname as usize).unwrap_or("?");
+                crate::println!("module: reloc out of section sym='{}' type={} off={:#x}", nm, typ, offset);
+                return Err("reloc outside section");
+            }
             match typ {
                 R_64 => {
                     let v = sva.wrapping_add(addend as u64);
@@ -458,13 +595,32 @@ pub fn load_ko(img: &[u8]) -> Result<(), &'static str> {
                         return Err("reloc verify failed");
                     }
                 },
-                R_32 | R_32S => {
-                    let v = sva.wrapping_add(addend as u64) as u32;
-                    module_write_bytes(base, &frames, loc, &v.to_le_bytes());
+                R_32 => {
+                    let v = sva.wrapping_add(addend as u64);
+                    if v > 0xffff_ffff {
+                        let nm = cstr(strs, sname as usize).unwrap_or("?");
+                        crate::println!("module: R_32 overflow sym='{}' value={:#x} (needs high alias or large model)", nm, v);
+                        return Err("reloc overflow");
+                    }
+                    module_write_bytes(base, &frames, loc, &(v as u32).to_le_bytes());
+                }
+                R_32S => {
+                    let v = (sva as i64).wrapping_add(addend);
+                    if v < -0x8000_0000 || v > 0x7fff_ffff {
+                        let nm = cstr(strs, sname as usize).unwrap_or("?");
+                        crate::println!("module: R_32S overflow sym='{}' value={:#x} (needs high alias)", nm, v as u64);
+                        return Err("reloc overflow");
+                    }
+                    module_write_bytes(base, &frames, loc, &(v as u32).to_le_bytes());
                 }
                 R_PC32 | R_PLT32 => {
-                    let v = (sva.wrapping_add(addend as u64)).wrapping_sub(p) as u32;
-                    module_write_bytes(base, &frames, loc, &v.to_le_bytes());
+                    let v = (sva as i64).wrapping_add(addend).wrapping_sub(p as i64);
+                    if v < -0x8000_0000 || v > 0x7fff_ffff {
+                        let nm = cstr(strs, sname as usize).unwrap_or("?");
+                        crate::println!("module: PC32 overflow sym='{}' delta={:#x}", nm, v as u64);
+                        return Err("reloc overflow");
+                    }
+                    module_write_bytes(base, &frames, loc, &(v as u32).to_le_bytes());
                 }
                 _ => return Err("unsupported reloc"),
             }
@@ -649,7 +805,9 @@ pub fn unload(name: &str) -> Result<(), i64> {
 /* Staging buffer for .ko files (no global allocator in-kernel yet).
    Serialized by lock; 256 KiB cap keeps real-world test drivers loadable
    while large vendor drivers fail cleanly until demand paging lands. */
-const STAGE_MAX: usize = 256 * 1024;
+/* Staging buffer for the incoming .ko image. Unstripped distro modules
+   with debug info are megabytes; refuse only absurd sizes. */
+const STAGE_MAX: usize = 4 * 1024 * 1024;
 static mut STAGE: [u8; STAGE_MAX] = [0; STAGE_MAX];
 static STAGE_LOCK: IrqSpinLock<()> = IrqSpinLock::new(());
 

@@ -26,8 +26,10 @@ llvm-readelf --dyn-syms build/vdso.so | grep -q '__vdso_clock_gettime' || {
 }
 # The C library computes the load address of the page from the last
 # loadable segment, so the file offset and the address of every loadable
-# segment have to be the same.
+# segment have to be the same. Compare numerically: llvm-readelf pads the
+# two columns differently across versions ("0x001000" vs
+# "0x0000000000001000"), so a raw string compare misfires.
 llvm-readelf -l build/vdso.so | awk '
-  $1=="LOAD" { if ($2 != $3) { print "vdso: a loadable segment has a file offset that differs from its address" > "/dev/stderr"; exit 1 } }
+  $1=="LOAD" { o=$2; a=$3; gsub(/^0x0*/, "0x", o); gsub(/^0x0*/, "0x", a); if (o != a) { print "vdso: a loadable segment has a file offset that differs from its address" > "/dev/stderr"; exit 1 } }
 ' || exit 1
 printf 'created build/vdso.so\n'

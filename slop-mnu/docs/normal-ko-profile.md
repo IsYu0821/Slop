@@ -9,7 +9,20 @@ enumerated ground truth for the pinned toolchain.
 - Target Linux series: Ubuntu `7.0.0-38-generic` (`SMP preempt mod_unload modversions`)
 - Config markers (vermagic): `SMP preempt mod_unload modversions`
 - Compiler: `gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0` via kbuild defaults
+- binutils: `GNU ld 2.42` (Ubuntu)
 - Module ABI: `vermagic=7.0.0-38-generic SMP preempt mod_unload modversions`
+- Module config: `CONFIG_SMP=y`, `CONFIG_PREEMPT` (preempt), `CONFIG_64BIT=y`,
+  `CONFIG_MODVERSIONS=y`, `CONFIG_MODULE_SIG=y`, `CONFIG_RETPOLINE=y`
+  (metadata; Slop enforces the vermagic string, not the config set)
+- Page size: 4 KiB (`CONFIG_PAGE_SIZE_4KB=y`)
+- Module compression: distro ships `.ko.zst` (zstd). The Slop loader has
+  no in-kernel decompressor and refuses compressed images explicitly
+  (`compressed module`); feed it uncompressed bytes (same bytes as
+  `zstd -d`, whose identity the loader does NOT re-verify — record the
+  decompression step in the test log).
+- Module signing: `CONFIG_MODULE_SIG=y` on the distro; Slop has no keyring
+  and does not verify signatures (loads tainted, like `module_sig_check`
+  bypassed — documented, never silent: the vermagic gate still applies).
 - modversions: present (`__versions`, `__version_ext_names`, `__version_ext_crcs`)
 - retpoline: `retpoline=Y` (`.call_sites` + `.return_sites`, `__x86_return_thunk`)
 - IBT/CET: `.call_sites`/`.return_sites` metadata present; no `endbr64` in
@@ -77,11 +90,34 @@ enumerated ground truth for the pinned toolchain.
 `_printk`, `__fentry__`, `__x86_return_thunk`, plus loader-internal
 `module_layout` handling (CRC ignored, name/params still parsed).
 
-## Implication for C2/C3
+## C2 as-built (high-half alias)
 
-- The high-alias design must serve `R_64` (absolute data) and small `PC32`
-  ranges from module text to nearby sections — full `R_32/32S` support in
-  ALLOC sections is NOT required by this profile (none observed), but the
-  loader must explicitly reject them, not truncate.
+- Kernel image mirrored at `ALIAS_KBASE=0xffffffff80000000` (same frames,
+  same permission bits, discovered by walking the live tables at first
+  module load; installed once, never unmapped).
+- Modules load into the 64 MiB window at `ALIAS_MBASE=0xffffffff90000000`
+  (+256 MiB above the kernel alias, mirroring the real layout); all
+  section VAs, reloc places, init/exit/probe/handler addresses and kernel
+  exports resolve inside the alias. `R_32S` sign-extends correctly there;
+  `R_64` is unaffected; module-to-kernel `PC32` spans ~256 MiB.
+- No PLT, no per-symbol thunks: everything referenced stays within ±2 GiB
+  of its user, so relocs bind directly (the alias itself is the reusable
+  mechanism). No dual-execution: modules execute only via the alias
+  mapping; the old real-half module window is gone.
+- W^X preserved (RX text / RW+NX data, mirrored per page); cache
+  attributes identical (same frames); unload unmaps alias pages with
+  local invlpg (same SMP pattern as before — cross-CPU shootdown remains
+  future work, as for all module mappings).
+- Stack traces show alias VAs: subtract `ALIAS_KBASE-KIMAGE_BASE` to get
+  the link address from `build/kernel.map`.
+
+## Implication for C2/C3 (original notes, kept)
+
+- Full `R_32/32S` support in ALLOC sections IS required after all (the
+  normal-kbuild slotest carries 28 `R_32S` in `.text`/`.init.text`/
+  `.exit.text`): the alias makes them validate; anything still
+  overflowing is refused with symbol+reloc logged, never truncated.
 - `.init.text`/`.exit.text` placement and RX mapping must work when `.text`
   is empty (zero-page section edge case for the page-granular loader).
+- Relocs targeting non-allocated (debug) sections are skipped, not
+  rejected — unstripped distro `.ko` bytes load as-is.
