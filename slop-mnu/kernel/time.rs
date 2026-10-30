@@ -41,11 +41,22 @@ pub fn scale()->u64{SCALE.load(Ordering::Relaxed)}
 /// Records the rate of the counter in nanoseconds per cycle.
 pub fn set_scale(v:u64){SCALE.store(v,Ordering::Relaxed)}
 
+/// Highest monotonic value ever reported. The virtual counter can step
+/// backward under TCG/KVM (observed: a later rdtsc below an earlier one),
+/// and POSIX forbids CLOCK_MONOTONIC from ever going backward, so the
+/// reported time is clamped to never decrease. The underlying CLOCK still
+/// accumulates only forward guarded deltas.
+static MONO_LAST:AtomicU64=AtomicU64::new(0);
 /// The monotonic time at a given counter value.
 pub fn monotonic_at(t:u64)->u64{
- let c=CLOCK.lock();
- if t<=c.tsc{return c.ns}
- c.ns.saturating_add(((t-c.tsc) as u64).saturating_mul(scale())>>32)
+ let v={
+  let c=CLOCK.lock();
+  if t<=c.tsc{c.ns}
+  else{c.ns.saturating_add(((t-c.tsc) as u64).saturating_mul(scale())>>32)}
+ };
+ // Never report a time earlier than a previously reported one.
+ let prev=MONO_LAST.fetch_max(v,Ordering::Relaxed);
+ if prev>v{prev}else{v}
 }
 /// The current monotonic time.
 pub fn monotonic_ns()->u64{monotonic_at(crate::arch::x86_64::tsc::rdtsc())}

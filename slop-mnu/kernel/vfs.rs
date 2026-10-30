@@ -29,18 +29,21 @@ fn in_initramfs(addr:u64)->bool{let(a,b)=*INITRAMFS_SPAN.lock();a!=0&&addr>=a&&a
 const MAX_MOUNTS:usize=16;
 const TMPFS_INO_TAG:u64=0x1000_0000_0000_0000;
 #[derive(Clone,Copy,PartialEq,Eq)]enum MountKind{Tmpfs,Ext2,Ext4}
-#[derive(Clone,Copy)]struct MountEntry{used:bool,ns:u64,kind:MountKind,fs_id:usize,target:[u8;128],tlen:usize}
-const EMPTY_MOUNT:MountEntry=MountEntry{used:false,ns:0,kind:MountKind::Tmpfs,fs_id:0,target:[0;128],tlen:0};
+#[derive(Clone,Copy)]struct MountEntry{used:bool,ns:u64,kind:MountKind,fs_id:usize,target:[u8;128],tlen:usize,ro:bool}
+const EMPTY_MOUNT:MountEntry=MountEntry{used:false,ns:0,kind:MountKind::Tmpfs,fs_id:0,target:[0;128],tlen:0,ro:false};
+/* Linux mount(2) flag: a read-only mount rejects every mutating operation
+   with EROFS, decided per mount (not per filesystem type). */
+pub const MS_RDONLY:u64=1;
 #[derive(Clone,Copy)]struct TmpfsStore{used:bool,len:usize,nodes:[Inode;MAX_NODES],linked:[bool;MAX_NODES]}
 const EMPTY_TMPFS:TmpfsStore=TmpfsStore{used:false,len:0,nodes:[EMPTY;MAX_NODES],linked:[false;MAX_NODES]};
 struct MountRegistry{entries:[MountEntry;MAX_MOUNTS],tmpfs:[TmpfsStore;MAX_MOUNTS]}
 static MOUNT_REGISTRY:SpinLock<MountRegistry>=SpinLock::new(MountRegistry{entries:[EMPTY_MOUNT;MAX_MOUNTS],tmpfs:[EMPTY_TMPFS;MAX_MOUNTS]});
-#[derive(Clone,Copy)]struct PathRoute{kind:Option<MountKind>,fs_id:usize,target:[u8;128],tlen:usize,relative:[u8;128],rlen:usize}
+#[derive(Clone,Copy)]struct PathRoute{kind:Option<MountKind>,fs_id:usize,target:[u8;128],tlen:usize,relative:[u8;128],rlen:usize,ro:bool}
 
 fn current_mount_ns()->u64{crate::task::with_current_process(|p|p.ns_mnt).unwrap_or(1)}
 fn path_has_prefix(path:&str,prefix:&str)->bool{path==prefix||(path.starts_with(prefix)&&(prefix=="/"||path.as_bytes().get(prefix.len())==Some(&b'/')))}
 fn route_path(path:&str,ns:u64)->PathRoute{
- let mut route=PathRoute{kind:None,fs_id:0,target:[0;128],tlen:0,relative:[0;128],rlen:0};
+ let mut route=PathRoute{kind:None,fs_id:0,target:[0;128],tlen:0,relative:[0;128],rlen:0,ro:false};
  let mut best:Option<MountEntry>=None;
  {
   let registry=MOUNT_REGISTRY.lock();
@@ -51,7 +54,7 @@ fn route_path(path:&str,ns:u64)->PathRoute{
   }
  }
  if let Some(entry)=best{
-  route.kind=Some(entry.kind);route.fs_id=entry.fs_id;route.tlen=entry.tlen;route.target=entry.target;
+  route.kind=Some(entry.kind);route.fs_id=entry.fs_id;route.tlen=entry.tlen;route.target=entry.target;route.ro=entry.ro;
   let suffix=&path[entry.tlen..];let relative=if suffix.is_empty(){"/"}else{suffix};
   route.rlen=relative.len().min(127);route.relative[..route.rlen].copy_from_slice(&relative.as_bytes()[..route.rlen]);
   return route
@@ -62,6 +65,11 @@ fn route_path(path:&str,ns:u64)->PathRoute{
  if crate::ext2::ready()&&path_has_prefix(path,"/mnt"){
   let kind=if crate::ext4::probe(){MountKind::Ext4}else{MountKind::Ext2};
   route.kind=Some(kind);route.target[..4].copy_from_slice(b"/mnt");route.tlen=4;
+  /* The legacy disk mount carries no flags: ext4 stays read-only here
+     (the read-only battery asserts EROFS on every mutation), while ext2
+     keeps its tested writable behavior. Writable ext4 needs an explicit
+     mount without MS_RDONLY. */
+  route.ro=kind==MountKind::Ext4;
   let suffix=&path[4..];let relative=if suffix.is_empty(){"/"}else{suffix};
   route.rlen=relative.len().min(127);route.relative[..route.rlen].copy_from_slice(&relative.as_bytes()[..route.rlen]);
   return route
@@ -71,7 +79,8 @@ fn route_path(path:&str,ns:u64)->PathRoute{
 }
 
 pub fn mount_filesystem(source:&str,target:&str,fstype:&str,flags:u64,ns:u64)->Result<()>{
- let _=source;let _=flags;
+ let _=source;
+ let ro=flags&MS_RDONLY!=0;
  if !target.starts_with('/')||target=="/"||target.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if target.len()>127{return Err(errno::ENAMETOOLONG)}
  let kind=match fstype{"tmpfs"=>MountKind::Tmpfs,"ext2"=>MountKind::Ext2,"ext4"=>MountKind::Ext4,_=>return Err(errno::ENODEV)};
@@ -87,8 +96,13 @@ pub fn mount_filesystem(source:&str,target:&str,fstype:&str,flags:u64,ns:u64)->R
   registry.tmpfs[id]=TmpfsStore{used:true,..EMPTY_TMPFS};id
  }else{0};
  let mut name=[0u8;128];name[..target.len()].copy_from_slice(target.as_bytes());
- registry.entries[entry_slot]=MountEntry{used:true,ns,kind,fs_id,target:name,tlen:target.len()};
+ registry.entries[entry_slot]=MountEntry{used:true,ns,kind,fs_id,target:name,tlen:target.len(),ro};
  Ok(())
+}
+/* True when path resolves under a read-only mount (explicit MS_RDONLY or
+   the legacy read-only ext4 disk mount). Callers deny mutating opens. */
+pub fn path_readonly(path:&str)->bool{
+ route_path(path,current_mount_ns()).ro
 }
 pub fn unmount_filesystem(target:&str,flags:u64,ns:u64)->Result<()>{
   let _=flags;let mut registry=MOUNT_REGISTRY.lock();

@@ -332,9 +332,13 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
     /* The clock is measured with the counter, so the tick moves it forward
-       and the length of the tick is the time the counter has passed. */
+       and the length of the tick is the time the counter has passed.
+       Deliberately NOT fed back into set_tick_ns: per-tick TSC deltas
+       jitter under virtual clocks (observed TCG), and a jittered rate
+       corrupts every ns<->tick conversion armed under a different rate
+       (e.g. alarm(5) expiring early/late). The boot-measured rate stands;
+       advance() still accumulates truthful nanoseconds into CLOCK. */
     let tick_ns=crate::time::advance(now);
-    if tick_ns>0{crate::time::set_tick_ns(tick_ns);}
     crate::task::note_timer_stage(1);
     /* The vector system call entry point reads the time from a shared page
        that the kernel keeps up to date. */

@@ -108,27 +108,42 @@ def main():
             print('ABI MISMATCH %s: got %s, expected %s' % (label, actual, expected))
             failed += 1
 
-    # struct k_sigaction: handler, flags, mask, restorer.
+    # struct sigaction (x86-64 UAPI, asm/signal.h): handler, flags,
+    # restorer, mask ("mask last for extensibility"). The kernel Action
+    # struct keeps this order; an older revision of this check had mask
+    # and restorer swapped (wrong side fixed here, verified against the
+    # installed kernel headers, not against the kernel source).
     offsets, size = types.layout('Action')
     expect('k_sigaction.handler', offsets['handler'], 0)
     expect('k_sigaction.flags', offsets['flags'], 8)
-    expect('k_sigaction.mask', offsets['mask'], 16)
-    expect('k_sigaction.restorer', offsets['restorer'], 24)
+    expect('k_sigaction.restorer', offsets['restorer'], 16)
+    expect('k_sigaction.mask', offsets['mask'], 24)
     expect('k_sigaction.size', size, 32)
 
-    # struct sigcontext: the register order named by the REG_* index list.
-    expected_context = {
-        'r8': 0, 'r9': 8, 'r10': 16, 'r11': 24, 'r12': 32, 'r13': 40,
-        'r14': 48, 'r15': 56, 'rdi': 64, 'rsi': 72, 'rbp': 80, 'rbx': 88,
-        'rdx': 96, 'rax': 104, 'rcx': 112, 'rsp': 120, 'rip': 128,
-        'eflags': 136, 'cs': 144, 'gs': 146, 'fs': 148, 'ss': 150,
-        'err': 152, 'trapno': 160, 'oldmask': 168, 'cr2': 176,
-        'fpstate': 184, 'reserved1': 192,
-    }
-    offsets, size = types.layout('SigContext')
-    for name, expected in expected_context.items():
-        expect('sigcontext.%s' % name, offsets[name], expected)
+    # struct sigcontext (x86-64 UAPI, asm/sigcontext.h): r8..rip at
+    # 0..128, eflags at 136, cs/gs/fs/ss packed at 144..151, err at 152,
+    # trapno at 160, oldmask at 168, cr2 at 176, fpstate at 184,
+    # reserved1[8] at 192..256, total size 256. The kernel publishes this
+    # as MachineContext{gregs:[u64;23], fpregs:u64, reserved1:[u64;8]}
+    # with REG_* index constants; check the substance (array slots and
+    # the index order), not a particular Rust field naming.
+    offsets, size = types.layout('MachineContext')
+    expect('sigcontext.gregs', offsets['gregs'], 0)
+    expect('sigcontext.fpregs', offsets['fpregs'], 184)
+    expect('sigcontext.reserved1', offsets['reserved1'], 192)
     expect('sigcontext.size', size, 256)
+    expected_regs = [
+        ('R8', 0), ('R9', 1), ('R10', 2), ('R11', 3),
+        ('R12', 4), ('R13', 5), ('R14', 6), ('R15', 7),
+        ('RDI', 8), ('RSI', 9), ('RBP', 10), ('RBX', 11),
+        ('RDX', 12), ('RAX', 13), ('RCX', 14), ('RSP', 15),
+        ('RIP', 16), ('EFL', 17), ('CSGSFS', 18), ('ERR', 19),
+        ('TRAPNO', 20), ('OLDMASK', 21), ('CR2', 22),
+    ]
+    for name, expected in expected_regs:
+        match = re.search(r'pub const REG_%s\s*:\s*usize\s*=\s*(\d+)' % name, kernel)
+        actual = int(match.group(1)) if match else -1
+        expect('sigcontext.REG_%s' % name, actual, expected)
 
     # stack_t and the userspace ucontext_t.
     offsets, size = types.layout('StackArea')
@@ -143,18 +158,20 @@ def main():
     expect('ucontext.uc_stack', offsets['uc_stack'], 16)
     expect('ucontext.uc_mcontext', offsets['uc_mcontext'], 40)
     expect('ucontext.uc_sigmask', offsets['uc_sigmask'], 296)
-    expect('ucontext.uc_fpstate', offsets['uc_fpstate'], 304)
+    expect('ucontext.uc_fpstate', offsets['fpstate'], 304)
     expect('ucontext.size', size, 816)
 
     # siginfo_t: the header fields and the _kill member inside the union.
     # The union starts right after the three header fields, so the _kill
-    # member begins at offset 12.
+    # member (pid, uid) begins at offset 12. The kernel publishes the
+    # union as si_pad and writes pid/uid at si_pad[0..1] (see signal.rs);
+    # check the substance (offsets), not the union member names.
     offsets, size = types.layout('SigInfo')
     expect('siginfo.si_signo', offsets['si_signo'], 0)
     expect('siginfo.si_errno', offsets['si_errno'], 4)
     expect('siginfo.si_code', offsets['si_code'], 8)
-    expect('siginfo.si_pid', offsets['si_pid'], 12)
-    expect('siginfo.si_uid', offsets['si_uid'], 16)
+    expect('siginfo.si_pid', offsets['si_pad'], 12)
+    expect('siginfo.si_uid', offsets['si_pad'] + 4, 16)
     expect('siginfo.size', size, 128)
 
     # The signal frame: the restorer, then the ucontext, then the siginfo.

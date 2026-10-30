@@ -1,12 +1,18 @@
-/* ext4 overwrite test: opens /mnt/xdiag4/hello.txt, overwrites bytes in
-   place (no size change, no allocation), reads back and verifies. */
+/* ext4 overwrite test: explicitly mounts the virtio-blk ext4 image
+   read-write at /mntw (the legacy /mnt disk mount is read-only and must
+   stay EROFS), overwrites bytes in place (no size change, no
+   allocation), reads back and verifies. */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mount.h>
 
 int main(void) {
-    const char *path = "/mnt/xdiag4/hello.txt";
+    if (mkdir("/mntw", 0755) != 0) { printf("ext4w: mkdir /mntw failed\n"); return 1; }
+    if (mount("vda", "/mntw", "ext4", 0, NULL) != 0) { printf("ext4w: rw mount failed\n"); return 1; }
+    const char *path = "/mntw/xdiag4/hello.txt";
     printf("ext4w: opening\n");
     int fd = open(path, O_RDWR);
     printf("ext4w: opened fd=%d\n", fd);

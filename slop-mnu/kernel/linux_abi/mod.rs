@@ -1736,6 +1736,12 @@ fn sys_sysinfo(ptr:u64)->i64{
 
 fn open_common(p:&str,flags:u64,mode:u64)->i64{
  const O_CREAT:u64=0o100;const O_CLOEXEC:u64=0o2000000;const O_APPEND:u64=0o2000;const O_NONBLOCK:u64=0o4000;
+ const O_TRUNC:u64=0o1000;
+ /* Read-only mounts reject write-intent opens, like Linux (EROFS at
+    open, not just at write). Access mode, CREAT and TRUNC all count. */
+ if (flags&0o3==0o1||flags&0o3==0o2||flags&O_CREAT!=0||flags&O_TRUNC!=0)&&crate::vfs::path_readonly(p){
+  return errno::neg(errno::EROFS);
+ }
  let mut status=0u32;
  if flags&O_APPEND!=0{status|=crate::fd::O_APPEND}
  if flags&O_NONBLOCK!=0{status|=crate::fd::O_NONBLOCK}
@@ -1968,9 +1974,13 @@ fn sys_alarm(sec:u64)->i64{
  /* The deadline is a number of ticks, and the length of a tick is measured
     at boot, so the seconds are turned into ticks with the measured rate. */
  let next=if active{crate::time::ticks_after_ns_floor(sec.saturating_mul(1_000_000_000))}else{0};
- match crate::posix_timer::alarm_set(pid,0,active,next,0,now){Ok((old_rem,_))=>{
+ /* Remaining time comes from the monotonic deadline (robust against
+    per-tick rate recalibration); read it before alarm_set deactivates. */
+ let rem_ns=crate::posix_timer::alarm_remaining_ns(pid,0);
+ let deadline_ns=if active{crate::time::monotonic_ns().saturating_add(sec.saturating_mul(1_000_000_000))}else{0};
+ match crate::posix_timer::alarm_set(pid,0,active,next,0,now,deadline_ns){Ok(_)=>{
   /* The remaining time is reported in whole seconds, rounded up. */
-  ((crate::time::ticks_to_ns(old_rem)+999_999_999)/1_000_000_000)as i64},Err(e)=>errno::neg(e)}
+  ((rem_ns+999_999_999)/1_000_000_000)as i64},Err(e)=>errno::neg(e)}
 }
 fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
  if which>2{return errno::neg(errno::EINVAL)}
@@ -1986,7 +1996,8 @@ fn sys_setitimer(which:u64,newptr:u64,oldptr:u64)->i64{
     when the timer is cancelled. */
  let next=if active{if which==0{crate::time::ticks_after_ns_floor(v_ns)}else{crate::time::ns_to_ticks_ceil(v_ns)}}else{0};
  let interval=crate::time::ns_to_ticks_ceil(iv_ns);
- let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,which as u8,active,next,interval,now){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let deadline_ns=if active&&which==0{crate::time::monotonic_ns().saturating_add(v_ns)}else{0};
+ let (old_rem,old_iv)=match crate::posix_timer::alarm_set(pid,which as u8,active,next,interval,now,deadline_ns){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  if oldptr!=0{return write_itimer_val(oldptr,old_rem,old_iv)}
  0
 }

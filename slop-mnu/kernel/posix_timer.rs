@@ -21,8 +21,12 @@ static NEXT_ID:AtomicU32=AtomicU32::new(1);
 #[derive(Clone,Copy)]
 /* which: 0 ITIMER_REAL (next is an absolute tick), 1 ITIMER_VIRTUAL and
    2 ITIMER_PROF count down user (and kernel) ticks attributed to the pid. */
-struct Alarm{used:bool,pid:u32,which:u8,active:bool,next:u64,interval:u64}
-const EMPTY_A:Alarm=Alarm{used:false,pid:0,which:0,active:false,next:0,interval:0};
+/* deadline_ns is the monotonic-clock (CLOCK.ns) expiry for wall timers
+   (which==0). Tick counts drive expiry, but per-tick rate recalibration
+   jitters under virtual clocks, so second-granularity reporting (alarm)
+   derives remaining time from this truthful deadline instead. */
+struct Alarm{used:bool,pid:u32,which:u8,active:bool,next:u64,interval:u64,deadline_ns:u64}
+const EMPTY_A:Alarm=Alarm{used:false,pid:0,which:0,active:false,next:0,interval:0,deadline_ns:0};
 static ALARMS:SpinLock<[Alarm;MAX_ALARMS]>=SpinLock::new([EMPTY_A;MAX_ALARMS]);
 
 /* CLOCK_REALTIME, CLOCK_MONOTONIC and CLOCK_BOOTTIME are distinguishable in
@@ -81,17 +85,27 @@ pub fn release_pid(pid:u32){
 /* Sets or cancels one of the three per-process interval timers; returns the
    previous (remaining, interval) in ticks. A missing entry is created only
    when the new timer is armed. */
-pub fn alarm_set(pid:u32,which:u8,active:bool,next:u64,interval:u64,now:u64)->Result<(u64,u64),i64>{
+pub fn alarm_set(pid:u32,which:u8,active:bool,next:u64,interval:u64,now:u64,deadline_ns:u64)->Result<(u64,u64),i64>{
  let mut a=ALARMS.lock();
  if let Some(e)=a.iter_mut().find(|e|e.used&&e.pid==pid&&e.which==which){
   let old=(if e.active{if which==0{e.next.saturating_sub(now)}else{e.next}}else{0},e.interval);
-  if active{e.active=true;e.next=next;e.interval=interval}else{e.active=false;e.next=0;e.interval=0;}
+  if active{e.active=true;e.next=next;e.interval=interval;if which==0{e.deadline_ns=deadline_ns;}}
+  else{e.active=false;e.next=0;e.interval=0;e.deadline_ns=0;}
   return Ok(old)
  }
  if !active{return Ok((0,0))}
  let slot=a.iter().position(|e|!e.used).ok_or(errno::EAGAIN)?;
- a[slot]=Alarm{used:true,pid,which,active:true,next,interval};
+ a[slot]=Alarm{used:true,pid,which,active:true,next,interval,deadline_ns:if which==0{deadline_ns}else{0}};
  Ok((0,0))
+}
+/* Remaining wall-clock time in nanoseconds from the monotonic deadline.
+   Immune to per-tick rate recalibration jitter (unlike next-now ticks). */
+pub fn alarm_remaining_ns(pid:u32,which:u8)->u64{
+ let a=ALARMS.lock();
+ match a.iter().find(|e|e.used&&e.pid==pid&&e.which==which){
+  Some(e) if e.active&&e.which==0=>e.deadline_ns.saturating_sub(crate::time::monotonic_ns()),
+  _=>0,
+ }
 }
 
 pub fn alarm_get(pid:u32,which:u8,now:u64)->(u64,u64){
@@ -144,7 +158,9 @@ pub fn tick(now:u64){
  for e in a.iter_mut(){
   if !e.used||!e.active||e.which!=0||e.next>now{continue}
   let expirations=if e.interval>0{1+(now-e.next)/e.interval}else{1};
-  if e.interval>0{e.next=e.next.saturating_add(expirations*e.interval)}else{e.active=false;e.next=0;}
+  if e.interval>0{e.next=e.next.saturating_add(expirations*e.interval);
+   e.deadline_ns=e.deadline_ns.saturating_add((expirations as u64).saturating_mul(e.interval).saturating_mul(crate::time::tick_ns()));}
+  else{e.active=false;e.next=0;e.deadline_ns=0;}
   if an<alarm_pids.len(){alarm_pids[an]=e.pid;an+=1}
  }
  drop(a);

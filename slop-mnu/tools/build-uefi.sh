@@ -7,7 +7,9 @@ mkdir -p build/efi/EFI/BOOT
 ./tools/build-vdso.sh
 ./tools/build-initramfs.py
 cargo +nightly build -Zbuild-std=core,compiler_builtins -Zbuild-std-features=compiler-builtins-mem --target x86_64-pc-windows-msvc --release
-KLIB=$(find target/x86_64-pc-windows-msvc/release -maxdepth 1 -type f \( -name '*slop_mnu_kernel*.lib' -o -name '*slop_mnu_kernel*.a' \) | head -n 1)
+# The link must use the library cargo just built: respect CARGO_TARGET_DIR
+# when set (otherwise a stale default-target library is linked silently).
+KLIB=$(find "${CARGO_TARGET_DIR:-target}/x86_64-pc-windows-msvc/release" -maxdepth 1 -type f \( -name '*slop_mnu_kernel*.lib' -o -name '*slop_mnu_kernel*.a' \) | head -n 1)
 test -n "$KLIB"
 clang -target x86_64-pc-win32-coff -ffreestanding -fshort-wchar -mno-red-zone -fno-stack-protector -c loader/main.c -o build/loader.obj
 for src in loader/entry.S arch/x86_64/exceptions.S arch/x86_64/syscall.S arch/x86_64/user.S arch/x86_64/irq.S arch/x86_64/context.S arch/x86_64/trampoline.S; do
