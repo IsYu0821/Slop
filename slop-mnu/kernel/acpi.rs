@@ -14,6 +14,29 @@ pub unsafe fn interrupt_info(rsdp_pa:u64)->Result<InterruptInfo,&'static str>{if
 unsafe fn parse_madt(pa:u64)->Result<InterruptInfo,&'static str>{let h=unsafe{header(pa)}.ok_or("invalid MADT")?;let lapic=unsafe{((pa+core::mem::size_of::<SdtHeader>()as u64)as*const u32).read_unaligned()}as u64;let mut out=InterruptInfo{lapic,ioapic:0,ioapic_gsi:0,iso_gsi:[0;16],iso_flags:[0;16]};for i in 0..16{out.iso_gsi[i]=i as u32}let mut p=pa as usize+core::mem::size_of::<SdtHeader>()+8;let end=pa as usize+h.length as usize;while p+2<=end{let typ=unsafe{*(p as*const u8)};let len=unsafe{*((p+1)as*const u8)}as usize;if len<2||p+len>end{return Err("corrupt MADT entry")}match typ{1 if len>=12=>{out.ioapic=unsafe{((p+4)as*const u32).read_unaligned()}as u64;out.ioapic_gsi=unsafe{((p+8)as*const u32).read_unaligned()};},2 if len>=10=>{let src=unsafe{*((p+3)as*const u8)}as usize;if src<16{out.iso_gsi[src]=unsafe{((p+4)as*const u32).read_unaligned()};out.iso_flags[src]=unsafe{((p+8)as*const u16).read_unaligned()};}},5 if len>=12=>out.lapic=unsafe{((p+4)as*const u64).read_unaligned()},_=>{}}p+=len;}  if out.ioapic==0{return Err("IOAPIC missing")}Ok(out)}
 /* Lists the MADT processor entries (type 0 local APIC and type 9 x2APIC)
    in firmware order, capped so the per-CPU tables stay bounded. */
+/// Find an ACPI table by 4-byte signature (e.g. b"DMAR"). Returns its
+/// physical address, or 0 if absent/invalid.
+pub fn find_table(sig:&[u8;4])->u64{
+ let pv=|pa:u64|crate::arch::x86_64::phys::phys_to_virt(pa);
+ let rsdp_pa=crate::boot_rsdp();
+ if rsdp_pa==0{return 0}
+ let r=unsafe{&*(pv(rsdp_pa) as *const Rsdp2)};
+ if &r.v1.sig!=b"RSD PTR "||sum(pv(rsdp_pa) as *const u8,20)!=0{return 0}
+ let(use_xsdt,root_pa)=(r.v1.revision>=2&&r.length>=36&&sum(pv(rsdp_pa) as *const u8,r.length as usize)==0,r.xsdt);
+ let root_pa=if use_xsdt{root_pa}else{r.v1.rsdt as u64};
+ let root=match unsafe{header(pv(root_pa))}{Some(h)=>h,None=>return 0};
+ let es=if use_xsdt{8}else{4};
+ let count=(root.length as usize-core::mem::size_of::<SdtHeader>())/es;
+ let base=(pv(root_pa) as usize+core::mem::size_of::<SdtHeader>())as*const u8;
+ for i in 0..count{
+  let raw=unsafe{if es==8{base.add(i*8).cast::<u64>().read_unaligned()}else{base.add(i*4).cast::<u32>().read_unaligned() as u64}};
+  let p=raw;
+  if p==0{continue}
+  if let Some(h)=unsafe{header(pv(p))}{if &h.signature==sig{return p}}
+ }
+ 0
+}
+
 pub fn cpu_list(rsdp_pa:u64,out:&mut [CpuEntry;MAX_MADT_CPUS])->Result<usize,&'static str>{
  // NOTE: this runs after the high-half transition, where low memory is no
  // longer identity-mapped. Every firmware physical address must go through

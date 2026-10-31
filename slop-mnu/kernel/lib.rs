@@ -51,6 +51,7 @@ static mut IRQ_STACK: Stack = Stack([0; 131072]);
 static mut BOOT_PAGES:u64=0;
 static mut BOOT_IRQ:Option<crate::acpi::InterruptInfo>=None;
 static mut BOOT_RSDP:u64=0;
+pub fn boot_rsdp()->u64{unsafe{core::ptr::addr_of!(BOOT_RSDP).read()}}
 static mut BOOT_INITRD:(u64,u64)=(0,0);
 static mut BOOT_IMAGE_SIZE:u64=0;
 /// Byte size of the loaded kernel image (for the high-half alias map).

@@ -8,11 +8,20 @@ pub mod ahci;
 pub mod xhci;
 pub mod netdev;
 pub mod e1000;
+pub mod iommu;
 pub trait Driver:Sync { fn name(&self)->&'static str; fn probe(&self,dev:&Device)->bool; fn attach(&self,dev:&Device)->Result<(),()>; }
 pub enum Bus{Pci,Platform,Virtio} pub struct Device{pub bus:Bus,pub vendor:u32,pub device:u32,pub class:u32}
 pub fn init(){
  let devices=pci::count();
  crate::println!("driver: PCI/platform/virtio contracts ready devices={}",devices);
+ /* IOMMU first: all subsequent DMA (driver selftests included) must go
+    through remapping once enabled. Identity-mapped, so backends are
+    unaffected until real isolation is added. */
+ match iommu::init(){
+  Ok(())=>crate::println!("iommu: up"),
+  Err(e)=>crate::println!("iommu: unavailable: {}",e),
+ }
+ iommu::selftest();
  match virtio_net::init(){
   Ok(mac)=>crate::println!("net: virtio-net up mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]),
   Err(e)=>crate::println!("net: virtio-net unavailable: {}",e),
@@ -37,6 +46,7 @@ pub fn init(){
   Err(e)=>crate::println!("net: e1000 unavailable: {}",e),
  }
  e1000::selftest();
+
  match xhci::init(){
   Ok(())=>crate::println!("usb: xhci up"),
   Err(e)=>crate::println!("usb: xhci unavailable: {}",e),
