@@ -76,6 +76,25 @@ const NO_PORT: Port = Port { bdf: Bdf { segment: 0, bus: 0, device: 0, function:
 static PORT: IrqSpinLock<Port> = IrqSpinLock::new(NO_PORT);
 static CMD_LOCK: IrqSpinLock<()> = IrqSpinLock::new(());
 static IRQ_FIRED: AtomicU32 = AtomicU32::new(0);
+const INTX_VEC: u8 = 0x58;
+const PXIE_BITS: u32 = (1 << 0) | (1 << 30); /* DHRS + TFES */
+
+fn bdf_pack(bdf: Bdf) -> u64 { ((bdf.bus as u64) << 16) | ((bdf.device as u64) << 8) | (bdf.function as u64) }
+
+fn ahci_handler(_vector: u8, dev_id: u64) -> bool {
+    let (bar, port) = {
+        let p = PORT.lock();
+        if !p.ready || p.bar == 0 { return false; }
+        if bdf_pack(p.bdf) != dev_id { return false; }
+        (p.bar, p.port)
+    };
+    let pp = pregs(port);
+    let is = r32(bar, pp + R_P_IS);
+    if is == 0 { return false; }
+    w32(bar, pp + R_P_IS, is);
+    IRQ_FIRED.fetch_add(1, Ordering::SeqCst);
+    true
+}
 
 fn pregs(port: u32) -> u64 { PORT_BASE + (port as u64) * PORT_STRIDE }
 
@@ -388,6 +407,20 @@ fn setup_port(bdf: Bdf, bar: u64) -> Result<(u32, u64), &'static str> {
             q.ct_va = ct_va;
         }
         port_start(bar, port).map_err(|_| "port start")?;
+        /* INTx completion notification (shared 0x58 line). Polling remains
+           the completion path; the handler only counts deliveries. */
+        {
+            let acc = Cam;
+            let cmd = acc.read32(bdf, CFG_COMMAND);
+            acc.write32(bdf, CFG_COMMAND, cmd & !(1 << 10));
+        }
+        if crate::driver::pci::legacy_route(bdf, INTX_VEC).is_ok() {
+            if crate::irq::register(INTX_VEC, ahci_handler, bdf_pack(bdf), b"ahci0\0", true) == 0 {
+                w32(bar, R_GHC, r32(bar, R_GHC) | (1 << 1));
+                w32(bar, pregs(port) + 0x14, PXIE_BITS);
+                crate::println!("ahci: INTx vec={:#x} on", INTX_VEC);
+            }
+        }
         /* Mark usable before IDENTIFY: transfers check ready(). */
         {
             let mut q = PORT.lock();
@@ -537,5 +570,7 @@ pub fn selftest() {
             return;
         }
     }
+    let fired = IRQ_FIRED.load(Ordering::Relaxed);
+    crate::println!("ahci: selftest irqs fired={}", fired);
     crate::println!("ahci: selftest PASS resets=1");
 }
