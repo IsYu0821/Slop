@@ -254,6 +254,7 @@ pub fn selftest() {
         }
     }
     crate::println!("xhci: selftest PASS ports_with_devices={} enumerated={}", found, enumerated);
+
 }
 
 /* ================= Stage 2: rings, commands, enumeration ================= */
@@ -530,12 +531,12 @@ fn control_xfer(slot: u8, ring: &mut EpRing, setup: &[u8; 8], data_va: u64, data
         };
         let dpa = crate::arch::x86_64::phys::virt_to_phys_full(data_va);
         if dpa == 0 { return Err("unmapped data"); }
-        /* TD size 0 (like OVMF/EDK2): the data stage length field carries
-           the byte count; QEMU's model stalls on nonzero TD size here. */
+        /* Match OVMF/EDK2 bit-for-bit (ISP + IOC on data stage):
+           QEMU's xhci model stalls without them. */
         unsafe {
             (daddr as *mut u64).write_volatile(dpa);
             (daddr as *mut u32).add(2).write_volatile(data_len as u32);
-            let mut c = (TRB_DATA << 10) | (dcycle as u32);
+            let mut c = (TRB_DATA << 10) | (dcycle as u32) | (1 << 2) | (1 << 5);
             if dir_in { c |= 1 << 16; }
             (daddr as *mut u32).add(3).write_volatile(c);
         }
