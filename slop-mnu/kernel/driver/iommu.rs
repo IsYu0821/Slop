@@ -43,11 +43,12 @@ fn w64(bar: u64, off: u64, v: u64) {
 
 struct Iommu {
     bar: u64,
+    irta_va: u64,
     ready: bool,
     dma_ready: bool,
     ir_ready: bool,
 }
-const NO_IOMMU: Iommu = Iommu { bar: 0, ready: false, dma_ready: false, ir_ready: false };
+const NO_IOMMU: Iommu = Iommu { bar: 0, irta_va: 0, ready: false, dma_ready: false, ir_ready: false };
 static IOMMU: IrqSpinLock<Iommu> = IrqSpinLock::new(NO_IOMMU);
 
 /* ---- DMAR table parse (find first DRHD on segment 0) ---- */
@@ -97,12 +98,23 @@ pub fn init() -> Result<(), &'static str> {
         n.ready = true;
     }
     enable_dma()?;
+    match enable_ir() {
+        Ok(()) => {
+            let mut n = IOMMU.lock();
+            n.ir_ready = true;
+        }
+        Err(e) => {
+            crate::println!("iommu: IR unavailable ({})", e);
+        }
+    }
     {
         let mut n = IOMMU.lock();
         n.ready = true;
     }
     Ok(())
 }
+
+pub fn ir_ready() -> bool { IOMMU.lock().ir_ready }
 
 pub fn selftest() {
     if !ready() {
@@ -218,4 +230,65 @@ pub fn enable_dma() -> Result<(), &'static str> {
     }
     crate::println!("iommu: DMA remapping enabled (identity 1:1)");
     Ok(())
+}
+
+/* ================= Interrupt remapping ================= */
+/* IRTA: 4KB, 256 x 16B entries. IRTE[0] is reserved for NVMe MSI-X. */
+const IRTE_COUNT: usize = 256;
+
+pub fn enable_ir() -> Result<(), &'static str> {
+    let bar = {
+        let n = IOMMU.lock();
+        if n.bar == 0 { return Err("no IOMMU"); }
+        n.bar
+    };
+    let (irta_va, irta_pa) = phys_alloc_zero(1).ok_or("irta alloc")?;
+    unsafe { core::ptr::write_bytes(irta_va as *mut u8, 0, 4096); }
+    /* IRTA register: base + size (log2(entries)-1 = 7 for 256). */
+    w64(bar, R_IRTA, (irta_pa & !0xfff) | 7);
+    {
+        let mut n = IOMMU.lock();
+        n.irta_va = irta_va;
+    }
+    /* Enable interrupt remapping. Set both SIRTP (latch table) and IRE
+       (enable); bit assignment 24/25 is confirmed by GSTS readback. */
+    let mut g = r32(bar, R_GCMD);
+    g |= (1 << 24) | (1 << 25);
+    w32(bar, R_GCMD, g);
+    let deadline = crate::arch::x86_64::apic::ticks().wrapping_add(500 + 2);
+    loop {
+        let sts = r32(bar, R_GSTS);
+        if sts & ((1 << 24) | (1 << 25)) == ((1 << 24) | (1 << 25)) { break; }
+        core::hint::spin_loop();
+        if crate::arch::x86_64::apic::ticks().wrapping_sub(deadline) < 0x8000_0000 {
+            return Err("IRE timeout");
+        }
+    }
+    crate::println!("iommu: interrupt remapping enabled");
+    Ok(())
+}
+
+
+
+/* Program IRTE[index]: fixed delivery, edge trigger, physical dest,
+   no source validation. Returns the remappable MSI address/data pair
+   for the device to write (handle=index, subhandle=0). */
+pub fn set_irte(index: usize, vector: u8, dest: u8) -> Result<(u64, u32), &'static str> {
+    if index >= 256 { return Err("irte range"); }
+    let irta = {
+        let n = IOMMU.lock();
+        if n.irta_va == 0 { return Err("no IRTA"); }
+        n.irta_va
+    };
+    unsafe {
+        let e = (irta + (index as u64) * 16) as *mut u64;
+        /* Low: P=1, DM=0, RH=0, TM=0(edge), DLM=000(fixed), Vector, DEST. */
+        e.write_volatile(1 | ((vector as u64) << 16) | ((dest as u64) << 32));
+        /* High: SVT=00 (none), SQ=00, SID=0. */
+        e.add(1).write_volatile(0);
+    }
+    /* Remappable MSI: address 0xFEE0_0010 | handle<<5, data 0.
+       (Verified against QEMU's checks: __head==0xfee, int_mode set.) */
+    let addr = 0xFEE0_0000u64 | 0x10 | ((index as u64) << 5);
+    Ok((addr, 0))
 }

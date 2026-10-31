@@ -76,7 +76,7 @@ phase "guest run on NVMe (profile B + virtio-net scaffold, 300s budget)"
 if NVME_IMG=build/nvme-test-ext2.img \
    SERIAL_LOG=build/nvme-serial.log \
    EXTRA_DEVICES="-netdev user,id=net1 -device virtio-net-pci,netdev=net1" \
-   timeout 300 ./tools/qemu-profile.sh B >/dev/null 2>&1; then
+   timeout 300 ./tools/qemu-profile.sh ${PROFILE:-B} >/dev/null 2>&1; then
   guest_status=0
 else
   guest_status=$?

@@ -364,10 +364,25 @@ fn setup_msix(bdf: Bdf, reg_bar: u64, reg_nr: u8) -> Result<u8, &'static str> {
     }
     let table = tbar + info.table_offset as u64;
     let me = crate::arch::x86_64::apic::apic_id() as u8;
+    /* Remappable MSI when IOMMU IR is up (IRTE 0); else compatible. */
+    let (msg_addr, msg_data) = if crate::driver::iommu::ir_ready() {
+        match crate::driver::iommu::set_irte(0, vec, me) {
+            Ok((a, d)) => {
+                crate::println!("nvme: MSI-X remappable vec={:#x}", vec);
+                (a as u32, d)
+            }
+            Err(e) => {
+                crate::println!("nvme: IRTE setup failed ({}), using compatible MSI", e);
+                (MSI_ADDR_BASE | ((me as u32) << 12), vec as u32)
+            }
+        }
+    } else {
+        (MSI_ADDR_BASE | ((me as u32) << 12), vec as u32)
+    };
     unsafe {
-        (table as *mut u32).write_volatile(MSI_ADDR_BASE | ((me as u32) << 12));
+        (table as *mut u32).write_volatile(msg_addr);
         (table as *mut u32).add(1).write_volatile(0);
-        (table as *mut u32).add(2).write_volatile(vec as u32);
+        (table as *mut u32).add(2).write_volatile(msg_data);
         let c = (table as *mut u32).add(3).read_volatile();
         (table as *mut u32).add(3).write_volatile(c & !1);
     }
