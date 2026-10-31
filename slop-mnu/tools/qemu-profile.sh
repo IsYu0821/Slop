@@ -75,7 +75,7 @@ case "$PROFILE" in
       -device nvme-ns,drive=nvme0 \
       -device qemu-xhci,id=xhci \
       -device usb-kbd -device usb-mouse \
-      -device e1000e,netdev=net0 -netdev user,id=net0
+      -device e1000,netdev=net0 -netdev user,id=net0
     ;;
   C)
     # AHCI/SATA variant of the generic PC.
@@ -86,7 +86,7 @@ case "$PROFILE" in
       -device ide-hd,drive=sata0,bus=ahci.0 \
       -device qemu-xhci,id=xhci \
       -device usb-kbd -device usb-mouse \
-      -device e1000e,netdev=net0 -netdev user,id=net0
+      -device e1000,netdev=net0 -netdev user,id=net0
     ;;
   D)
     # IOMMU variant of the generic PC (Intel VT-d + interrupt remapping).
@@ -97,7 +97,7 @@ case "$PROFILE" in
       -device nvme,drive=nvme0,serial=nvme-generic-pc \
       -device qemu-xhci,id=xhci \
       -device usb-kbd -device usb-mouse \
-      -device e1000e,netdev=net0 -netdev user,id=net0
+      -device e1000,netdev=net0 -netdev user,id=net0
     ;;
   *)
     echo "unknown profile: $PROFILE (want A, B, C or D)" >&2; exit 2 ;;

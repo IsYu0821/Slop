@@ -63,10 +63,10 @@ fn eth_send(ethertype:u16,dst:&[u8;6],payload:&[u8])->Result<(),i64>{
  let mut frame=[0u8;1600];
  if payload.len()+14>frame.len(){return Err(errno::EMSGSIZE)}
  frame[..6].copy_from_slice(dst);
- frame[6..12].copy_from_slice(&crate::driver::virtio_net::mac());
+ frame[6..12].copy_from_slice(&crate::driver::netdev::mac());
  frame[12..14].copy_from_slice(&ethertype.to_be_bytes());
  frame[14..14+payload.len()].copy_from_slice(payload);
- crate::driver::virtio_net::send_frame(&frame[..14+payload.len()])
+ crate::driver::netdev::send_frame(&frame[..14+payload.len()])
 }
 fn ip_emit(proto:u8,dst_ip:u32,dst_mac:&[u8;6],payload:&[u8])->Result<(),i64>{
  let total=20+payload.len();
@@ -117,7 +117,7 @@ fn arp_emit(op:u16,target_ip:u32,dst_mac:&[u8;6],target_mac:&[u8;6]){
  p[2..4].copy_from_slice(&ETH_IPV4.to_be_bytes());
  p[4]=6;p[5]=4;
  p[6..8].copy_from_slice(&op.to_be_bytes());
- p[8..14].copy_from_slice(&crate::driver::virtio_net::mac());
+ p[8..14].copy_from_slice(&crate::driver::netdev::mac());
  p[14..18].copy_from_slice(&our_ip().to_be_bytes());
  p[18..24].copy_from_slice(target_mac);
  p[24..28].copy_from_slice(&target_ip.to_be_bytes());
@@ -1001,9 +1001,9 @@ fn dispatch(frame:&[u8]){
    interrupt, syscall context and idle loops; all state is behind spin locks
    and never held across nested polls. */
 pub fn poll(){
- if !crate::driver::virtio_net::ready(){return}
+ if !crate::driver::netdev::ready(){return}
   let mut frame=[0u8;2048];
-  while let Some(len)=crate::driver::virtio_net::poll_frame(&mut frame){
+  while let Some(len)=crate::driver::netdev::poll_frame(&mut frame){
    dispatch(&frame[..len]);
   }
   poll_loopback();
@@ -1033,7 +1033,7 @@ fn dhcp_build(buf:&mut [u8],msg_type:u8,xid:u32,req_ip:u32,srv_id:u32)->usize{
  /* secs, flags (broadcast) */
  buf[10..12].copy_from_slice(&0x8000u16.to_be_bytes());
  /* ciaddr stays 0 (no address yet); chaddr = our MAC */
- let mac=crate::driver::virtio_net::mac();
+ let mac=crate::driver::netdev::mac();
  buf[28..34].copy_from_slice(&mac);
  /* magic cookie */
  buf[236..240].copy_from_slice(&DHCP_MAGIC);
