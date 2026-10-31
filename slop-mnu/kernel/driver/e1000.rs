@@ -3,7 +3,7 @@
 //! Generic-PC NIC (Profile B/C): QEMU e1000 on user-net. Reuses the Slop
 //! PCI/BAR/DMA/IRQ core and the netdev facade (virtio-net first, then
 //! e1000). Polling via net::poll (timer-driven) is the completion path;
-//! MSI is wired for delivery counting only (same pattern as AHCI INTx).
+//! INTx (shared 0x58; 82540EM has no MSI) is wired for delivery counting.
 //!
 //! Bring-up: BAR0 map -> software reset -> link up -> RAL/RAH MAC ->
 //! RX/TX descriptor rings -> RCTL/TCTL on. Queue discipline (NVMe/AHCI
