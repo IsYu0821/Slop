@@ -6,6 +6,8 @@ pub mod blk;
 pub mod nvme;
 pub mod ahci;
 pub mod xhci;
+pub mod netdev;
+pub mod e1000;
 pub trait Driver:Sync { fn name(&self)->&'static str; fn probe(&self,dev:&Device)->bool; fn attach(&self,dev:&Device)->Result<(),()>; }
 pub enum Bus{Pci,Platform,Virtio} pub struct Device{pub bus:Bus,pub vendor:u32,pub device:u32,pub class:u32}
 pub fn init(){
@@ -30,6 +32,11 @@ pub fn init(){
   Err(e)=>crate::println!("blk: ahci unavailable: {}",e),
  }
  ahci::selftest();
+ match e1000::init(){
+  Ok(m)=>crate::println!("net: e1000 up {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",m[0],m[1],m[2],m[3],m[4],m[5]),
+  Err(e)=>crate::println!("net: e1000 unavailable: {}",e),
+ }
+ e1000::selftest();
  match xhci::init(){
   Ok(())=>crate::println!("usb: xhci up"),
   Err(e)=>crate::println!("usb: xhci unavailable: {}",e),

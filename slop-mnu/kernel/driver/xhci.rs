@@ -214,9 +214,9 @@ pub fn init() -> Result<(), &'static str> {
     w64(rt, R_ERDP, crate::arch::x86_64::phys::virt_to_phys_full(ev_va));
     w32(rt, R_IMOD, 0);
     w32(rt, R_IMAN, (1 << 1) | 1); /* IE + clear IP */
-    /* Run. */
+    /* Run (with INTE: QEMU may gate transfer-event posting on it). */
     let mut cmd = r32(op, R_USBCMD);
-    cmd |= CMD_RS;
+    cmd |= CMD_RS | CMD_INTE;
     w32(op, R_USBCMD, cmd);
     wait_op(bar, op, R_USBSTS, STS_HALT, 0, 5000).map_err(|_| "run")?;
     {
@@ -364,13 +364,12 @@ fn wait_event(timeout_ms: u64) -> Result<(u32, u64, u32, u32), &'static str> {
         }
         wait_pause(&mut waited_ev, had_if_ev);
         if crate::arch::x86_64::apic::ticks().wrapping_sub(deadline) < 0x8000_0000 {
-            let (ev_va, rt) = {
-                let x = XHCI.lock();
-                (x.ev_va, x.rt)
-            };
-            let _ = rt;
-            crate::println!("xhci: event timeout");
-
+            static TO: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+            let n = TO.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            if n % 20000 == 0 {
+                crate::println!("xhci: event timeout #{} ticks={}", n, crate::arch::x86_64::apic::ticks());
+            }
+            return Err("xhci event timeout");
         }
     }
 }
