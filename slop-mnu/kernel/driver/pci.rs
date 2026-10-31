@@ -462,6 +462,35 @@ pub fn ioremap_bar(bdf: Bdf, nr: u8) -> u64 {
 }
 
 /// Unmap a VA previously returned by ioremap_bar. Safe no-op if unknown.
+/// Map an arbitrary physical range as UC (for non-BAR MMIO like IOMMU
+/// registers). No BAR reservation; caller must ensure exclusive use.
+/// Returns kernel VA, or 0 on failure.
+pub fn ioremap_pa(pa: u64, len: u64) -> u64 {
+    if len == 0 { return 0; }
+    let base = pa & !0xfff;
+    let off = pa & 0xfff;
+    let pages = ((off + len + 4095) / 4096) as u64;
+    let mlen = pages * 4096;
+    let va = mmio_alloc_va(mlen);
+    if va == 0 { return 0; }
+    let root = PageTableRoot { pml4: cur_cr3() };
+    let acc = Identity;
+    let mut off2 = 0u64;
+    while off2 < mlen {
+        if root.map_page(&acc, va + off2, base + off2, PRESENT | WRITABLE | PCD | PWT | NX).is_err() {
+            let mut r = 0u64;
+            while r < off2 {
+                let _ = root.unmap_page(&acc, va + r);
+                r += 4096;
+            }
+            mmio_free_va(va, mlen);
+            return 0;
+        }
+        off2 += 4096;
+    }
+    va + off
+}
+
 pub fn iounmap_bar(va: u64) {
     if va == 0 { return; }
     let (len, bdf_packed, nr) = {
