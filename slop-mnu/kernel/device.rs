@@ -73,6 +73,7 @@ pub fn init_devtmpfs(){
  }
  if crate::driver::virtio_blk::ready(){let _=crate::vfs::mknod("/dev/vda",0o060660,(254u64<<8)|0);}
  if crate::driver::nvme::ready(){let _=crate::vfs::mknod("/dev/nvme0n1",0o060660,(259u64<<8)|0);}
+ if crate::driver::ahci::ready(){let _=crate::vfs::mknod("/dev/sda",0o060660,(8u64<<8)|0);}
 }
 
 pub fn blk_read(major:u32,minor:u32,off:u64,dst:&mut[u8])->Result<usize,i64>{

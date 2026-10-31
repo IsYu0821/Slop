@@ -47,20 +47,27 @@ fn path_has_prefix(path:&str,prefix:&str)->bool{path==prefix||(path.starts_with(
    change under a running guest. 0 = unknown, 1 = none, 2 = ext2, 3 = ext4.
    Device readiness alone is NOT enough (a blank disk must not capture
    /mnt and break tmpfs mounts). */
+/* Cached legacy-disk filesystem kind + the capacity it was probed at.
+   A probe that runs before the block backend is up (capacity 0) must not
+   stick: the capacity tag forces a re-probe once the disk appears. */
 static LEGACY_FS:AtomicU64=AtomicU64::new(0);
+static LEGACY_FSCAP:AtomicU64=AtomicU64::new(u64::MAX);
 fn legacy_fs_kind()->u64{
+ let cap_now=crate::driver::blk::capacity();
  let v=LEGACY_FS.load(Ordering::Relaxed);
- if v!=0{return v}
- let k=if crate::ext4::probe(){3}else{
+ if v!=0&&LEGACY_FSCAP.load(Ordering::Relaxed)==cap_now{return v}
+ let k=if cap_now>2&&crate::ext4::probe(){3}else{
   let mut b=[0u8;512];
   let mut ok=false;
-  if crate::driver::blk::capacity()>2&&crate::driver::blk::read_sector(2,&mut b).is_ok(){
+  if cap_now>2&&crate::driver::blk::read_sector(2,&mut b).is_ok(){
    let m=u16::from_le_bytes([b[56],b[57]]);
    ok=m==0xef53;
   }
   if ok{2}else{1}
  };
  LEGACY_FS.store(k,Ordering::Relaxed);
+ LEGACY_FSCAP.store(cap_now,Ordering::Relaxed);
+
  k
 }
 fn route_path(path:&str,ns:u64)->PathRoute{
@@ -87,6 +94,7 @@ fn route_path(path:&str,ns:u64)->PathRoute{
   // Claim /mnt only when the legacy disk actually holds a filesystem
   // (a blank disk must not capture the mount point and break tmpfs).
   let kind=match legacy_fs_kind(){3=>Some(MountKind::Ext4),2=>Some(MountKind::Ext2),_=>None};
+
   if let Some(kind)=kind{
   route.kind=Some(kind);route.target[..4].copy_from_slice(b"/mnt");route.tlen=4;
   /* The legacy disk mount carries no flags: ext4 stays read-only here

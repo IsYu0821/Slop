@@ -40,6 +40,7 @@ fi
 : "${SERIAL_LOG:=build/profile-serial.log}"
 : "${EFI_DIR:=build/efi}"
 : "${NVME_IMG:=build/nvme-disk.img}"
+: "${SATA_IMG:=build/sata-disk.img}"
 mkdir -p build
 VARS=$(mktemp "${TMPDIR:-/tmp}/slop-vars.XXXXXX.fd")
 trap 'rm -f "$VARS"' EXIT INT TERM
@@ -78,9 +79,9 @@ case "$PROFILE" in
     ;;
   C)
     # AHCI/SATA variant of the generic PC.
-    [ -f build/sata-disk.img ] || qemu-img create -f raw build/sata-disk.img 64M
+    [ -f "$SATA_IMG" ] || qemu-img create -f raw "$SATA_IMG" 64M
     set -- "$@" \
-      -drive file=build/sata-disk.img,format=raw,if=none,id=sata0 \
+      -drive file="$SATA_IMG",format=raw,if=none,id=sata0 \
       -device ich9-ahci,id=ahci \
       -device ide-hd,drive=sata0,bus=ahci.0 \
       -device qemu-xhci,id=xhci \
