@@ -325,7 +325,14 @@ pub extern "sysv64" fn ap_main(apic_id: u32, slot: usize) -> ! {
     CPU_PROBE_RSP[slot].store(if in_range { rsp } else { 0 }, Ordering::Relaxed);
     CPU_MAGIC[slot].store(ATTEST_MAGIC, Ordering::Relaxed);
     CPU_COUNTER[slot].fetch_add(1, Ordering::Relaxed);
-    let _ = apic_id;
+    /* Publish this CPU's APIC ID before going READY: current_cpu() matches
+       the LAPIC ID against TRAMP_IDS, and an unset entry (0xFFFFFFFF)
+       makes every AP misidentify as the BSP (zeroed CPU accounting,
+       wrong per-CPU runqueues). */
+    unsafe {
+        let ids = &raw mut TRAMP_IDS as *mut [u32; MAX_CPUS];
+        (*ids)[slot] = apic_id;
+    }
     // Release: the BSP's waiter observes READY only after every field above.
     CPU_STATE[slot].store(CPU_READY, Ordering::Release);
     // Wait for scheduler init, then join the shared run queue (never returns).

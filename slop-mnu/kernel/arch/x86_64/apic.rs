@@ -283,45 +283,6 @@ pub fn diag_ap() -> [u64; 10] {
 }
 #[unsafe(no_mangle)]
 pub extern "sysv64" fn apic_timer_rust(cs:u64) {
-    /* DIAG-MS93: minimal path on APs to isolate the deafness: count, tick,
-       EOI only. Full path below runs on the BSP. */
-    if crate::smp::current_cpu()!=crate::smp::bsp_slot(){
-        crate::task::note_timer_tick();
-    TICKS.fetch_add(1, Ordering::Relaxed);
-    crate::linux_compat::tick_jiffies();
-        /* DIAG-MS93: dump LAPIC state on the first AP tick. */
-        static DIAG_DONE: AtomicU64 = AtomicU64::new(0);
-        if DIAG_DONE.swap(1, Ordering::Relaxed)==0{
-            let tpr=unsafe{read(0x80)};
-            let svr=unsafe{read(0xf0)};
-            let lvt=unsafe{read(0x320)};
-            let irr0=unsafe{read(0x200)};
-            let isr0=unsafe{read(0x100)};
-            let isr4=unsafe{read(0x140)};
-            let (cs,ss,rsp,cr3):(u64,u64,u64,u64);
-            unsafe{
-                core::arch::asm!("mov {o}, cs",o=out(reg)cs,options(nostack,preserves_flags));
-                core::arch::asm!("mov {o}, ss",o=out(reg)ss,options(nostack,preserves_flags));
-                core::arch::asm!("mov {o}, rsp",o=out(reg)rsp,options(nostack,preserves_flags));
-                core::arch::asm!("mov {o}, cr3",o=out(reg)cr3,options(nostack,preserves_flags));
-            }
-            let me=crate::smp::current_cpu();
-            let ist_now=crate::smp::tss_diag(me).2;
-            let entry_rsp=unsafe{(*crate::smp::per_cpu_ptr(me)).diag_entry_rsp};
-            DIAG_AP[0].store(cs,Ordering::Relaxed);
-            DIAG_AP[1].store(ss,Ordering::Relaxed);
-            DIAG_AP[2].store(rsp,Ordering::Relaxed);
-            DIAG_AP[3].store(cr3,Ordering::Relaxed);
-            DIAG_AP[4].store(ist_now,Ordering::Relaxed);
-            DIAG_AP[5].store(entry_rsp,Ordering::Relaxed);
-            DIAG_AP[6].store(tpr as u64,Ordering::Relaxed);
-            DIAG_AP[7].store(svr as u64,Ordering::Relaxed);
-            DIAG_AP[8].store(lvt as u64,Ordering::Relaxed);
-            DIAG_AP[9].store(me as u64,Ordering::Relaxed);
-        }
-        unsafe { write(0xb0,0) }
-        return;
-    }
     let now = super::tsc::rdtsc();
     crate::task::note_timer_tick();
     crate::task::note_timer_stage(0);
@@ -331,6 +292,7 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
         TSC_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
     TICKS.fetch_add(1, Ordering::Relaxed);
+    crate::linux_compat::tick_jiffies();
     /* The clock is measured with the counter, so the tick moves it forward
        and the length of the tick is the time the counter has passed.
        Deliberately NOT fed back into set_tick_ns: per-tick TSC deltas
@@ -341,8 +303,12 @@ pub extern "sysv64" fn apic_timer_rust(cs:u64) {
     let tick_ns=crate::time::advance(now);
     crate::task::note_timer_stage(1);
     /* The vector system call entry point reads the time from a shared page
-       that the kernel keeps up to date. */
-    crate::vdso::update(now);
+       that the kernel keeps up to date. Updated by the BSP only: AP TSCs
+       can carry an offset, and publishing an AP reading would make the
+       shared clock jump. */
+    if crate::smp::current_cpu()==crate::smp::bsp_slot(){
+        crate::vdso::update(now);
+    }
     crate::task::note_timer_stage(2);
     crate::task::on_timer_tick(cs & 3 != 0,tick_ns);
     crate::task::note_timer_stage(3);
