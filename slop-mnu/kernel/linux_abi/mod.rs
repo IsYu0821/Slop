@@ -143,8 +143,8 @@ fn dispatch_inner(n:u64,a:[u64;6])->i64 {
     nr::STATFS=>sys_statfs(a[0],a[1]), nr::FSTATFS=>sys_fstatfs(a[0] as usize,a[1]),
     nr::READLINK=>sys_readlink(a[0],a[1],a[2]),
     nr::CLOSE_RANGE=>sys_close_range(a[0] as usize,a[1] as usize,a[2]),
-    nr::FADVISE64=>0, nr::SYNC=>0, nr::GETCPU=>sys_getcpu(a[0],a[1]), nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
-    nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>0, nr::FALLOCATE=>sys_fallocate(a[0] as usize,a[1],a[2],a[3]),
+    nr::FADVISE64=>0, nr::SYNC=>sys_sync(), nr::SYNCFS=>sys_syncfs(a[0] as usize), nr::GETCPU=>sys_getcpu(a[0],a[1]), nr::SCHED_SETAFFINITY=>0, nr::MINCORE=>sys_mincore(a[0],a[1],a[2]),
+    nr::MLOCK2=>0, nr::PERSONALITY=>0, nr::NICE=>0, nr::SYNC_FILE_RANGE=>sys_sync_file_range(a[0] as usize,a[1],a[2],a[3]), nr::FALLOCATE=>sys_fallocate(a[0] as usize,a[1],a[2],a[3]),
     nr::SENDFILE=>sys_sendfile(a[0] as usize,a[1] as usize,a[2],a[3] as usize), nr::SPLICE=>sys_splice(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::TEE=>sys_tee(a[0] as usize,a[1] as usize,a[2] as usize,a[3]),
     nr::COPY_FILE_RANGE=>sys_copy_file_range(a[0] as usize,a[1],a[2] as usize,a[3],a[4] as usize,a[5]), nr::FUTIMESAT=>0, nr::UTIMES=>0,
     nr::GETXATTR=>errno::neg(errno::ENODATA), nr::LGETXATTR=>errno::neg(errno::ENODATA), nr::FGETXATTR=>errno::neg(errno::ENODATA),
@@ -1813,7 +1813,50 @@ fn sys_open(path_ptr:u64,flags:u64,mode:u64)->i64{
  open_common(p,flags,mode)
 }
 fn sys_creat(path_ptr:u64,mode:u64)->i64{sys_open(path_ptr,0o100|0o1,if mode==0{0o644}else{mode})}
-fn sys_fsync(fd:usize)->i64{let _=fd;0}
+fn sys_fsync(fd:usize)->i64{
+ /* Real fsync (not a no-op): validate the descriptor, then flush volatile
+    device caches to stable storage. All filesystem writes in this kernel
+    are synchronous through to the device (no page cache), so durability
+    reduces to a device flush; errors (bad fd, ENODEV, EIO) are reported
+    honestly instead of masked. */
+ let _id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::driver::blk::flush(){
+  Ok(())=>0,
+  Err(e)=>errno::neg(e),
+ }
+}
+fn sys_sync()->i64{
+ /* sync(2): flush all volatile device caches. No page cache exists, so this
+    is a device flush; errors are reported, not masked. */
+ match crate::driver::blk::flush(){
+  Ok(())=>0,
+  Err(e)=>errno::neg(e),
+ }
+}
+fn sys_sync_file_range(fd:usize,off:u64,len:u64,flags:u64)->i64{
+ /* Linux sync_file_range with WAIT_BEFORE|WRITE|AFTER. Writes here are
+    already synchronous (BEFORE/WRITE trivially satisfied); AFTER needs a
+    device flush. Validate fd and range. */
+ let _id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ const WAIT_BEFORE:u64=1;const WRITE:u64=2;const WAIT_AFTER:u64=4;
+ if flags & !(WAIT_BEFORE|WRITE|WAIT_AFTER) != 0 { return errno::neg(errno::EINVAL); }
+ if flags & WAIT_AFTER != 0 {
+  match crate::driver::blk::flush(){
+   Ok(())=>{},
+   Err(e)=>return errno::neg(e),
+  }
+ }
+ 0
+}
+fn sys_syncfs(fd:usize)->i64{
+ /* syncfs(fd): flush the filesystem containing fd. Single-device kernel:
+    validate fd, flush the block device. */
+ let _id=match fd_id(fd as u64){Some(id)=>id,None=>return errno::neg(errno::EBADF)};
+ match crate::driver::blk::flush(){
+  Ok(())=>0,
+  Err(e)=>errno::neg(e),
+ }
+}
 fn sys_epoll_create1(flags:u64)->i64{
  if flags&!0o2000000!=0{return errno::neg(errno::EINVAL)}
  let id=match crate::fd::alloc_file(crate::fd::OpenKind::Epoll){Ok(v)=>v,Err(e)=>return errno::neg(e)};

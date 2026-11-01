@@ -234,9 +234,15 @@ impl Transport{
  /// a secure erase. The driver only implements the plain interface, so it
  /// must not acknowledge those.
  pub fn negotiate_modern(&self)->bool{
+  self.negotiate_modern_with(0)
+ }
+ /// Same as negotiate_modern but additionally requests low-word feature bits
+ /// (e.g. block flush). Callers must implement every requested feature.
+ pub fn negotiate_modern_with(&self,extra_lo:u32)->bool{
   let high=self.read_features(1);
   if high&(1<<(VIRTIO_F_VERSION_1-32))==0{return false}
-  self.set_features(0,0);
+  let lo=self.read_features(0);
+  self.set_features(0,extra_lo & lo);
   self.set_features(1,1<<(VIRTIO_F_VERSION_1-32));
   self.set_status(self.status()|S_FEATURES_OK);
   (self.status()&S_FEATURES_OK)!=0

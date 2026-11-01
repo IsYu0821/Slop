@@ -11,6 +11,7 @@ use core::sync::atomic::Ordering;
 
 const VIRTIO_BLK_T_IN:u32=0;
 const VIRTIO_BLK_T_OUT:u32=1;
+const VIRTIO_BLK_T_FLUSH:u32=4;
 
 struct Blk{ready:bool,transport:Transport,capacity:u64,qsize:usize}
 static BLK:IrqSpinLock<Blk>=IrqSpinLock::new(Blk{ready:false,transport:Transport::legacy(0),capacity:0,qsize:0});
@@ -61,6 +62,13 @@ fn setup_queue(t:&Transport,size:usize)->Result<(),&'static str>{
 }
 
 fn do_request(typ:u32,sector:u64)->Result<(),i64>{
+ do_request_data(typ, sector, true)
+}
+/* Flush uses a 2-descriptor chain (header + status, no data) per spec. */
+fn do_flush()->Result<(),i64>{
+ do_request_data(VIRTIO_BLK_T_FLUSH, 0, false)
+}
+fn do_request_data(typ:u32,sector:u64,has_data:bool)->Result<(),i64>{
  let (t,size)={
   let blk=BLK.lock();
   if !blk.ready{return Err(crate::errno::ENODEV)}
@@ -74,10 +82,14 @@ fn do_request(typ:u32,sector:u64)->Result<(),i64>{
   (hdr.add(4)as*mut u32).write_volatile(0);
   (hdr.add(8)as*mut u64).write_volatile(sector);
   BLK_STATUS.0[0]=0xff;
-  // The descriptor chain: header, data, status.
+  // The descriptor chain: header, [data,] status. Flush omits data.
   desc_set(r,size,0,virt_to_phys(core::ptr::addr_of!(REQ.0)as u64),16,1,1);
-  desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
-  desc_set(r,size,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
+  if has_data {
+   desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(DATA.0)as u64),512,if typ==VIRTIO_BLK_T_IN{3}else{1},2);
+   desc_set(r,size,2,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
+  } else {
+   desc_set(r,size,1,virt_to_phys(core::ptr::addr_of!(BLK_STATUS.0)as u64),1,2,0);
+  }
   // Queue one attempt and wait for its completion. The device side runs
   // while the vCPU is outside the guest, so halt regularly to hand the CPU
   // back instead of spinning a fixed count that can expire first under TCG.
@@ -119,10 +131,12 @@ pub fn init()->Result<u64,&'static str>{
  t.set_status(virtio::S_ACK);
  t.set_status(virtio::S_ACK|virtio::S_DRIVER);
  if t.modern{
-  if !t.negotiate_modern(){return Err("virtio-blk feature negotiation failed")}
+  /* Request FLUSH (bit 9) in addition to VERSION_1; flush() implements it. */
+  if !t.negotiate_modern_with(1<<9){return Err("virtio-blk feature negotiation failed")}
  }else{
-  let _=t.read_features(0);
-  t.set_features(0,0);
+  let offered=t.read_features(0);
+  /* Legacy: request FLUSH if offered (bit 9). */
+  t.set_features(0,(1<<9)&offered);
  }
  let size=t.queue_size(0,MAX_Q);
  if size<1{return Err("virtio-blk queue too small")}
@@ -150,4 +164,7 @@ pub fn write_sector(sector:u64,src:&[u8])->Result<(),i64>{
  if src.len()<512{return Err(crate::errno::EINVAL)}
  unsafe{DATA.0[..512].copy_from_slice(&src[..512]);}
  match do_request(VIRTIO_BLK_T_OUT,sector){Ok(())=>Ok(()),Err(e)=>Err(e)}
+}
+pub fn flush()->Result<(),i64>{
+ do_flush()
 }

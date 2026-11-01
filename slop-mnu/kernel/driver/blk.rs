@@ -44,3 +44,18 @@ pub fn write_sector(sector: u64, src: &[u8]) -> Result<(), i64> {
     }
     Err(errno::ENODEV)
 }
+/* Volatile-cache flush for durability (fsync path). All writes in this
+   kernel are synchronous through to the device; flush pushes device caches
+   to stable storage. Returns EIO if the active backend reports failure. */
+pub fn flush() -> Result<(), i64> {
+    if crate::driver::virtio_blk::ready() {
+        return crate::driver::virtio_blk::flush();
+    }
+    if crate::driver::nvme::ready() {
+        return crate::driver::nvme::flush();
+    }
+    if crate::driver::ahci::ready() {
+        return crate::driver::ahci::flush();
+    }
+    Err(errno::ENODEV)
+}
