@@ -749,8 +749,8 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
  off as i64
 }
 fn sys_futex(uaddr:u64,op:i32,val:i32,timeout:u64,uaddr2:u64,val3:i32)->i64{
- let _=uaddr2;let _=val3;
- match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout){Ok(v)=>v,Err(e)=>errno::neg(e)}
+ let _=uaddr2;
+ match crate::futex::dispatch(uaddr,op as u32,val as u32,timeout,val3 as u32){Ok(v)=>v,Err(e)=>errno::neg(e)}
 }
 
 /* statx: fills a linux statx buffer from the path or fd. Layout follows the
@@ -1007,8 +1007,13 @@ fn sys_clone3(args:u64)->i64{
  let tls=u64::from_ne_bytes(b[56..64].try_into().unwrap());
  if flags&0x100!=0{
   if stack==0{return errno::neg(errno::EINVAL)}
+  /* clone3 passes the stack BOTTOM plus size (unlike legacy clone which
+     passes the top); the child starts at the top, like Linux. */
+  let size=u64::from_ne_bytes(b[48..56].try_into().unwrap());
+  let top=match stack.checked_add(size){Some(v)=>v,None=>return errno::neg(errno::EINVAL)};
+  if top==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,stack,tls,ctid,ptid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  match crate::task::spawn_thread(frame,top,tls,ctid,ptid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if flags!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};

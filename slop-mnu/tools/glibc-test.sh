@@ -15,7 +15,7 @@ cleanup() {
   rm -rf "$BACKUP_DIR"
 }
 trap cleanup EXIT
-gcc -O1 -o build/glibc-hello /tmp/opencode/glibc-hello.c
+gcc -O1 -o build/glibc-hello tests/glibc-hello.c
 cp build/glibc-hello tests/musl/glibc-hello
 # real host glibc files (unmodified bytes) at their canonical paths
 mkdir -p tests/glibc/lib64 tests/glibc/lib-x86_64

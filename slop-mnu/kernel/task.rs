@@ -946,7 +946,7 @@ pub fn exit(code:i32)->!{
    if ctid!=0{
     let zero=0u64;
     let _=crate::usercopy::copy_to_user(ctid as usize,&zero.to_ne_bytes());
-    let _=crate::futex::wake(ctid,1);
+    let _=crate::futex::wake(ctid,1,crate::futex::FUTEX_BITSET_MATCH_ANY);
    }
   });
   robust_exit();

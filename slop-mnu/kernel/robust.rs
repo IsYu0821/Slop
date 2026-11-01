@@ -35,7 +35,7 @@ fn handle_futex(uaddr:u64,pid:u32){
  let new=(cur&FUTEX_WAITERS)|FUTEX_OWNER_DIED;
  if write_u32(uaddr,new).is_err(){return}
  /* Linux only wakes when the waiter advertised itself with FUTEX_WAITERS. */
- if cur&FUTEX_WAITERS!=0{let _=crate::futex::wake(uaddr,1);}
+ if cur&FUTEX_WAITERS!=0{let _=crate::futex::wake(uaddr,1,crate::futex::FUTEX_BITSET_MATCH_ANY);}
 }
 
 /* head points at struct robust_list_head { list, futex_offset, list_op_pending }. */
