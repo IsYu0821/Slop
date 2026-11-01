@@ -10,11 +10,13 @@ pub fn build(page:&mut[u8],base:u64,argv:&[&str],envp:&[&str],execfn:&str,random
  if argv.len()>MAX_ARGS||envp.len()>MAX_ENVS{return Err(crate::errno::E2BIG)}
  let top=base.checked_add(page.len() as u64).ok_or(crate::errno::EFAULT)?; let mut cursor=page.len();
  let random_addr=push_bytes(page,base,&mut cursor,&random)?;
+ let platform_addr=push_cstr(page,base,&mut cursor,"x86_64")?;
+ let (hwcap,hwcap2)=crate::arch::x86_64::cpu::hwcap();
  let execfn_addr=push_cstr(page,base,&mut cursor,execfn)?;
  let mut enva=[0u64;MAX_ENVS]; for (i,s) in envp.iter().enumerate().rev(){enva[i]=push_cstr(page,base,&mut cursor,s)?;}
  let mut arga=[0u64;MAX_ARGS]; for (i,s) in argv.iter().enumerate().rev(){arga[i]=push_cstr(page,base,&mut cursor,s)?;}
  cursor&=!7usize;
- let aux=[Auxv{kind:AT_PAGESZ,value:4096},Auxv{kind:AT_PHDR,value:info.phdr},Auxv{kind:AT_PHENT,value:info.phent},Auxv{kind:AT_PHNUM,value:info.phnum},Auxv{kind:AT_ENTRY,value:info.entry},Auxv{kind:AT_BASE,value:info.base},Auxv{kind:AT_UID,value:0},Auxv{kind:AT_EUID,value:0},Auxv{kind:AT_GID,value:0},Auxv{kind:AT_EGID,value:0},Auxv{kind:AT_SECURE,value:0},Auxv{kind:AT_RANDOM,value:random_addr},Auxv{kind:AT_EXECFN,value:execfn_addr},Auxv{kind:AT_SYSINFO_EHDR,value:info.vdso},Auxv{kind:AT_NULL,value:0}];
+ let aux=[Auxv{kind:AT_PAGESZ,value:4096},Auxv{kind:AT_PHDR,value:info.phdr},Auxv{kind:AT_PHENT,value:info.phent},Auxv{kind:AT_PHNUM,value:info.phnum},Auxv{kind:AT_ENTRY,value:info.entry},Auxv{kind:AT_BASE,value:info.base},Auxv{kind:AT_UID,value:0},Auxv{kind:AT_EUID,value:0},Auxv{kind:AT_GID,value:0},Auxv{kind:AT_EGID,value:0},Auxv{kind:AT_SECURE,value:0},Auxv{kind:AT_RANDOM,value:random_addr},Auxv{kind:AT_PLATFORM,value:platform_addr},Auxv{kind:AT_HWCAP,value:hwcap as u64},Auxv{kind:AT_HWCAP2,value:hwcap2 as u64},Auxv{kind:AT_CLKTCK,value:100},Auxv{kind:AT_EXECFN,value:execfn_addr},Auxv{kind:AT_SYSINFO_EHDR,value:info.vdso},Auxv{kind:AT_NULL,value:0}];
  let scalar_words=aux.len()*2 + 1+envp.len() + 1+argv.len() + 1;
  if (base + cursor as u64 - (scalar_words as u64)*8)&15!=0 { if cursor<8{return Err(crate::errno::E2BIG)} cursor-=8; }
  for a in aux.iter().rev(){push_u64(page,&mut cursor,a.value)?;push_u64(page,&mut cursor,a.kind)?;}

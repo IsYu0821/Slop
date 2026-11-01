@@ -7,6 +7,10 @@ static mut HOSTNAME:[u8;65]=[0;65];
 fn hostname_init(){unsafe{HOSTNAME[..4].copy_from_slice(b"slop");}}
 fn hostname_bytes()->[u8;65]{let h=unsafe{HOSTNAME}; if h[0]==0 { let mut d=[0u8;65]; d[..4].copy_from_slice(b"slop"); d } else { h } }
 pub fn dispatch(n:u64,a:[u64;6])->i64 {
+ dispatch_inner(n,a)
+}
+#[allow(dead_code)]
+fn dispatch_inner(n:u64,a:[u64;6])->i64 {
  if crate::task::with_current_process(|p|p.seccomp_mode).unwrap_or(0)==1 {
    match n { nr::READ|nr::WRITE|nr::EXIT|nr::RT_SIGRETURN=>{}, _=>crate::task::exit_signal(9), }
  }
@@ -36,10 +40,10 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::GETITIMER=>sys_getitimer(a[0],a[1]), nr::SETITIMER=>sys_setitimer(a[0],a[1],a[2]),
     nr::STAT=>sys_stat(a[0],a[1]), nr::LSTAT=>sys_lstat(a[0],a[1]), nr::UNLINK=>sys_unlink(a[0]),
     nr::SYMLINK=>sys_symlink(a[0],a[1]), nr::LINK=>sys_link(a[0],a[1]),
-    nr::SYMLINKAT=>sys_symlinkat(a[0],a[1] as i64,a[2]), nr::LINKAT=>sys_linkat(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
+    nr::SYMLINKAT=>sys_symlinkat(a[0],a[1] as i64,a[2]), nr::LINKAT=>sys_linkat((a[0] as u32 as i32) as i64,a[1],a[2] as i64,a[3],a[4]),
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
-    nr::OPENAT=>sys_openat(a[0] as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat(a[0] as i64,a[1],a[2],a[3]),
-    nr::MMAP=>proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],a[3],a[4] as i64,a[5])),
+    nr::OPENAT=>sys_openat((a[0] as u32 as i32) as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
+    nr::MMAP=>mmap_dispatch(a),
     nr::MPROTECT=>proc_unit(|p|p.mprotect(a[0] as usize,a[1] as usize,a[2])),
     nr::MUNMAP=>proc_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_u64(|p|Ok(p.brk(a[0]))),
     nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID=>crate::task::current_tgid() as i64, nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
@@ -84,8 +88,8 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::WRITEV=>sys_writev(a[0],a[1],a[2] as i32),
     nr::GETDENTS64=>sys_getdents64(a[0],a[1],a[2] as i32),
     nr::FUTEX=>sys_futex(a[0],a[1] as i32,a[2] as i32,a[3],a[4] as u64,a[5] as i32),
-    nr::UNLINKAT=>sys_unlinkat(a[0] as i64,a[1],a[2]),
-    nr::STATX=>sys_statx(a[0] as i64,a[1],a[2],a[3],a[4]),
+    nr::UNLINKAT=>sys_unlinkat((a[0] as u32 as i32) as i64,a[1],a[2]),
+    nr::STATX=>sys_statx((a[0] as u32 as i32) as i64,a[1],a[2],a[3],a[4]),
     nr::MREMAP=>proc_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64,a[4])),
     nr::MADVISE=>proc_result(|p|p.madvise(a[0] as usize,a[1] as usize,a[2])),
     nr::MEMBARRIER=>0,
@@ -94,11 +98,11 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::RSEQ=>errno::neg(errno::ENOSYS),
     nr::PKEY_ALLOC=>0,
     nr::WAITID=>sys_waitid(a[0] as i32,a[1],a[2],a[3] as i32,a[4]),
-    nr::READLINKAT=>sys_readlinkat(a[0] as i64,a[1],a[2],a[3]),
-    nr::FACCESSAT=>sys_faccessat(a[0] as i64,a[1],a[2],a[3]),
-    nr::FACCESSAT2=>sys_faccessat(a[0] as i64,a[1],a[2],a[3]),
+    nr::READLINKAT=>sys_readlinkat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
+    nr::FACCESSAT=>sys_faccessat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
+    nr::FACCESSAT2=>sys_faccessat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
     nr::ACCESS=>sys_faccessat(-100,a[0],a[1],0),
-    nr::EXECVEAT=>sys_execveat(a[0] as i64,a[1],a[2],a[3],a[4]),
+    nr::EXECVEAT=>sys_execveat((a[0] as u32 as i32) as i64,a[1],a[2],a[3],a[4]),
     nr::SCHED_GETAFFINITY=>sys_sched_getaffinity(a[0] as u32,a[1] as usize,a[2]),
     nr::POLL=>sys_poll(a[0],a[1] as i32,a[2] as i32),
     nr::PPOLL=>sys_ppoll(a[0],a[1] as i32,a[2],a[3]),
@@ -147,17 +151,17 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::SETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::LSETXATTR=>errno::neg(errno::EOPNOTSUPP), nr::FSETXATTR=>errno::neg(errno::EOPNOTSUPP),
     nr::LISTXATTR=>0, nr::LLISTXATTR=>0, nr::FLISTXATTR=>0,
     nr::REMOVEXATTR=>errno::neg(errno::ENODATA), nr::LREMOVEXATTR=>errno::neg(errno::ENODATA), nr::FREMOVEXATTR=>errno::neg(errno::ENODATA),
-    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>sys_mknodat(a[0] as i64,a[1],a[2] as u32,a[3]),
+    nr::USERFAULTFD=>errno::neg(errno::ENOSYS), nr::MKNODAT=>sys_mknodat((a[0] as u32 as i32) as i64,a[1],a[2] as u32,a[3]),
     nr::SETPGID=>sys_setpgid(a[0] as u32,a[1] as u32), nr::GETPGID=>sys_getpgid(a[0] as u32),
     nr::SETSID=>sys_setsid(), nr::GETSID=>sys_getsid(a[0] as u32),
     nr::PRCTL=>sys_prctl(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::SYSINFO=>sys_sysinfo(a[0]),
     nr::MSYNC=>0, nr::MLOCK=>proc_result(|p|p.mlock(a[0] as usize,a[1] as usize)), nr::MUNLOCK=>proc_result(|p|p.munlock(a[0] as usize,a[1] as usize)), nr::MLOCKALL=>0, nr::MUNLOCKALL=>0,
     nr::CHDIR=>sys_chdir(a[0]), nr::FCHDIR=>sys_fchdir(a[0] as usize),
-    nr::MKDIR=>sys_mkdir(a[0],a[1] as u32), nr::MKDIRAT=>sys_mkdirat(a[0] as i64,a[1],a[2] as u32),
+    nr::MKDIR=>sys_mkdir(a[0],a[1] as u32), nr::MKDIRAT=>sys_mkdirat((a[0] as u32 as i32) as i64,a[1],a[2] as u32),
     nr::RMDIR=>sys_rmdir(a[0]),
-    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat(a[0] as i64,a[1],a[2] as i64,a[3]), nr::RENAMEAT2=>sys_renameat_flags(a[0] as i64,a[1],a[2] as i64,a[3],a[4]),
-    nr::CHMOD=>sys_chmod(a[0],a[1] as u32), nr::FCHMOD=>sys_fchmod(a[0] as usize,a[1] as u32), nr::FCHMODAT=>sys_fchmodat(a[0] as i64,a[1],a[2] as u32,a[3]),
+    nr::RENAME=>sys_rename(a[0],a[1]), nr::RENAMEAT=>sys_renameat((a[0] as u32 as i32) as i64,a[1],a[2] as i64,a[3]), nr::RENAMEAT2=>sys_renameat_flags((a[0] as u32 as i32) as i64,a[1],a[2] as i64,a[3],a[4]),
+    nr::CHMOD=>sys_chmod(a[0],a[1] as u32), nr::FCHMOD=>sys_fchmod(a[0] as usize,a[1] as u32), nr::FCHMODAT=>sys_fchmodat((a[0] as u32 as i32) as i64,a[1],a[2] as u32,a[3]),
     nr::TRUNCATE=>sys_truncate(a[0],a[1]), nr::FTRUNCATE=>sys_ftruncate(a[0] as usize,a[1]),
     nr::DUP=>sys_dup(a[0] as usize),
     nr::GETTIMEOFDAY=>sys_gettimeofday(a[0],a[1]),
@@ -166,8 +170,8 @@ pub fn dispatch(n:u64,a:[u64;6])->i64 {
     nr::CLOCK_GETRES=>sys_clock_getres(a[0],a[1]), nr::CLOCK_NANOSLEEP=>sys_clock_nanosleep(a[0],a[1],a[2],a[3]), nr::CLOCK_SETTIME=>sys_clock_settime(a[0],a[1]),
     nr::SELECT=>sys_select(a[0] as i32,a[1],a[2],a[3],a[4]),
     nr::PSELECT6=>sys_pselect6(a[0] as i32,a[1],a[2],a[3],a[4],a[5]),
-    nr::UTIMENSAT=>sys_utimensat(a[0] as i64,a[1],a[2],a[3]),
-    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>sys_fchownat(a[0] as i64,a[1],a[2] as u32,a[3] as u32,a[4]),
+    nr::UTIMENSAT=>sys_utimensat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
+    nr::CHOWN=>0, nr::FCHOWN=>0, nr::LCHOWN=>0, nr::FCHOWNAT=>sys_fchownat((a[0] as u32 as i32) as i64,a[1],a[2] as u32,a[3] as u32,a[4]),
     nr::UTIME=>0,
     nr::IOCTL=>sys_ioctl(a[0] as usize,a[1],a[2]),
     nr::IO_URING_SETUP=>sys_io_uring_setup(a[0] as u32,a[1]), nr::IO_URING_ENTER=>sys_io_uring_enter(a[0] as usize,a[1] as u32,a[2] as u32,a[3] as u32,a[4],a[5]),
@@ -185,6 +189,48 @@ fn fd_nlink(ino:u64,rdev:u64)->u32{
  }else if let Some(fs_id)=crate::vfs::tmpfs_fs_id(ino){
   crate::vfs::tmpfs_nlink(fs_id,ino)
  }else{1}
+}
+/// mmap with eager private-copy for writable file mappings.
+/// process.rs rejects PROT_WRITE on file VMAs (no COW-file support there),
+/// so emulate MAP_PRIVATE|PROT_WRITE by mapping anonymous memory and
+/// pre-copying the file range (observably identical to demand-COW for a
+/// private mapping; msync is correctly a no-op). SHARED|WRITE file maps
+/// still fail honestly (write-back needs VMA support in process.rs).
+fn mmap_dispatch(a:[u64;6])->i64{
+ const MAP_FIXED:u64=0x10;const MAP_ANON:u64=0x20;const MAP_PRIVATE:u64=0x02;const MAP_SHARED:u64=0x01;
+ let fl=a[3] & !0x800u64; /* MAP_DENYWRITE accepted but not enforced */
+ let fd=(a[4] as u32 as i32) as i64;
+ let anon=fl & MAP_ANON != 0;
+ let writable=a[2] & 0x2 != 0;
+ let shared=fl & MAP_SHARED != 0;
+ let is_anon_file=crate::task::with_current_process(|p|{
+  p.fds.get(fd as usize).and_then(|id|crate::fd::kind(id)).map_or(false,|k|matches!(k,crate::fd::OpenKind::IoUring))
+ }).unwrap_or(false);
+ if !anon && !is_anon_file && writable && !shared && fd>=0 {
+  /* Private writable file mapping: anonymous + pre-copy. */
+  let addr=a[0] as usize; let len=a[1] as usize; let prot=a[2]; let off=a[5];
+  let base:usize=match crate::task::with_current_process(|p|p.mmap(addr,len,prot,fl|MAP_ANON,(0xffffffffu32 as i32) as i64,0)){
+   Some(Ok(v))=>v, Some(Err(e))=>return errno::neg(e), None=>return errno::neg(errno::ESRCH),
+  };
+  /* Copy file bytes [off, off+len); short read leaves zeros (BSS). */
+  let mut done=0usize;
+  while done<len {
+   let chunk=core::cmp::min(4096,len-done);
+   let mut tmp=[0u8;4096];
+   let n={
+    let id=match crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten(){Some(id)=>id,None=>{let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EBADF)}};
+    match crate::fd::read_at(id,(off as u64).wrapping_add(done as u64),&mut tmp[..chunk]){
+     Ok(n)=>n,Err(e)=>{let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(e)}
+    }
+   };
+   if n==0{break}
+   if crate::usercopy::copy_to_user(base+done,&tmp[..n]).is_err(){let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EFAULT)}
+   done+=n;
+   if n<chunk{break}
+  }
+  return base as i64;
+ }
+ proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],fl,fd,a[5]))
 }
 fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn proc_unit(f:impl FnOnce(&mut crate::process::Process)->Result<(),i64>)->i64{match crate::task::with_current_process(f){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
