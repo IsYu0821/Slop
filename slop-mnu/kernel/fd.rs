@@ -345,8 +345,7 @@ pub fn write(id:u32,src:&[u8])->Result<usize,i64>{
 }
 pub fn seek(id:u32,off:i64,whence:u64)->Result<u64,i64>{
  let(kind,offset)={let t=OPEN.lock();let f=t[id as usize].ok_or(errno::EBADF)?;(f.kind,f.offset)};
- let size=match kind{OpenKind::Inode(n)=>crate::vfs::inode_size(n.ino).unwrap_or(n.size),OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)|OpenKind::Socket(_)|OpenKind::EventFd(_,_)|OpenKind::Epoll|OpenKind::TimerFd(_,_)|OpenKind::CharDevice(_)|OpenKind::BlockDevice(_)|OpenKind::Inotify|OpenKind::SignalFd(_)|OpenKind::Netlink|OpenKind::IoUring|OpenKind::PidFd(_)=>return Err(errno::ESPIPE)};
- let size=match kind{OpenKind::BlockDevice(_)=>crate::driver::virtio_blk::capacity(),_=>0};
+ let size=match kind{OpenKind::Inode(n)=>crate::vfs::inode_size(n.ino).unwrap_or(n.size),OpenKind::BlockDevice(_)=>crate::driver::blk::capacity().saturating_mul(512),OpenKind::Console=>return Err(errno::ESPIPE),OpenKind::PipeRead(_)|OpenKind::PipeWrite(_)|OpenKind::Socket(_)|OpenKind::EventFd(_,_)|OpenKind::Epoll|OpenKind::TimerFd(_,_)|OpenKind::CharDevice(_)|OpenKind::Inotify|OpenKind::SignalFd(_)|OpenKind::Netlink|OpenKind::IoUring|OpenKind::PidFd(_)=>return Err(errno::ESPIPE)};
  let base=match whence{0=>0,1=>offset,2=>size,_=>return Err(errno::EINVAL)};let next=if off>=0{base.checked_add(off as u64)}else{base.checked_sub(off.unsigned_abs())}.ok_or(errno::EINVAL)?;
  if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset=next}Ok(next)
 }

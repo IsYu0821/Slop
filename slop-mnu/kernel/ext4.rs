@@ -55,9 +55,9 @@ fn read_block(block: u64, blksize: usize, buf: &mut [u8]) -> Result<(), i64> {
 struct Super {
     s_inodes_count: u32,      // 0
     s_blocks_count_lo: u32,   // 4
-    _r0: u32,                 // 8
-    _r1: u32,                 // 12
-    _r2: u32,                 // 16
+    s_r_blocks_count_lo: u32, // 8
+    s_free_blocks_count_lo: u32, // 12
+    s_free_inodes_count: u32, // 16
     s_first_data_block: u32,  // 20
     s_log_block_size: u32,    // 24
     _r3: u32,                 // 28
@@ -589,9 +589,9 @@ fn write_inode(sb: &Super, inum: u32, inode: &Inode) -> Result<(), i64> {
     Ok(())
 }
 
-/* Overwrites bytes within the current EOF (no allocation, no extension).
-   Extending writes, holes, and all metadata allocation return EROFS until
-   the allocator lands. Returns bytes written. */
+/* Overwrites bytes within the current EOF and extends the file (block
+   allocation + inline extent growth; depth-0 trees with <=4 extents only,
+   no holes — gaps are zero-filled real blocks). Returns bytes written. */
 pub fn write_file(inum: u32, off: u64, src: &[u8]) -> Result<usize, i64> {
     if !ready() {
         return Err(errno::ENODEV);
@@ -612,10 +612,56 @@ pub fn write_file(inum: u32, off: u64, src: &[u8]) -> Result<usize, i64> {
     }
     let size = inode_len(&inode);
     let end = off.checked_add(src.len() as u64).ok_or(errno::EINVAL)?;
-    if end > size {
-        return Err(errno::EROFS);
-    }
     let bs = block_size(&sb);
+    /* Extend: allocate + zero every new block, grow the extent tree. */
+    if end > size {
+        /* Zero the tail of the last partial block so newly exposed bytes
+           read as zeros (Linux semantics, no stale-data leak). */
+        if size % bs as u64 != 0 {
+            let last_lb = (size as usize) / bs;
+            if let Ok(blk) = read_file_block(&sb, &inode, last_lb as u32) {
+                if blk != 0 {
+                    let mut block = [0u8; 4096];
+                    if read_block(blk, bs, &mut block).is_ok() {
+                        let zoff = (size as usize) % bs;
+                        for b in block[zoff..bs].iter_mut() { *b = 0; }
+                        let _ = write_block(blk, bs, &block);
+                    }
+                }
+            }
+        }
+        let first_new_lb = (size as usize + bs - 1) / bs;
+        let last_lb = (end as usize - 1) / bs;
+        let zero = [0u8; 4096];
+        for lb in first_new_lb..=last_lb {
+            let pblk = match alloc_block(&sb) {
+                Ok(b) => b,
+                Err(_) => {
+                    /* Persist the partial extension (zero-filled) and fail.
+                       No corruption: allocated blocks are attached + sized. */
+                    let covered = (lb as u64) * bs as u64;
+                    let new_size = core::cmp::max(size, core::cmp::min(end, covered));
+                    inode.i_size_lo = new_size as u32;
+                    inode.i_size_high = (new_size >> 32) as u32;
+                    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+                    inode.i_mtime = t;
+                    inode.i_ctime = t;
+                    let _ = write_inode(&sb, inum, &inode);
+                    return Err(errno::ENOSPC);
+                }
+            };
+            if write_block(pblk, bs, &zero[..bs.min(4096)]).is_err() {
+                return Err(errno::EIO);
+            }
+            if extent_append(&sb, &mut inode, lb as u32, pblk).is_err() {
+                return Err(errno::ENOSPC);
+            }
+            inode.i_blocks_lo = inode.i_blocks_lo.saturating_add((bs / 512) as u32);
+        }
+        let new_size = core::cmp::max(size, end);
+        inode.i_size_lo = new_size as u32;
+        inode.i_size_high = (new_size >> 32) as u32;
+    }
     let mut done = 0usize;
     while done < src.len() {
         let poff = off as usize + done;
@@ -640,4 +686,120 @@ pub fn write_file(inum: u32, off: u64, src: &[u8]) -> Result<usize, i64> {
     inode.i_ctime = t;
     write_inode(&sb, inum, &inode)?;
     Ok(src.len())
+}
+
+/* ================= Stage B1: block allocation + extent growth ========== */
+/* Synchronous, journal-less allocator (crash consistency is a later track;
+   all metadata is written before returning so clean e2fsck passes). */
+fn write_superblock(sb: &Super) -> Result<(), i64> {
+    let mut buf = [0u8; 1024];
+    read_bytes(1024, &mut buf)?;
+    let src = unsafe {
+        core::slice::from_raw_parts(
+            (sb as *const Super) as *const u8,
+            core::mem::size_of::<Super>(),
+        )
+    };
+    buf[..src.len()].copy_from_slice(src);
+    write_bytes_at(1024, &buf)?;
+    Ok(())
+}
+fn write_group_desc(sb: &Super, g: usize, gd: &GroupDesc) -> Result<(), i64> {
+    let bs = block_size(sb);
+    let mut buf = [0u8; 4096];
+    read_block(group_desc_block(sb), bs, &mut buf)?;
+    let off = g * 32;
+    let dst = &mut buf[off..off + core::mem::size_of::<GroupDesc>()];
+    let src = unsafe {
+        core::slice::from_raw_parts(
+            (gd as *const GroupDesc) as *const u8,
+            core::mem::size_of::<GroupDesc>(),
+        )
+    };
+    dst.copy_from_slice(src);
+    write_block(group_desc_block(sb), bs, &buf)?;
+    Ok(())
+}
+/* First-fit block allocator: scans groups for a free bit, sets it, and
+   debits group + superblock free counts. Returns the filesystem block. */
+fn alloc_block(sb: &Super) -> Result<u64, i64> {
+    let bs = block_size(sb);
+    let ngroups = groups_count(sb);
+    let blocks_per_group = sb.s_blocks_per_group as u64;
+    let total_blocks = sb.s_blocks_count_lo as u64;
+    let mut sb_mut = superblock()?;
+    for g in 0..ngroups {
+        let mut gd = read_group_desc(&sb_mut, g)?;
+        if gd.bg_free_blocks_count_lo == 0 {
+            continue;
+        }
+        let bitmap_blk = gd.bg_block_bitmap_lo as u64;
+        let mut bmp = [0u8; 4096];
+        read_block(bitmap_blk, bs, &mut bmp)?;
+        let base = g as u64 * blocks_per_group;
+        /* Block 0 of group 0 is never allocatable (superblock); start after
+           s_first_data_block on group 0. */
+        let start_bit = if g == 0 { sb.s_first_data_block as usize } else { 0 };
+        let max_bit = core::cmp::min(blocks_per_group as usize, (total_blocks - base) as usize);
+        let map_len = core::cmp::min(bs, (max_bit + 7) / 8);
+        for i in start_bit..max_bit {
+            if bmp[i / 8] & (1 << (i % 8)) == 0 {
+                bmp[i / 8] |= 1 << (i % 8);
+                write_block(bitmap_blk, bs, &bmp)?;
+                gd.bg_free_blocks_count_lo -= 1;
+                write_group_desc(&sb_mut, g, &gd)?;
+                sb_mut.s_free_blocks_count_lo -= 1;
+                write_superblock(&sb_mut)?;
+                return Ok(base + i as u64);
+            }
+            if i / 8 >= map_len {
+                break;
+            }
+        }
+    }
+    Err(errno::ENOSPC)
+}
+/* Appends one physical block to the file's extent tree at logical block lb
+   (depth-0 inline only: grows the last extent if contiguous, else adds a
+   new one; fails ENOSPC when the 4 inline slots are exhausted). */
+fn extent_append(sb: &Super, inode: &mut Inode, lb: u32, pblk: u64) -> Result<(), i64> {
+    if pblk > u32::MAX as u64 {
+        return Err(errno::ENOSPC);
+    }
+    let iblk = unsafe {
+        core::slice::from_raw_parts_mut(
+            inode.i_block.as_mut_ptr() as *mut u8,
+            core::mem::size_of::<u32>() * 15,
+        )
+    };
+    let mut h = read_header(&iblk[..12])?;
+    if h.eh_depth != 0 {
+        return Err(errno::ENOSPC);
+    }
+    if h.eh_entries > 4 {
+        return Err(errno::EINVAL);
+    }
+    /* Grow last extent if this block continues it. */
+    if h.eh_entries > 0 {
+        let last_off = 12 + (h.eh_entries as usize - 1) * 12;
+        let e = unsafe { &mut *(iblk[last_off..].as_mut_ptr() as *mut Extent) };
+        let e_len = (e.ee_len & 0x7fff) as u64;
+        let e_start = ((e.ee_start_hi as u64) << 32) | e.ee_start_lo as u64;
+        if e.ee_block + e_len as u32 == lb && e_start + e_len == pblk && e_len < 0x7fff {
+            e.ee_len += 1;
+            return Ok(());
+        }
+    }
+    if h.eh_entries >= h.eh_max || h.eh_entries >= 4 {
+        return Err(errno::ENOSPC);
+    }
+    let off = 12 + h.eh_entries as usize * 12;
+    let e = unsafe { &mut *(iblk[off..].as_mut_ptr() as *mut Extent) };
+    e.ee_block = lb;
+    e.ee_len = 1;
+    e.ee_start_hi = (pblk >> 32) as u16;
+    e.ee_start_lo = pblk as u32;
+    h.eh_entries += 1;
+    iblk[2..4].copy_from_slice(&h.eh_entries.to_ne_bytes());
+    Ok(())
 }
