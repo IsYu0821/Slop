@@ -2081,10 +2081,11 @@ fn sys_timerfd_create(clock:i32,flags:u64)->i64{
  match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
 fn sys_eventfd2(init:u64,flags:u64)->i64{
- if flags&!0x80003!=0{return errno::neg(errno::EINVAL)}
- let id=match crate::fd::alloc_file(crate::fd::OpenKind::EventFd(init, (flags&1) as u8)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ const EFD_SEMAPHORE:u64=1;const EFD_NONBLOCK:u64=0x800;const EFD_CLOEXEC:u64=0x80000;
+ if flags&!(EFD_SEMAPHORE|EFD_NONBLOCK|EFD_CLOEXEC)!=0{return errno::neg(errno::EINVAL)}
+ let id=match crate::fd::alloc_file(crate::fd::OpenKind::EventFd(init, (flags&EFD_SEMAPHORE) as u8)){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  // install
- match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>fd as i64,Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
+ match crate::task::with_current_process(|p|p.fds.install(id)){Some(Ok(fd))=>{if flags&EFD_CLOEXEC!=0{let _=crate::task::with_current_process(|q|q.fds.set_close_exec(fd as usize,true));}fd as i64},Some(Err(e))=>{crate::fd::release(id);errno::neg(e)},None=>{crate::fd::release(id);errno::neg(errno::ESRCH)}}
 }
 fn sys_time(ptr:u64)->i64{
  let sec=(crate::time::monotonic_ns()/1_000_000_000) as i64;
