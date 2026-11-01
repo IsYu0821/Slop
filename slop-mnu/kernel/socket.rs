@@ -16,8 +16,20 @@ pub const SOCK_STREAM:u32=1;pub const SOCK_DGRAM:u32=2;
 pub const DGRAM_DATA_MAX:usize=4096;pub const DGRAM_QUEUE:usize=8;
 #[derive(Clone,Copy,PartialEq)]pub enum SockState{Unbound,Listening,Connected}
 #[derive(Clone,Copy,PartialEq)]pub enum SockKind{Stream,Dgram}
-#[derive(Clone,Copy)]struct DgramMsg{len:usize,src_len:usize,src:[u8;PATH_MAX],data:[u8;DGRAM_DATA_MAX]}
-impl DgramMsg{const fn empty()->Self{Self{len:0,src_len:0,src:[0;PATH_MAX],data:[0;DGRAM_DATA_MAX]}}}
+#[derive(Clone,Copy)]struct DgramMsg{len:usize,src_len:usize,src:[u8;PATH_MAX],data:[u8;DGRAM_DATA_MAX],
+ /* SCM_RIGHTS: global fd-table ids (incref'd at send, installed or released
+    at recv) plus the sender's credentials. Honest subset: at most
+    ANC_FDS_MAX descriptors per message; more is rejected at send. */
+ nfds:usize,fds:[u32;ANC_FDS_MAX],cred:bool,cred_pid:u32,cred_uid:u32,cred_gid:u32}
+pub const ANC_FDS_MAX:usize=8;
+pub const ANC_QUEUE:usize=8;
+#[derive(Clone,Copy)]pub struct AncData{pub nfds:usize,pub fds:[u32;ANC_FDS_MAX],
+ pub cred:bool,pub cred_pid:u32,pub cred_uid:u32,pub cred_gid:u32}
+impl AncData{pub const fn empty()->Self{Self{nfds:0,fds:[0;ANC_FDS_MAX],cred:false,cred_pid:0,cred_uid:0,cred_gid:0}}}
+/* Stream ancillary item: byte-stream position the data belongs to plus payload. */
+#[derive(Clone,Copy)]struct AncItem{pos:u64,data:AncData}
+impl AncItem{const fn empty()->Self{Self{pos:0,data:AncData::empty()}}}
+impl DgramMsg{const fn empty()->Self{Self{len:0,src_len:0,src:[0;PATH_MAX],data:[0;DGRAM_DATA_MAX],nfds:0,fds:[0;ANC_FDS_MAX],cred:false,cred_pid:0,cred_uid:0,cred_gid:0}}}
 struct Socket{
  used:bool,kind:SockKind,state:SockState,
  path:[u8;PATH_MAX],path_len:usize,
@@ -28,12 +40,46 @@ struct Socket{
  dgram_q:[DgramMsg;DGRAM_QUEUE],dgram_head:usize,dgram_len:usize,
  readq:WaitQueue,writeq:WaitQueue,
  acceptq:WaitQueue,
+ /* Byte-stream accounting for SCM placement (stream only). write_total is
+    the sender-side count of bytes ever queued; read_total the receiver-side
+    count of bytes ever consumed. An anc item rides with the bytes written
+    at send time and is delivered to the recvmsg whose byte range covers it. */
+ write_total:u64,read_total:u64,
+ anc_q:[AncItem;ANC_QUEUE],anc_head:usize,anc_len:usize,
+ passcred:bool,
 }
 impl Socket{
- const fn new()->Self{Self{used:false,kind:SockKind::Stream,state:SockState::Unbound,path:[0;PATH_MAX],path_len:0,peer:None,buf:[0;CAPACITY],head:0,len:0,peer_closed:false,dgram_peer:[0;PATH_MAX],dgram_peer_len:0,has_dgram_peer:false,dgram_q:[DgramMsg::empty();DGRAM_QUEUE],dgram_head:0,dgram_len:0,readq:WaitQueue::new(),writeq:WaitQueue::new(),acceptq:WaitQueue::new()}}
+ const fn new()->Self{Self{used:false,kind:SockKind::Stream,state:SockState::Unbound,path:[0;PATH_MAX],path_len:0,peer:None,buf:[0;CAPACITY],head:0,len:0,peer_closed:false,dgram_peer:[0;PATH_MAX],dgram_peer_len:0,has_dgram_peer:false,dgram_q:[DgramMsg::empty();DGRAM_QUEUE],dgram_head:0,dgram_len:0,readq:WaitQueue::new(),writeq:WaitQueue::new(),acceptq:WaitQueue::new(),write_total:0,read_total:0,anc_q:[AncItem::empty();ANC_QUEUE],anc_head:0,anc_len:0,passcred:false}}
  fn path_bytes(&self)->&[u8]{&self.path[..self.path_len]}
- fn free(&mut self){*self=Socket::new();}
+ fn free(&mut self){
+  /* Release any in-flight passed fds so they do not leak when the socket
+     dies with undelivered ancillary data. */
+  for i in 0..self.anc_len{
+   let it=self.anc_q[(self.anc_head+i)%ANC_QUEUE];
+   for j in 0..it.data.nfds{crate::fd::release(it.data.fds[j]);}
+  }
+  for i in 0..self.dgram_len{
+   let m=self.dgram_q[(self.dgram_head+i)%DGRAM_QUEUE];
+   for j in 0..m.nfds{crate::fd::release(m.fds[j]);}
+  }
+  *self=Socket::new();
+ }
 }
+/* SO_PASSCRED flag for credential delivery on recvmsg. */
+pub fn set_passcred(id:u8,on:bool)->Result<(),i64>{
+ if !valid(id){return Err(errno::EBADF)}
+ let mut s=SOCKS[id as usize].lock();
+ if !s.used{return Err(errno::EBADF)}
+ s.passcred=on;Ok(())
+}
+pub fn get_passcred(id:u8)->Result<bool,i64>{
+ if !valid(id){return Err(errno::EBADF)}
+ let s=SOCKS[id as usize].lock();
+ if !s.used{return Err(errno::EBADF)}
+ Ok(s.passcred)
+}
+/* Releases one anc payload (used when the receiver cannot take it). */
+pub fn anc_release(a:&AncData){for j in 0..a.nfds{crate::fd::release(a.fds[j]);}}
 static SOCKS:[SpinLock<Socket>;MAX_SOCKETS]=[const{SpinLock::new(Socket::new())};MAX_SOCKETS];
 /* Server-side pending-connection requests: (requester socket, requester pid). */
 static PENDING:[SpinLock<[(Option<u8>,Option<u8>);16]>;MAX_SOCKETS]=[const{SpinLock::new([(None,None);16])};MAX_SOCKETS];
@@ -205,13 +251,13 @@ pub fn dgram_connect(id:u8,raw:&[u8])->Result<(),i64>{
  s.state=SockState::Connected;
  Ok(())
 }
-fn dgram_enqueue(dest:u8,src_path:&[u8],data:&[u8],nonblock:bool)->Result<usize,i64>{
- if data.len()>DGRAM_DATA_MAX{return Err(errno::EMSGSIZE)}
+fn dgram_enqueue_anc(dest:u8,src_path:&[u8],data:&[u8],nonblock:bool,mut anc:AncData)->Result<usize,i64>{
+ if data.len()>DGRAM_DATA_MAX{anc_release(&anc);return Err(errno::EMSGSIZE)}
  loop{
   let registered={
    let mut d=SOCKS[dest as usize].lock();
-   if !d.used{return Err(errno::ENOENT)}
-   if d.kind!=SockKind::Dgram{return Err(errno::ECONNREFUSED)}
+   if !d.used{anc_release(&anc);return Err(errno::ENOENT)}
+   if d.kind!=SockKind::Dgram{anc_release(&anc);return Err(errno::ECONNREFUSED)}
    if d.dgram_len<DGRAM_QUEUE{
     let idx=(d.dgram_head+d.dgram_len)%DGRAM_QUEUE;
     d.dgram_q[idx].len=data.len();
@@ -219,16 +265,27 @@ fn dgram_enqueue(dest:u8,src_path:&[u8],data:&[u8],nonblock:bool)->Result<usize,
     let n=src_path.len().min(PATH_MAX);
     d.dgram_q[idx].src[..n].copy_from_slice(&src_path[..n]);
     d.dgram_q[idx].src_len=n;
+    /* Kernel-verified sender identity (never the sender's bytes). */
+    let (pid,uid,gid)=crate::task::with_current_process(|p|(crate::task::current_pid(),p.euid,p.egid)).unwrap_or((0,0,0));
+    d.dgram_q[idx].nfds=anc.nfds;
+    d.dgram_q[idx].fds=anc.fds;
+    d.dgram_q[idx].cred=anc.cred||d.passcred;
+    d.dgram_q[idx].cred_pid=pid;
+    d.dgram_q[idx].cred_uid=uid;
+    d.dgram_q[idx].cred_gid=gid;
     d.dgram_len+=1;
     d.readq.wake_all();
     return Ok(data.len());
    }
-   if nonblock{return Err(errno::EAGAIN)}
+   if nonblock{anc_release(&anc);return Err(errno::EAGAIN)}
    d.writeq.register().is_ok()
   };
-  if !registered{return Err(errno::EAGAIN)}
+  if !registered{anc_release(&anc);return Err(errno::EAGAIN)}
   crate::task::block_current();
  }
+}
+fn dgram_enqueue(dest:u8,src_path:&[u8],data:&[u8],nonblock:bool)->Result<usize,i64>{
+ dgram_enqueue_anc(dest,src_path,data,nonblock,AncData::empty())
 }
 pub fn dgram_sendto(from:u8,dest_path:&[u8],data:&[u8],nonblock:bool)->Result<usize,i64>{
  if !valid(from){return Err(errno::EBADF)}
@@ -247,6 +304,9 @@ pub fn dgram_sendto(from:u8,dest_path:&[u8],data:&[u8],nonblock:bool)->Result<us
  dgram_enqueue(dest,&src[..src_len],data,nonblock)
 }
 pub fn dgram_recvfrom(id:u8,dst:&mut[u8],nonblock:bool)->Result<(usize,[u8;PATH_MAX],usize),i64>{
+ dgram_recvfrom_anc(id,dst,nonblock).map(|(n,s,sl,_)| (n,s,sl))
+}
+pub fn dgram_recvfrom_anc(id:u8,dst:&mut[u8],nonblock:bool)->Result<(usize,[u8;PATH_MAX],usize,AncData),i64>{
  if !valid(id){return Err(errno::EBADF)}
  loop{
   let registered={
@@ -260,10 +320,11 @@ pub fn dgram_recvfrom(id:u8,dst:&mut[u8],nonblock:bool)->Result<(usize,[u8;PATH_
     let mut src=[0u8;PATH_MAX];
     src[..msg.src_len].copy_from_slice(&msg.src[..msg.src_len]);
     let sl=msg.src_len;
+    let anc=AncData{nfds:msg.nfds,fds:msg.fds,cred:msg.cred||s.passcred,cred_pid:msg.cred_pid,cred_uid:msg.cred_uid,cred_gid:msg.cred_gid};
     s.dgram_head=(s.dgram_head+1)%DGRAM_QUEUE;
     s.dgram_len-=1;
     s.writeq.wake_all();
-    return Ok((n,src,sl));
+    return Ok((n,src,sl,anc));
    }
    if nonblock{return Err(errno::EAGAIN)}
    s.readq.register().is_ok()
@@ -281,6 +342,163 @@ pub fn dgram_peer_of(id:u8)->Result<([u8;PATH_MAX],usize),i64>{
  let s=SOCKS[id as usize].lock();
  if s.kind!=SockKind::Dgram||!s.has_dgram_peer{return Err(errno::ENOTCONN)}
  Ok((s.dgram_peer,s.dgram_peer_len))
+}
+/* Stream send with ancillary data. Bytes flow into the peer's ring as usual;
+   the anc item is stamped with the post-send stream position so the recvmsg
+   whose byte range covers it receives the fds/creds. Anc-queue-full blocks
+   like a full byte buffer (the receiver drains it by reading, which wakes
+   the peer writeq). */
+pub fn send_anc(id:u8,data:&[u8],nonblock:bool,mut anc:AncData)->Result<usize,i64>{
+ if let Some(tcp)=inet_kind(id){
+  anc_release(&anc);
+  return if tcp{crate::net::tcp_send(id-INET_TCP_BASE,data)}else{crate::net::udp_send(id-INET_UDP_BASE,None,data)};
+ }
+ if !valid(id){anc_release(&anc);return Err(errno::EBADF)}
+ let kind=match kind_of(id){Some(k)=>k,None=>{anc_release(&anc);return Err(errno::EBADF)}};
+ if kind==SockKind::Dgram{
+  /* Connected datagram send with anc. */
+  let peer_direct=SOCKS[id as usize].lock().peer;
+  let (has_named,peer_path,peer_len)={
+   let s=SOCKS[id as usize].lock();
+   (s.has_dgram_peer,s.dgram_peer,s.dgram_peer_len)
+  };
+  if has_named{
+   let dest_path=[peer_path];
+   return dgram_send_anc_to(id,&dest_path[0][..peer_len],data,nonblock,anc);
+  }
+  if let Some(p)=peer_direct{
+   let src_len=SOCKS[id as usize].lock().path_len;
+   let mut src=[0u8;PATH_MAX];
+   if src_len>0{src[..src_len].copy_from_slice(&SOCKS[id as usize].lock().path[..src_len]);}
+   return dgram_enqueue_anc(p,&src[..src_len],data,nonblock,anc);
+  }
+  anc_release(&anc);
+  return Err(errno::ENOTCONN);
+ }
+ let peer=match SOCKS[id as usize].lock().peer{Some(p)=>p,None=>{anc_release(&anc);return Err(errno::ENOTCONN)}};
+ /* Fast path only when there is truly nothing to attach AND the peer does
+    not want credentials (SO_PASSCRED auto-attaches even to plain sends). */
+ if anc.nfds==0&&!anc.cred&&!SOCKS[peer as usize].lock().passcred{
+  return send(id,data,nonblock);
+ }
+ /* Ancillary path: reserve a slot first so the byte write and the stamp are
+    consistent, then write bytes, then publish the item. */
+ loop{
+  let slot_ok={
+   let p=SOCKS[peer as usize].lock();
+   if p.peer_closed{return Err(errno::EPIPE)}
+   p.anc_len<ANC_QUEUE
+  };
+  if slot_ok{break}
+  if nonblock{anc_release(&anc);return Err(errno::EAGAIN)}
+  let registered={SOCKS[peer as usize].lock().writeq.register().is_ok()};
+  if !registered{anc_release(&anc);return Err(errno::EAGAIN)}
+  crate::task::block_current();
+ }
+ let n=match send(id,data,nonblock){Ok(n)=>n,Err(e)=>{anc_release(&anc);return Err(e)}};
+ {
+  /* Kernel-verified sender identity (never the sender's bytes). */
+  let (pid,uid,gid)=crate::task::with_current_process(|pr|(crate::task::current_pid(),pr.euid,pr.egid)).unwrap_or((0,0,0));
+  anc.cred_pid=pid;anc.cred_uid=uid;anc.cred_gid=gid;
+  let mut p=SOCKS[peer as usize].lock();
+  anc.cred=anc.cred||p.passcred;
+  /* Position AFTER the bytes just written; the receiver delivers this item
+     to the first recvmsg whose consumed range reaches it. Zero-byte sends
+     still advance nothing, so they are delivered on the next recvmsg. */
+  let pos=p.write_total;
+  if p.anc_len<ANC_QUEUE{
+   let idx=(p.anc_head+p.anc_len)%ANC_QUEUE;
+   p.anc_q[idx]=AncItem{pos,data:anc};
+   p.anc_len+=1;
+  }else{
+   /* Raced full: drop (fds released, no leak) rather than misdeliver. */
+   anc_release(&anc);
+  }
+ }
+ Ok(n)
+}
+fn dgram_send_anc_to(from:u8,dest_path:&[u8],data:&[u8],nonblock:bool,anc:AncData)->Result<usize,i64>{
+ if !valid(from){anc_release(&anc);return Err(errno::EBADF)}
+ if dest_path.len()>=PATH_MAX{anc_release(&anc);return Err(errno::EINVAL)}
+ let dest=match find_bound_dgram(dest_path){
+  Some(d)=>d,
+  None=>{
+   anc_release(&anc);
+   if find_bound(dest_path).is_some(){return Err(errno::ECONNREFUSED)}
+   return Err(errno::ENOENT);
+  }
+ };
+ let src_len=SOCKS[from as usize].lock().path_len;
+ let mut src=[0u8;PATH_MAX];
+ if src_len>0{src[..src_len].copy_from_slice(&SOCKS[from as usize].lock().path[..src_len]);}
+ dgram_enqueue_anc(dest,&src[..src_len],data,nonblock,anc)
+}
+/* Stream recv with ancillary data. Returns (bytes, anc, anc_truncated).
+   Covered anc items (pos <= new read_total) are merged into one payload;
+   on fd overflow the excess ids are released and truncated=true. */
+pub fn recv_anc(id:u8,dst:&mut[u8],nonblock:bool)->Result<(usize,AncData,bool),i64>{
+ if let Some(tcp)=inet_kind(id){
+  return if tcp{crate::net::tcp_recv(id-INET_TCP_BASE,dst).map(|n|(n,AncData::empty(),false))}else{crate::net::udp_recv(id-INET_UDP_BASE,dst).map(|(n,_,_)|(n,AncData::empty(),false))};
+ }
+ if dst.is_empty(){return Ok((0,AncData::empty(),false))}
+ if matches!(kind_of(id),Some(SockKind::Dgram)){
+  return dgram_recvfrom_anc(id,dst,nonblock).map(|(n,_,_,a)|(n,a,false));
+ }
+ loop{
+  let registered={
+   let mut s=SOCKS[id as usize].lock();
+   if s.len>0{
+    let n=core::cmp::min(s.len,dst.len());
+    for i in 0..n{dst[i]=s.buf[s.head];s.head=(s.head+1)%CAPACITY;}
+    s.len-=n;s.read_total+=n as u64;
+    /* Collect covered anc items. */
+    let mut out=AncData::empty();
+    let mut truncated=false;
+    while s.anc_len>0{
+     let head=s.anc_q[s.anc_head];
+     if head.pos>s.read_total{break}
+     /* Merge, releasing on overflow. */
+     for j in 0..head.data.nfds{
+      if out.nfds<ANC_FDS_MAX{out.fds[out.nfds]=head.data.fds[j];out.nfds+=1;}
+      else{crate::fd::release(head.data.fds[j]);truncated=true;}
+     }
+     if head.data.cred&&!out.cred{out.cred=true;out.cred_pid=head.data.cred_pid;out.cred_uid=head.data.cred_uid;out.cred_gid=head.data.cred_gid;}
+     s.anc_head=(s.anc_head+1)%ANC_QUEUE;
+     s.anc_len-=1;
+    }
+    if s.passcred&&!out.cred{
+     /* SO_PASSCRED without sender creds: no sender identity is known for
+        stream bytes already in flight, so only flag cred if an item
+        carried it. (Dgram always knows its sender.) */
+    }
+    s.writeq.wake_all();
+    return Ok((n,out,truncated));
+   }
+   /* No bytes but covered anc (zero-byte send): deliver without blocking. */
+   if s.anc_len>0&&s.anc_q[s.anc_head].pos<=s.read_total{
+    let mut out=AncData::empty();
+    let mut truncated=false;
+    while s.anc_len>0{
+     let head=s.anc_q[s.anc_head];
+     if head.pos>s.read_total{break}
+     for j in 0..head.data.nfds{
+      if out.nfds<ANC_FDS_MAX{out.fds[out.nfds]=head.data.fds[j];out.nfds+=1;}
+      else{crate::fd::release(head.data.fds[j]);truncated=true;}
+     }
+     if head.data.cred&&!out.cred{out.cred=true;out.cred_pid=head.data.cred_pid;out.cred_uid=head.data.cred_uid;out.cred_gid=head.data.cred_gid;}
+     s.anc_head=(s.anc_head+1)%ANC_QUEUE;
+     s.anc_len-=1;
+    }
+    s.writeq.wake_all();
+    return Ok((0,out,truncated));
+   }
+   if s.peer_closed{return Ok((0,AncData::empty(),false))}
+   if nonblock{return Err(errno::EAGAIN)}
+   s.readq.register().is_ok()
+  };
+  if !registered{return Err(errno::EAGAIN)}
+  crate::task::block_current();
+ }
 }
 pub fn send(id:u8,data:&[u8],nonblock:bool)->Result<usize,i64>{
  if let Some(tcp)=inet_kind(id){
@@ -324,9 +542,10 @@ pub fn send(id:u8,data:&[u8],nonblock:bool)->Result<usize,i64>{
   };
   if done==data.len(){break}
   if !registered{return Err(errno::EAGAIN)}
-  crate::task::block_current();
- }
- Ok(done)
+   crate::task::block_current();
+  }
+  SOCKS[peer as usize].lock().write_total+=done as u64;
+  Ok(done)
 }
 pub fn recv(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
  if let Some(tcp)=inet_kind(id){
@@ -339,21 +558,21 @@ pub fn recv(id:u8,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
  loop{
   let registered={
    let mut s=SOCKS[id as usize].lock();
-      if s.len>0{
-    let n=core::cmp::min(s.len,dst.len());
-    for i in 0..n{dst[i]=s.buf[s.head];s.head=(s.head+1)%CAPACITY;}
-    s.len-=n;s.writeq.wake_all();
-    return Ok(n);
-   }
-   if s.peer_closed{return Ok(0)}
-   if nonblock{return Err(errno::EAGAIN)}
-   s.readq.register().is_ok()
-  };
-  if !registered{return Err(errno::EAGAIN)}
-  crate::task::block_current();
+   if s.len>0{
+     let n=core::cmp::min(s.len,dst.len());
+     for i in 0..n{dst[i]=s.buf[s.head];s.head=(s.head+1)%CAPACITY;}
+     s.len-=n;s.read_total+=n as u64;s.writeq.wake_all();
+     return Ok(n);
+    }
+    if s.peer_closed{return Ok(0)}
+    if nonblock{return Err(errno::EAGAIN)}
+    s.readq.register().is_ok()
+   };
+   if !registered{return Err(errno::EAGAIN)}
+   crate::task::block_current();
+  }
  }
-}
-/* Half-closes: the peer observes EOF while this end may still read. */
+ /* Half-closes: the peer observes EOF while this end may still read. */
 pub fn shutdown(id:u8)->Result<(),i64>{
  if let Some(tcp)=inet_kind(id){
   return if tcp{crate::net::tcp_shutdown(id-INET_TCP_BASE,1)}else{Ok(())};

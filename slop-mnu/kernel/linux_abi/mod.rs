@@ -2926,7 +2926,18 @@ fn sys_io_uring_register(fd:usize,opcode:u32,arg:u64,nr_args:u32)->i64{
 
 fn sys_setsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,_optlen:u64)->i64{
  if netlink_fd(fd){return 0}
- let _=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ /* SO_PASSCRED (level SOL_SOCKET=1, optname 16) enables SCM_CREDENTIALS
+    delivery on recvmsg for AF_UNIX sockets. Other options are accepted as
+    no-ops (documented gap: no real socket options modeled). */
+ if _level==1&&_optname==16&&crate::socket::inet_kind(sock).is_none(){
+  let mut v=[0u8;4];
+  if optval!=0{
+   if crate::usercopy::copy_from_user(&mut v,optval as usize).is_err(){return errno::neg(errno::EFAULT)}
+  }
+  let on=i32::from_ne_bytes(v)!=0;
+  return match crate::socket::set_passcred(sock,on){Ok(())=>0,Err(e)=>errno::neg(e)};
+ }
  0
 }
 fn sys_getsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,optlen:u64)->i64{
@@ -2934,13 +2945,172 @@ fn sys_getsockopt(fd:usize,_level:i32,_optname:i32,optval:u64,optlen:u64)->i64{
   if optval!=0 && optlen!=0{let v=0i32;let _=crate::usercopy::copy_to_user(optval as usize,&v.to_ne_bytes());let _=crate::usercopy::copy_to_user(optlen as usize,&4u32.to_ne_bytes());}
   return 0
  }
- let _=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ let sock=match sock_fd(fd){Ok(s)=>s,Err(e)=>return errno::neg(e)};
+ if _level==1&&_optname==16&&crate::socket::inet_kind(sock).is_none(){
+  if optval!=0 && optlen!=0{
+   let v=match crate::socket::get_passcred(sock){Ok(on)=>if on{1i32}else{0i32},Err(_)=>0i32};
+   let _=crate::usercopy::copy_to_user(optval as usize,&v.to_ne_bytes());
+   let _=crate::usercopy::copy_to_user(optlen as usize,&4u32.to_ne_bytes());
+  }
+  return 0
+ }
  if optval!=0 && optlen!=0{
   let v=0i32;
   let _=crate::usercopy::copy_to_user(optval as usize,&v.to_ne_bytes());
   let _=crate::usercopy::copy_to_user(optlen as usize,&4u32.to_ne_bytes());
  }
  0
+}
+/* SCM_RIGHTS / SCM_CREDENTIALS over AF_UNIX (honest subset).
+   - RIGHTS transfers open file *descriptions*: sender fd numbers resolve to
+     global ids (incref'd at send); the receiver installs them as new fds.
+     This is real passing, not fd-number copying.
+   - CREDENTIALS carries kernel-verified pid/uid/gid (sender bytes ignored).
+   - At most 8 descriptors per message (SCM_MAX_FD on Linux is 253; larger
+     control messages are rejected with EINVAL and documented as a gap).
+   - msghdr layout: control ptr @32, controllen @40, flags @48. */
+const SOL_SOCKET_I32:i32=1;const SCM_RIGHTS_I32:i32=1;const SCM_CREDENTIALS_I32:i32=2;
+const MSG_CTRUNC_I32:i32=0x20;const MSG_CMSG_CLOEXEC_I32:i32=0x40000000;
+fn cmsg_align(n:usize)->usize{(n+7)&!7}
+fn parse_send_anc(msg:u64)->Result<crate::socket::AncData,i64>{
+ let mut hdr=[0u8;56];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,msg as usize){return Err(e)}
+ let ctl=u64::from_ne_bytes(hdr[32..40].try_into().unwrap());
+ let mut ctl_len=u64::from_ne_bytes(hdr[40..48].try_into().unwrap()) as usize;
+ if ctl==0||ctl_len==0{return Ok(crate::socket::AncData::empty())}
+ /* Cap the kernel-side copy; 8 fds need only 48 bytes. */
+ ctl_len=core::cmp::min(ctl_len,1024);
+ let mut buf=[0u8;1024];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut buf[..ctl_len],ctl as usize){return Err(e)}
+ let mut out=crate::socket::AncData::empty();
+ let mut off=0usize;
+ while ctl_len-off>=16{
+  let clen=u64::from_ne_bytes(buf[off..off+8].try_into().unwrap()) as usize;
+  if clen<16||clen>ctl_len-off{return Err(errno::EINVAL)}
+  let level=i32::from_ne_bytes(buf[off+8..off+12].try_into().unwrap());
+  let ctype=i32::from_ne_bytes(buf[off+12..off+16].try_into().unwrap());
+  if level==SOL_SOCKET_I32{
+   if ctype==SCM_RIGHTS_I32{
+    let mut p=16usize;
+    while p+4<=clen{
+     if out.nfds>=crate::socket::ANC_FDS_MAX{
+      for j in 0..out.nfds{crate::fd::release(out.fds[j]);}
+      return Err(errno::EINVAL);
+     }
+     let fdnum=i32::from_ne_bytes(buf[off+p..off+p+4].try_into().unwrap());
+     if fdnum<0{for j in 0..out.nfds{crate::fd::release(out.fds[j]);}return Err(errno::EBADF)}
+     let id=match crate::task::with_current_process(|pr|pr.fds.get(fdnum as usize)){Some(Some(id))=>id,Some(None)=>{for j in 0..out.nfds{crate::fd::release(out.fds[j]);}return Err(errno::EBADF)},None=>{for j in 0..out.nfds{crate::fd::release(out.fds[j]);}return Err(errno::ESRCH)}};
+     crate::fd::incref(id);
+     out.fds[out.nfds]=id;out.nfds+=1;
+     p+=4;
+    }
+   }else if ctype==SCM_CREDENTIALS_I32{
+    /* Sender bytes (struct ucred) are ignored; the socket layer stamps the
+       real pid/uid/gid. Presence alone requests credential delivery. */
+    out.cred=true;
+   }
+   /* Unknown types are ignored (Linux does the same for most). */
+  }
+  off+=cmsg_align(clen);
+  if off>=ctl_len{break}
+ }
+ Ok(out)
+}
+/* Installs received SCM_RIGHTS ids as new fds in the caller's table and
+   describes them (+ credentials) in the msghdr control buffer (CMSG format).
+   - cloexec (MSG_CMSG_CLOEXEC on recvmsg) marks received fds close-on-exec.
+   - If the user control buffer is too small, only what fits is described;
+     excess fds are closed (no leak) and MSG_CTRUNC is set on msg_flags.
+   - anc_trunc (stream merge overflow, already released) also sets CTRUNC. */
+fn recv_build_cmsg(msg:u64,anc:crate::socket::AncData,anc_trunc:bool,cloexec:bool)->Result<(),i64>{
+ let mut hdr=[0u8;56];
+ if let Err(e)=crate::usercopy::copy_from_user(&mut hdr,msg as usize){crate::socket::anc_release(&anc);return Err(e)}
+ let ctl=u64::from_ne_bytes(hdr[32..40].try_into().unwrap());
+ let ctl_cap=u64::from_ne_bytes(hdr[40..48].try_into().unwrap()) as usize;
+ /* Install first: new fd numbers for every received id. The AncData ids
+    each carry one ref (sender-side incref, now owned by this function);
+    install() consumes that ref into the table slot. On install failure the
+    ref is released; already-installed fds are closed. */
+ let mut newfds=[0i32;8];
+ for i in 0..anc.nfds{
+  let fd=crate::task::with_current_process(|pr|{
+   let id=anc.fds[i];
+   match pr.fds.install(id){Ok(f)=>{if cloexec{pr.fds.set_close_exec(f as usize,true);}Ok(f)}Err(e)=>Err(e)}
+  });
+  match fd{
+   Some(Ok(f))=>{newfds[i]=f;},
+   _=>{
+    for j in 0..i{let _=crate::task::with_current_process(|pr|{let _=pr.fds.close(newfds[j] as usize);});}
+    for j in i..anc.nfds{crate::fd::release(anc.fds[j]);}
+    return Err(errno::EMFILE);
+   },
+  }
+ }
+ let mut off=0usize;
+ let mut truncated=anc_trunc;
+ /* SCM_RIGHTS cmsg. */
+ if anc.nfds>0{
+  let need=16+4*anc.nfds;
+  if ctl!=0&&off+cmsg_align(need)<=ctl_cap{
+   let mut cmsg=[0u8;16+4*8];
+   cmsg[0..8].copy_from_slice(&(need as u64).to_ne_bytes());
+   cmsg[8..12].copy_from_slice(&SOL_SOCKET_I32.to_ne_bytes());
+   cmsg[12..16].copy_from_slice(&SCM_RIGHTS_I32.to_ne_bytes());
+   for i in 0..anc.nfds{
+    cmsg[16+4*i..16+4*i+4].copy_from_slice(&newfds[i].to_ne_bytes());
+   }
+   let total=cmsg_align(need);
+   for b in cmsg.iter_mut().take(total).skip(need){*b=0;}
+   if crate::usercopy::copy_to_user(ctl as usize+off,&cmsg[..total]).is_err(){
+    for j in 0..anc.nfds{let _=crate::task::with_current_process(|pr|{let _=pr.fds.close(newfds[j] as usize);});}
+    return Err(errno::EFAULT);
+   }
+   off+=total;
+  }else{
+   /* No room: close ALL received fds (Linux drops undescribed ones). */
+   for j in 0..anc.nfds{let _=crate::task::with_current_process(|pr|{let _=pr.fds.close(newfds[j] as usize);});}
+   truncated=true;
+  }
+ }
+ /* SCM_CREDENTIALS cmsg (struct ucred: pid/i32, uid/u32, gid/u32 = 12 bytes). */
+ if anc.cred{
+  let need=16+12;
+  if ctl!=0&&off+cmsg_align(need)<=ctl_cap{
+   let mut cmsg=[0u8;32];
+   cmsg[0..8].copy_from_slice(&(need as u64).to_ne_bytes());
+   cmsg[8..12].copy_from_slice(&SOL_SOCKET_I32.to_ne_bytes());
+   cmsg[12..16].copy_from_slice(&SCM_CREDENTIALS_I32.to_ne_bytes());
+   cmsg[16..20].copy_from_slice(&(anc.cred_pid as i32).to_ne_bytes());
+   cmsg[20..24].copy_from_slice(&anc.cred_uid.to_ne_bytes());
+   cmsg[24..28].copy_from_slice(&anc.cred_gid.to_ne_bytes());
+   let total=cmsg_align(need);
+   if crate::usercopy::copy_to_user(ctl as usize+off,&cmsg[..total]).is_err(){return Err(errno::EFAULT)}
+   off+=total;
+  }else{
+   truncated=true;
+  }
+ }
+ /* Write back controllen + flags (OR in MSG_CTRUNC, keep other bits). */
+ {
+  let mut back=[0u8;16];
+  if crate::usercopy::copy_from_user(&mut back,msg as usize+40).is_err(){return Err(errno::EFAULT)}
+  let mut flags=u32::from_ne_bytes(back[8..12].try_into().unwrap());
+  back[0..8].copy_from_slice(&(off as u64).to_ne_bytes());
+  if truncated{flags|=MSG_CTRUNC_I32 as u32;}
+  back[8..12].copy_from_slice(&flags.to_ne_bytes());
+  if crate::usercopy::copy_to_user(msg as usize+40,&back).is_err(){return Err(errno::EFAULT)}
+ }
+ Ok(())
+}
+/* Sets MSG_CTRUNC on msg_flags when anc merged-overflowed with nothing to describe. */
+fn recv_flag_ctrunc(msg:u64)->Result<(),i64>{
+ let mut back=[0u8;16];
+ if crate::usercopy::copy_from_user(&mut back,msg as usize+40).is_err(){return Err(errno::EFAULT)}
+ let mut flags=u32::from_ne_bytes(back[8..12].try_into().unwrap());
+ flags|=MSG_CTRUNC_I32 as u32;
+ back[8..12].copy_from_slice(&flags.to_ne_bytes());
+ if crate::usercopy::copy_to_user(msg as usize+40,&back).is_err(){return Err(errno::EFAULT)}
+ Ok(())
 }
 fn parse_msghdr_iov(msg:u64)->Result<(u64,u64,u64,usize,i32),i64>{
  // returns (msg_name, msg_namelen, iov_base, iov_count, flags)
@@ -2983,20 +3153,30 @@ fn sys_sendmsg(fd:usize,msg:u64,_flags:i32)->i64{
    total+=n;
   }
  }
- if total==0{return 0}
- if let Some(tcp)=crate::socket::inet_kind(sock){
-  if tcp{
-   return match crate::net::tcp_send(sock-crate::socket::INET_TCP_BASE,&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
-  } else {
-   let mut ip=0u32;let mut port=0u16;
-   if name!=0 && namelen>=16{
-    if let Ok((i,p))=sockaddr_in_of(name,namelen as u64){ip=i;port=p;}
-   }
-   return match crate::net::udp_send(sock-crate::socket::INET_UDP_BASE,if name!=0{Some((ip,port))}else{None},&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+ // unix (always via send_anc so SO_PASSCRED auto-attaches even for plain sends).
+ // Anc is parsed once here; zero-byte data with no anc is a no-op like before.
+ let anc=match parse_send_anc(msg){Ok(a)=>a,Err(e)=>return errno::neg(e)};
+ if total==0&&(anc.nfds==0&&!anc.cred){crate::socket::anc_release(&anc);return 0}
+ if crate::socket::inet_kind(sock).is_some(){
+  if anc.nfds>0||anc.cred{
+   crate::socket::anc_release(&anc);
+   return errno::neg(errno::EINVAL);
   }
+  crate::socket::anc_release(&anc);
+  if let Some(tcp)=crate::socket::inet_kind(sock){
+   if tcp{
+    return match crate::net::tcp_send(sock-crate::socket::INET_TCP_BASE,&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+   } else {
+    let mut ip=0u32;let mut port=0u16;
+    if name!=0 && namelen>=16{
+     if let Ok((i,p))=sockaddr_in_of(name,namelen as u64){ip=i;port=p;}
+    }
+    return match crate::net::udp_send(sock-crate::socket::INET_UDP_BASE,if name!=0{Some((ip,port))}else{None},&buf[..total]){Ok(n)=>n as i64,Err(e)=>errno::neg(e)};
+   }
+  }
+  return 0;
  }
- // unix
- match crate::socket::send(sock,&buf[..total],nonblock){Ok(n)=>n as i64,Err(e)=>errno::neg(e)}
+ match crate::socket::send_anc(sock,&buf[..total],nonblock,anc){Ok(n)=>n as i64,Err(e)=>errno::neg(e)}
 }
 fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
  let nonblock=fd_id(fd as u64).map(crate::fd::is_nonblock).unwrap_or(false)||(_flags as u64)&0x40!=0;
@@ -3016,7 +3196,16 @@ fn sys_recvmsg(fd:usize,msg:u64,_flags:i32)->i64{
   if tcp{match crate::net::tcp_recv(sock-crate::socket::INET_TCP_BASE,&mut buf[..n]){Ok(g)=>g,Err(e)=>return errno::neg(e)}}
   else{match crate::net::udp_recv(sock-crate::socket::INET_UDP_BASE,&mut buf[..n]){Ok((g,_,_))=>g,Err(e)=>return errno::neg(e)}}
  }else{
-  match crate::socket::recv(sock,&mut buf[..n],nonblock){Ok(g)=>g,Err(e)=>return errno::neg(e)}
+  let (g,anc,anc_trunc)=match crate::socket::recv_anc(sock,&mut buf[..n],nonblock){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+  /* Install received fds and describe them (+creds) in the control buffer. */
+  if anc.nfds>0||anc.cred{
+   let r=recv_build_cmsg(msg,anc,anc_trunc,(_flags as u32)&0x40000000!=0);
+   if let Err(e)=r{return errno::neg(e)}
+  } else if anc_trunc {
+   /* Merged-overflow with nothing deliverable: still flag truncation. */
+   let _=recv_flag_ctrunc(msg);
+  }
+  g
  };
  // write iov
  let mut off=0usize;
