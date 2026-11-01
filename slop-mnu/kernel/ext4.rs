@@ -803,3 +803,603 @@ fn extent_append(sb: &Super, inode: &mut Inode, lb: u32, pblk: u64) -> Result<()
     iblk[2..4].copy_from_slice(&h.eh_entries.to_ne_bytes());
     Ok(())
 }
+
+/* ================= Stage B1b: create/unlink/mkdir/rename/truncate ====== */
+/* Path helpers (parent dir + basename, ext4 lookup for inums). */
+fn split_parent(path: &str) -> Result<(&str, &str), i64> {
+    let t = path.trim_start_matches('/');
+    if t.is_empty() || t.contains('\0') {
+        return Err(errno::EINVAL);
+    }
+    match t.rfind('/') {
+        Some(i) => {
+            let (d, n) = (&t[..i], &t[i + 1..]);
+            if n.is_empty() || n.len() > 255 || n.contains('/') {
+                return Err(errno::EINVAL);
+            }
+            Ok((d, n))
+        },
+        None => {
+            if t.len() > 255 {
+                return Err(errno::EINVAL);
+            }
+            Ok(("", t))
+        },
+    }
+}
+fn lookup_inum(rel: &str) -> Result<u32, i64> {
+    if rel.is_empty() {
+        return Ok(2);
+    }
+    Ok(lookup(rel)?.rdev as u32)
+}
+/* Inode allocator: first free bit in an inode bitmap with room. */
+fn alloc_inode(sb: &Super, is_dir: bool) -> Result<u32, i64> {
+    let ngroups = groups_count(sb);
+    let per = sb.s_inodes_per_group as usize;
+    let bs = block_size(sb);
+    let mut sb_mut = superblock()?;
+    for g in 0..ngroups {
+        let gd = read_group_desc(&sb_mut, g)?;
+        if gd.bg_free_inodes_count_lo == 0 {
+            continue;
+        }
+        let mut bmp = [0u8; 4096];
+        read_block(gd.bg_inode_bitmap_lo as u64, bs, &mut bmp)?;
+        let bits = core::cmp::min(per, bs * 8);
+        for bit in 0..bits {
+            if bmp[bit / 8] & (1 << (bit % 8)) != 0 {
+                continue;
+            }
+            bmp[bit / 8] |= 1 << (bit % 8);
+            write_block(gd.bg_inode_bitmap_lo as u64, bs, &bmp)?;
+            let mut gd2 = gd;
+            gd2.bg_free_inodes_count_lo -= 1;
+            if is_dir {
+                gd2.bg_used_dirs_count_lo += 1;
+            }
+            write_group_desc(&sb_mut, g, &gd2)?;
+            sb_mut.s_free_inodes_count -= 1;
+            write_superblock(&sb_mut)?;
+            return Ok(g as u32 * per as u32 + bit as u32 + 1);
+        }
+    }
+    Err(errno::ENOSPC)
+}
+fn free_inode(sb: &Super, inum: u32, is_dir: bool) -> Result<(), i64> {
+    if inum == 0 {
+        return Err(errno::EINVAL);
+    }
+    let g = ((inum - 1) as usize) / sb.s_inodes_per_group as usize;
+    let idx = ((inum - 1) as usize) % sb.s_inodes_per_group as usize;
+    let gd = read_group_desc(sb, g)?;
+    let bs = block_size(sb);
+    let mut bmp = [0u8; 4096];
+    read_block(gd.bg_inode_bitmap_lo as u64, bs, &mut bmp)?;
+    bmp[idx / 8] &= !(1 << (idx % 8));
+    write_block(gd.bg_inode_bitmap_lo as u64, bs, &bmp)?;
+    let mut gd2 = gd;
+    gd2.bg_free_inodes_count_lo += 1;
+    if is_dir && gd2.bg_used_dirs_count_lo > 0 {
+        gd2.bg_used_dirs_count_lo -= 1;
+    }
+    write_group_desc(sb, g, &gd2)?;
+    let mut sb_mut = superblock()?;
+    sb_mut.s_free_inodes_count += 1;
+    write_superblock(&sb_mut)?;
+    Ok(())
+}
+/* Directory entry length (8-byte header + aligned name). */
+fn dir_entry_len(nlen: usize) -> usize {
+    (8 + nlen + 3) & !3
+}
+/* Frees all data blocks of an inode (extent walk, depth-0 only). */
+fn free_all_blocks(sb: &Super, inode: &mut Inode) -> Result<(), i64> {
+    let iblk = unsafe {
+        core::slice::from_raw_parts(inode.i_block.as_ptr() as *const u8, 60)
+    };
+    let h = read_header(&iblk[..12])?;
+    if h.eh_depth != 0 {
+        return Err(errno::ENOSPC);
+    }
+    let bs = block_size(sb);
+    for i in 0..h.eh_entries as usize {
+        let off = 12 + i * 12;
+        let e = unsafe { &*(iblk[off..].as_ptr() as *const Extent) };
+        let start = ((e.ee_start_hi as u64) << 32) | e.ee_start_lo as u64;
+        let len = (e.ee_len & 0x7fff) as u64;
+        for b in 0..len {
+            free_block(sb, start + b)?;
+        }
+        let _ = bs;
+    }
+    /* Clear the extent tree (zero header, entries gone). */
+    let iblk_mut = unsafe {
+        core::slice::from_raw_parts_mut(inode.i_block.as_mut_ptr() as *mut u8, 60)
+    };
+    for b in iblk_mut.iter_mut() {
+        *b = 0;
+    }
+    /* Re-init empty extent header (magic + max). */
+    iblk_mut[0..2].copy_from_slice(&0xF30Au16.to_ne_bytes());
+    iblk_mut[4..6].copy_from_slice(&4u16.to_ne_bytes());
+    inode.i_blocks_lo = 0;
+    Ok(())
+}
+fn free_block(sb: &Super, blk: u64) -> Result<(), i64> {
+    let bs = block_size(sb);
+    let ngroups = groups_count(sb);
+    let blocks_per_group = sb.s_blocks_per_group as u64;
+    for g in 0..ngroups {
+        let base = g as u64 * blocks_per_group;
+        if blk < base || blk >= base + blocks_per_group {
+            continue;
+        }
+        let bit = (blk - base) as usize;
+        let gd = read_group_desc(sb, g)?;
+        let mut bmp = [0u8; 4096];
+        read_block(gd.bg_block_bitmap_lo as u64, bs, &mut bmp)?;
+        bmp[bit / 8] &= !(1 << (bit % 8));
+        write_block(gd.bg_block_bitmap_lo as u64, bs, &bmp)?;
+        let mut gd2 = gd;
+        gd2.bg_free_blocks_count_lo += 1;
+        write_group_desc(sb, g, &gd2)?;
+        let mut sb_mut = superblock()?;
+        sb_mut.s_free_blocks_count_lo += 1;
+        write_superblock(&sb_mut)?;
+        return Ok(());
+    }
+    Err(errno::EINVAL)
+}
+/* Inserts a directory entry (slack reuse, else appends a new dir block). */
+fn dir_insert(dir_inum: u32, name: &[u8], child: u32, ftype: u8) -> Result<(), i64> {
+    if name.is_empty() || name.len() > 255 || name.contains(&b'/') {
+        return Err(errno::EINVAL);
+    }
+    let sb = superblock()?;
+    let bs = block_size(&sb);
+    let need = dir_entry_len(name.len());
+    let mut dir = read_inode(&sb, dir_inum)?;
+    if dir.i_mode & 0o170000 != 0o040000 {
+        return Err(errno::ENOTDIR);
+    }
+    let size = inode_len(&dir) as usize;
+    let nblocks = (size + bs - 1) / bs;
+    for bi in 0..nblocks {
+        let blk = read_file_block(&sb, &dir, bi as u32)?;
+        if blk == 0 {
+            continue;
+        }
+        let mut block = [0u8; 4096];
+        read_block(blk, bs, &mut block)?;
+        let mut off = 0usize;
+        while off + 8 <= bs {
+            let ino = u32::from_le_bytes(block[off..off + 4].try_into().unwrap());
+            let rec = u16::from_le_bytes(block[off + 4..off + 6].try_into().unwrap()) as usize;
+            let nl = block[off + 6] as usize;
+            if rec == 0 || off + rec > bs {
+                break;
+            }
+            if ino != 0 && nl == name.len() && &block[off + 8..off + 8 + nl] == name {
+                return Err(errno::EEXIST);
+            }
+            let actual = if ino == 0 { 8 } else { dir_entry_len(nl) };
+            if rec >= actual && rec - actual >= need {
+                let no = if ino == 0 { off } else { off + actual };
+                let nrec = if ino == 0 { rec } else { rec - actual };
+                if ino != 0 {
+                    block[off + 4..off + 6].copy_from_slice(&(actual as u16).to_ne_bytes());
+                }
+                block[no..no + 4].copy_from_slice(&child.to_le_bytes());
+                block[no + 4..no + 6].copy_from_slice(&(nrec as u16).to_ne_bytes());
+                block[no + 6] = name.len() as u8;
+                block[no + 7] = ftype;
+                block[no + 8..no + 8 + name.len()].copy_from_slice(name);
+                write_block(blk, bs, &block)?;
+                return Ok(());
+            }
+            if rec == 0 {
+                break;
+            }
+            off += rec;
+        }
+    }
+    /* Append a new directory block (single spanning entry). */
+    let pblk = alloc_block(&sb)?;
+    let zero = [0u8; 4096];
+    write_block(pblk, bs, &zero[..bs.min(4096)])?;
+    let lb = nblocks as u32;
+    extent_append(&sb, &mut dir, lb, pblk)?;
+    dir.i_blocks_lo = dir.i_blocks_lo.saturating_add((bs / 512) as u32);
+    let new_size = ((nblocks + 1) * bs) as u64;
+    dir.i_size_lo = new_size as u32;
+    dir.i_size_high = (new_size >> 32) as u32;
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    dir.i_mtime = t;
+    dir.i_ctime = t;
+    write_inode(&sb, dir_inum, &dir)?;
+    let mut block = [0u8; 4096];
+    block[0..4].copy_from_slice(&child.to_le_bytes());
+    block[4..6].copy_from_slice(&(bs as u16).to_ne_bytes());
+    block[6] = name.len() as u8;
+    block[7] = ftype;
+    block[8..8 + name.len()].copy_from_slice(name);
+    write_block(pblk, bs, &block)?;
+    Ok(())
+}
+/* Removes a directory entry (marks ino=0; slack reused by future inserts). */
+fn dir_remove(dir_inum: u32, name: &[u8]) -> Result<u32, i64> {
+    let sb = superblock()?;
+    let bs = block_size(&sb);
+    let dir = read_inode(&sb, dir_inum)?;
+    if dir.i_mode & 0o170000 != 0o040000 {
+        return Err(errno::ENOTDIR);
+    }
+    let size = inode_len(&dir) as usize;
+    let nblocks = (size + bs - 1) / bs;
+    for bi in 0..nblocks {
+        let blk = read_file_block(&sb, &dir, bi as u32)?;
+        if blk == 0 {
+            continue;
+        }
+        let mut block = [0u8; 4096];
+        read_block(blk, bs, &mut block)?;
+        let mut off = 0usize;
+        while off + 8 <= bs {
+            let ino = u32::from_le_bytes(block[off..off + 4].try_into().unwrap());
+            let rec = u16::from_le_bytes(block[off + 4..off + 6].try_into().unwrap()) as usize;
+            let nl = block[off + 6] as usize;
+            if rec == 0 || off + rec > bs {
+                break;
+            }
+            if ino != 0 && nl == name.len() && &block[off + 8..off + 8 + nl] == name {
+                block[off..off + 4].copy_from_slice(&0u32.to_le_bytes());
+                write_block(blk, bs, &block)?;
+                return Ok(ino);
+            }
+            off += rec;
+        }
+    }
+    Err(errno::ENOENT)
+}
+/* Creates a regular file: alloc inode, init empty extent tree, link. */
+pub fn create_file(path: &str, mode: u32) -> Result<crate::vfs::Inode, i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let (dir_rel, name) = split_parent(path)?;
+    let dir_inum = lookup_inum(dir_rel)?;
+    let sb = superblock()?;
+    let inum = alloc_inode(&sb, false)?;
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    let mut inode = read_inode(&sb, inum)?;
+    inode.i_mode = 0o100000 | (mode & 0o7777) as u16;
+    inode.i_uid = 0;
+    inode.i_gid = 0;
+    inode.i_size_lo = 0;
+    inode.i_size_high = 0;
+    inode.i_atime = t;
+    inode.i_ctime = t;
+    inode.i_mtime = t;
+    inode.i_dtime = 0;
+    inode.i_links_count = 1;
+    inode.i_blocks_lo = 0;
+    inode.i_flags = 0x80000; /* EXTENTS_FL */
+    for w in inode.i_block.iter_mut() {
+        *w = 0;
+    }
+    /* Empty extent header (magic, max 4 inline). */
+    let iblk = unsafe {
+        core::slice::from_raw_parts_mut(inode.i_block.as_mut_ptr() as *mut u8, 60)
+    };
+    iblk[0..2].copy_from_slice(&0xF30Au16.to_ne_bytes());
+    iblk[4..6].copy_from_slice(&4u16.to_ne_bytes());
+    write_inode(&sb, inum, &inode)?;
+    if let Err(e) = dir_insert(dir_inum, name.as_bytes(), inum, 1) {
+        let _ = free_inode(&superblock()?, inum, false);
+        return Err(e);
+    }
+    Ok(make_vfs_inode(path, inum, &inode, &sb))
+}
+/* Unlinks a regular file: remove dir entry, free blocks + inode. */
+pub fn unlink_path(path: &str) -> Result<(), i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let (dir_rel, name) = split_parent(path)?;
+    let dir_inum = lookup_inum(dir_rel)?;
+    let inum = dir_remove(dir_inum, name.as_bytes())?;
+    let sb = superblock()?;
+    let mut inode = read_inode(&sb, inum)?;
+    if inode.i_mode & 0o170000 == 0o040000 {
+        /* Restore entry (rmdir must be used); best-effort reinsert. */
+        let _ = dir_insert(dir_inum, name.as_bytes(), inum, 2);
+        return Err(errno::EISDIR);
+    }
+    if inode.i_links_count > 0 {
+        inode.i_links_count -= 1;
+    }
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    inode.i_ctime = t;
+    if inode.i_links_count == 0 {
+        inode.i_dtime = t;
+        free_all_blocks(&sb, &mut inode)?;
+        write_inode(&sb, inum, &inode)?;
+        free_inode(&sb, inum, false)?;
+    } else {
+        write_inode(&sb, inum, &inode)?;
+    }
+    Ok(())
+}
+/* Makes a directory with . and .. entries. */
+pub fn mkdir_path(path: &str, mode: u32) -> Result<crate::vfs::Inode, i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let (dir_rel, name) = split_parent(path)?;
+    let dir_inum = lookup_inum(dir_rel)?;
+    let sb = superblock()?;
+    let bs = block_size(&sb);
+    let inum = alloc_inode(&sb, true)?;
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    let mut inode = read_inode(&sb, inum)?;
+    inode.i_mode = 0o040000 | (mode & 0o7777) as u16;
+    inode.i_uid = 0;
+    inode.i_gid = 0;
+    inode.i_size_lo = bs as u32;
+    inode.i_size_high = 0;
+    inode.i_atime = t;
+    inode.i_ctime = t;
+    inode.i_mtime = t;
+    inode.i_dtime = 0;
+    inode.i_links_count = 2;
+    inode.i_flags = 0x80000;
+    for w in inode.i_block.iter_mut() {
+        *w = 0;
+    }
+    let iblk = unsafe {
+        core::slice::from_raw_parts_mut(inode.i_block.as_mut_ptr() as *mut u8, 60)
+    };
+    iblk[0..2].copy_from_slice(&0xF30Au16.to_ne_bytes());
+    iblk[4..6].copy_from_slice(&4u16.to_ne_bytes());
+    /* Allocate the first directory block (. and ..). */
+    let pblk = match alloc_block(&sb) {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = free_inode(&superblock()?, inum, true);
+            return Err(e);
+        },
+    };
+    if extent_append(&sb, &mut inode, 0, pblk).is_err() {
+        let _ = free_inode(&superblock()?, inum, true);
+        return Err(errno::ENOSPC);
+    }
+    inode.i_blocks_lo = (bs / 512) as u32;
+    write_inode(&sb, inum, &inode)?;
+    let mut block = [0u8; 4096];
+    /* "." entry (rec_len sized to leave room for ".."). */
+    let dot_len = dir_entry_len(1);
+    block[0..4].copy_from_slice(&inum.to_le_bytes());
+    block[4..6].copy_from_slice(&(dot_len as u16).to_ne_bytes());
+    block[6] = 1;
+    block[7] = 2;
+    block[8] = b'.';
+    /* ".." entry (spans rest of block). */
+    let off2 = dot_len;
+    block[off2..off2 + 4].copy_from_slice(&dir_inum.to_le_bytes());
+    block[off2 + 4..off2 + 6].copy_from_slice(&((bs - off2) as u16).to_ne_bytes());
+    block[off2 + 6] = 2;
+    block[off2 + 7] = 2;
+    block[off2 + 8..off2 + 10].copy_from_slice(b"..");
+    write_block(pblk, bs, &block)?;
+    if let Err(e) = dir_insert(dir_inum, name.as_bytes(), inum, 2) {
+        let _ = free_inode(&superblock()?, inum, true);
+        return Err(e);
+    }
+    /* Parent gains a subdirectory link. */
+    if let Ok(mut parent) = read_inode(&sb, dir_inum) {
+        parent.i_links_count += 1;
+        let _ = write_inode(&sb, dir_inum, &parent);
+    }
+    Ok(make_vfs_inode(path, inum, &inode, &sb))
+}
+/* Removes an empty directory (only . and .. allowed). */
+pub fn rmdir_path(path: &str) -> Result<(), i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let (dir_rel, name) = split_parent(path)?;
+    let dir_inum = lookup_inum(dir_rel)?;
+    let sb = superblock()?;
+    /* Verify empty (only . and ..). */
+    let inum = {
+        let blk0 = {
+            let dir = read_inode(&sb, dir_inum)?;
+            let size = inode_len(&dir) as usize;
+            let bs = block_size(&sb);
+            let nblocks = (size + bs - 1) / bs;
+            let mut found = None;
+            for bi in 0..nblocks {
+                let blk = read_file_block(&sb, &dir, bi as u32)?;
+                if blk == 0 {
+                    continue;
+                }
+                let mut block = [0u8; 4096];
+                read_block(blk, bs, &mut block)?;
+                let mut off = 0usize;
+                while off + 8 <= bs {
+                    let ino = u32::from_le_bytes(block[off..off + 4].try_into().unwrap());
+                    let rec = u16::from_le_bytes(block[off + 4..off + 6].try_into().unwrap()) as usize;
+                    let nl = block[off + 6] as usize;
+                    if rec == 0 || off + rec > bs {
+                        break;
+                    }
+                    if ino != 0 && nl == name.len() && &block[off + 8..off + 8 + nl] == name.as_bytes() {
+                        found = Some(ino);
+                        break;
+                    }
+                    off += rec;
+                }
+                if found.is_some() {
+                    break;
+                }
+            }
+            found.ok_or(errno::ENOENT)?
+        };
+        blk0
+    };
+    let mut inode = read_inode(&sb, inum)?;
+    if inode.i_mode & 0o170000 != 0o040000 {
+        return Err(errno::ENOTDIR);
+    }
+    /* Count entries; fail if beyond . and ... */
+    let size = inode_len(&inode) as usize;
+    let bs = block_size(&sb);
+    let nblocks = (size + bs - 1) / bs;
+    let mut entries = 0u32;
+    for bi in 0..nblocks {
+        let blk = read_file_block(&sb, &inode, bi as u32)?;
+        if blk == 0 {
+            continue;
+        }
+        let mut block = [0u8; 4096];
+        read_block(blk, bs, &mut block)?;
+        let mut off = 0usize;
+        while off + 8 <= bs {
+            let ino = u32::from_le_bytes(block[off..off + 4].try_into().unwrap());
+            let rec = u16::from_le_bytes(block[off + 4..off + 6].try_into().unwrap()) as usize;
+            if rec == 0 || off + rec > bs {
+                break;
+            }
+            if ino != 0 {
+                entries += 1;
+            }
+            off += rec;
+        }
+    }
+    if entries > 2 {
+        return Err(errno::ENOTEMPTY);
+    }
+    dir_remove(dir_inum, name.as_bytes())?;
+    free_all_blocks(&sb, &mut inode)?;
+    write_inode(&sb, inum, &inode)?;
+    free_inode(&sb, inum, true)?;
+    if let Ok(mut parent) = read_inode(&sb, dir_inum) {
+        if parent.i_links_count > 0 {
+            parent.i_links_count -= 1;
+            let _ = write_inode(&sb, dir_inum, &parent);
+        }
+    }
+    Ok(())
+}
+/* Renames (files only in v1; dirs fail EXDEV to keep link-count logic simple
+   and honest). Overwrites an existing file target atomically-ish. */
+pub fn rename_path(old: &str, new: &str) -> Result<(), i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let (odir_rel, oname) = split_parent(old)?;
+    let (ndir_rel, nname) = split_parent(new)?;
+    let odir = lookup_inum(odir_rel)?;
+    let ndir = lookup_inum(ndir_rel)?;
+    let sb = superblock()?;
+    let inum = dir_remove(odir, oname.as_bytes())?;
+    let inode = read_inode(&sb, inum)?;
+    if inode.i_mode & 0o170000 == 0o040000 {
+        let _ = dir_insert(odir, oname.as_bytes(), inum, 2);
+        return Err(errno::EXDEV);
+    }
+    let ftype = 1u8;
+    /* If target exists and is a file, unlink it first (overwrite). */
+    let sb2 = superblock()?;
+    let mut dir = read_inode(&sb2, ndir)?;
+    if dir.i_mode & 0o170000 != 0o040000 {
+        let _ = dir_insert(odir, oname.as_bytes(), inum, ftype);
+        return Err(errno::ENOTDIR);
+    }
+    /* Best-effort overwrite: remove existing target file if present. */
+    let _ = unlink_path(new);
+    if let Err(e) = dir_insert(ndir, nname.as_bytes(), inum, ftype) {
+        let _ = dir_insert(odir, oname.as_bytes(), inum, ftype);
+        return Err(e);
+    }
+    Ok(())
+}
+/* Truncates (shrink frees tail blocks; grow sets size, holes read as zeros). */
+pub fn truncate_file(inum: u32, size: u64) -> Result<(), i64> {
+    if !ready() {
+        return Err(errno::ENODEV);
+    }
+    let sb = superblock()?;
+    let mut inode = read_inode(&sb, inum)?;
+    if inode.i_mode & 0o170000 == 0o040000 {
+        return Err(errno::EISDIR);
+    }
+    if inode.i_mode & 0o170000 != 0o100000 {
+        return Err(errno::EINVAL);
+    }
+    if !is_extents(&inode) {
+        return Err(errno::EINVAL);
+    }
+    let bs = block_size(&sb);
+    let cur = inode_len(&inode);
+    if size == cur {
+        return Ok(());
+    }
+    if size > cur {
+        inode.i_size_lo = size as u32;
+        inode.i_size_high = (size >> 32) as u32;
+        let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+        inode.i_mtime = t;
+        inode.i_ctime = t;
+        write_inode(&sb, inum, &inode)?;
+        return Ok(());
+    }
+    /* Shrink: walk extents, free blocks at/after the cut, trim last extent. */
+    let keep_lb = ((size as usize + bs - 1) / bs) as u32;
+    let iblk = unsafe {
+        core::slice::from_raw_parts_mut(inode.i_block.as_mut_ptr() as *mut u8, 60)
+    };
+    let h = read_header(&iblk[..12])?;
+    if h.eh_depth != 0 {
+        return Err(errno::ENOSPC);
+    }
+    let mut kept_sectors = 0u32;
+    let mut new_entries = 0u16;
+    for i in 0..h.eh_entries as usize {
+        let off = 12 + i * 12;
+        let e = unsafe { &mut *(iblk[off..].as_mut_ptr() as *mut Extent) };
+        let eb = e.ee_block;
+        let elen = (e.ee_len & 0x7fff) as u32;
+        let estart = ((e.ee_start_hi as u64) << 32) | e.ee_start_lo as u64;
+        if eb + elen <= keep_lb {
+            kept_sectors += elen * (bs / 512) as u32;
+            new_entries += 1;
+            continue;
+        }
+        if eb < keep_lb {
+            /* Partial keep: trim length, free the tail. */
+            let keep = keep_lb - eb;
+            for b in keep..elen {
+                let _ = free_block(&sb, estart + b as u64);
+            }
+            e.ee_len = keep as u16;
+            kept_sectors += keep * (bs / 512) as u32;
+            new_entries += 1;
+        } else {
+            for b in 0..elen {
+                let _ = free_block(&sb, estart + b as u64);
+            }
+        }
+    }
+    /* Compact: move kept extents down (they're already ordered; just fix count). */
+    iblk[2..4].copy_from_slice(&new_entries.to_ne_bytes());
+    inode.i_blocks_lo = kept_sectors;
+    inode.i_size_lo = size as u32;
+    inode.i_size_high = (size >> 32) as u32;
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    inode.i_mtime = t;
+    inode.i_ctime = t;
+    write_inode(&sb, inum, &inode)?;
+    Ok(())
+}

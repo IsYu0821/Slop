@@ -518,7 +518,7 @@ pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 }
 pub fn create(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::create_file(rel,mode&0o7777)},None=>{}}
   /* The parent directory must exist, like on Linux. */
   if let Some(parent)=path.rfind('/').map(|i|&path[..i]).filter(|p|!p.is_empty()){
    if lookup(parent).map(|n|n.mode&0o170000!=S_IFDIR).unwrap_or(true){return Err(errno::ENOENT)}
@@ -541,7 +541,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
 }
 pub fn unlink(path:&str)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::unlink_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
@@ -554,7 +554,7 @@ pub fn unlink(path:&str)->Result<()>{
 }
 pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::mkdir_path(rel,mode&0o7777)},None=>{}}
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
  if m.len>=MAX_NODES{return Err(errno::EMFILE)}
@@ -639,7 +639,7 @@ pub fn is_dir(path:&str)->bool{
 pub fn rmdir(path:&str)->Result<()>{
   if path=="/"{return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::rmdir_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
  if m.nodes[idx].mode&S_IFDIR==0{return Err(errno::ENOTDIR)}
@@ -658,7 +658,7 @@ pub fn rename(old:&str,new:&str)->Result<()>{
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
  if let Some(kind)=old_route.kind{match kind{
-  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},MountKind::Ext4=>return Err(errno::EROFS),
+  MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},MountKind::Ext4=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::rename_path(orel,nrel)},
    MountKind::Tmpfs=>{
     let old_rel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;
     let new_rel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;
@@ -716,7 +716,7 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
-  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
+  match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext4::lookup(rel)?.rdev;return crate::ext4::truncate_file(ino as u32,size)},None=>{}}
   let mut m=ROOT.lock();
   let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
   if m.nodes[idx].mode&S_IFDIR!=0{return Err(errno::EISDIR)}
