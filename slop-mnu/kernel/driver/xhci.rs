@@ -988,7 +988,10 @@ fn hid_poll_round(db: u64, timeout_ms: u64) {
                             /* Stall/halt: re-arm next round (drop this TD). */
                             break;
                         }
-                        let n = (status & 0xffffff) as usize;
+                        let residual = (status & 0xffffff) as usize;
+                        /* Transfer Event Length is RESIDUAL (bytes NOT moved);
+                           transferred = TRB length - residual. */
+                        let n = dev_opt.int_maxp.saturating_sub(residual);
                         hid_report(dev_opt, n.min(dev_opt.int_maxp));
                         break;
                     }
@@ -1170,7 +1173,8 @@ fn hid_poll_once(dev: &mut HidDev, db: u64, timeout_ms: u64) -> bool {
             dev.int_pending = false;
             let cc = (status >> 24) & 0xff;
             if cc != 1 { return false; }
-            let n = (status & 0xffffff) as usize;
+            let residual = (status & 0xffffff) as usize;
+            let n = dev.int_maxp.saturating_sub(residual);
             hid_parse_report(dev, n.min(dev.int_maxp));
             true
         },
