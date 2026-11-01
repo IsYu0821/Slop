@@ -507,9 +507,9 @@ fn control_xfer(slot: u8, ring: &mut EpRing, setup: &[u8; 8], data_va: u64, data
         let sp = setup.as_ptr() as *const u64;
         p.write_volatile(sp.read_volatile());
         (saddr as *mut u32).add(2).write_volatile(8); /* length */
-        let mut c = (TRB_SETUP << 10) | (scycle as u32) | (trt << 16);
-        let _ = c;
-        (saddr as *mut u32).add(3).write_volatile((TRB_SETUP << 10) | (scycle as u32) | (trt << 16));
+        /* IDT=1 (setup bytes are immediate, not a pointer), TRT per direction.
+           No IOC here: the status stage carries the completion event. */
+        (saddr as *mut u32).add(3).write_volatile((TRB_SETUP << 10) | (scycle as u32) | (1 << 6) | (trt << 16));
     }
     if data_len > 0 {
         let (daddr, dcycle) = {
@@ -573,16 +573,27 @@ fn control_xfer(slot: u8, ring: &mut EpRing, setup: &[u8; 8], data_va: u64, data
     core::sync::atomic::compiler_fence(Ordering::SeqCst);
     /* Doorbell: slot, DCI=1 (EP0 control). */
     w32(db, (slot as u64) * 4, 1);
-    /* Wait for the status-stage Transfer Event (success). */
+    /* Wait for the STATUS-stage Transfer Event. The data stage also has IOC
+       (QEMU needs it), so its event arrives first and must not be mistaken
+       for completion; match by TRB pointer (identity-mapped DMA). A stale
+       status event from a previous transfer would have been consumed already
+       because every transfer drains exactly its own status event. */
+    let status_pa = crate::arch::x86_64::phys::virt_to_phys_full(taddr);
     loop {
-        let (typ, _param, status, _ctrl) = wait_event(1000)?;
+        let (typ, param, status, _ctrl) = wait_event(1000)?;
         if typ == EVT_TRANSFER {
             let cc = (status >> 24) & 0xff;
-            if cc != 1 {
-                crate::println!("xhci: control xfer failed cc={}", cc);
+            if param == status_pa {
+                if cc != 1 {
+                    crate::println!("xhci: control xfer failed cc={}", cc);
+                    return Err("control xfer");
+                }
+                return Ok(());
+            } else if cc != 1 {
+                crate::println!("xhci: control xfer data failed cc={}", cc);
                 return Err("control xfer");
             }
-            return Ok(());
+            /* Data/setup stage success: keep waiting for status. */
         }
     }
 }
