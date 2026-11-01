@@ -7,14 +7,16 @@ pub const RANDOM_MAJOR:u32=1; pub const RANDOM_MINOR:u32=8;
 pub const URANDOM_MAJOR:u32=1; pub const URANDOM_MINOR:u32=9;
 pub const TTY_MAJOR:u32=5; pub const TTY_MINOR:u32=0;
 pub const CONSOLE_MAJOR:u32=5; pub const CONSOLE_MINOR:u32=1;
+pub const INPUT_MAJOR:u32=13; pub const INPUT_MINOR_BASE:u32=64;
 
-pub fn read(major:u32,minor:u32,dst:&mut[u8])->Result<usize,i64>{
+pub fn read(major:u32,minor:u32,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
  match (major,minor){
   (NULL_MAJOR,NULL_MINOR)=>Ok(0),
   (ZERO_MAJOR,ZERO_MINOR)=>{for b in dst.iter_mut(){*b=0;}Ok(dst.len())},
   (FULL_MAJOR,FULL_MINOR)=>Err(errno::ENOSPC),
   (RANDOM_MAJOR,RANDOM_MINOR)|(URANDOM_MAJOR,URANDOM_MINOR)=>{crate::time::fill_random(dst);Ok(dst.len())},
   (TTY_MAJOR,TTY_MINOR)|(CONSOLE_MAJOR,CONSOLE_MINOR)=>Ok(0),
+  (INPUT_MAJOR,m) if m>=INPUT_MINOR_BASE&&m<INPUT_MINOR_BASE+16=>crate::driver::xhci::evdev_read((m-INPUT_MINOR_BASE) as usize,dst,nonblock),
   _=>Err(errno::ENODEV),
  }
 }
@@ -53,11 +55,13 @@ pub fn ioctl(major:u32,minor:u32,cmd:u64,arg:u64)->i64{
     _=>0,
    }
   }
+  (INPUT_MAJOR,m) if m>=INPUT_MINOR_BASE&&m<INPUT_MINOR_BASE+16=>crate::driver::xhci::evdev_ioctl((m-INPUT_MINOR_BASE) as usize,cmd,arg),
   _=>0,
  }
 }
 pub fn init_devtmpfs(){
  let _=crate::vfs::mkdir("/dev",0o755);
+ let _=crate::vfs::mkdir("/dev/input",0o755);
  let nodes=[
   ("/dev/null",0o20666,NULL_MAJOR,NULL_MINOR),
   ("/dev/zero",0o20666,ZERO_MAJOR,ZERO_MINOR),
@@ -70,6 +74,19 @@ pub fn init_devtmpfs(){
  for (p,mode,maj,min) in nodes{
   let dev=((maj as u64)<<8)|(min as u64);
   let _=crate::vfs::mknod(p,0o020000|mode,dev);
+ }
+ /* evdev nodes exist from boot; open yields ENODEV until a HID device
+    claims the index (xHCI enumeration may run before or after devtmpfs). */
+ for i in 0..4u64 {
+  let mut path=[0u8;20];
+  let base=b"/dev/input/event";
+  path[..base.len()].copy_from_slice(base);
+  path[base.len()]=b'0'+i as u8;
+  let plen=base.len()+1;
+  if let Ok(pstr)=core::str::from_utf8(&path[..plen]) {
+   let dev=((INPUT_MAJOR as u64)<<8)|(INPUT_MINOR_BASE as u64+i);
+   let _=crate::vfs::mknod(pstr,0o020000|0o666,dev);
+  }
  }
  if crate::driver::virtio_blk::ready(){let _=crate::vfs::mknod("/dev/vda",0o060660,(254u64<<8)|0);}
  if crate::driver::nvme::ready(){let _=crate::vfs::mknod("/dev/nvme0n1",0o060660,(259u64<<8)|0);}

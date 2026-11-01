@@ -254,6 +254,9 @@ pub fn selftest() {
         }
     }
     crate::println!("xhci: selftest PASS ports_with_devices={} enumerated={}", found, enumerated);
+    /* On-demand polling via evdev read (no background thread: a kernel
+       polling thread hung the CPU after 2 rounds; root cause TBD). */
+    // hid_start_poller();
 
 }
 
@@ -563,8 +566,11 @@ fn control_xfer(slot: u8, ring: &mut EpRing, setup: &[u8; 8], data_va: u64, data
         (taddr as *mut u64).write_volatile(0);
         (taddr as *mut u32).add(2).write_volatile(0);
         let mut c = (TRB_STATUS << 10) | (tcycle as u32) | (1 << 5); /* IOC */
-        if dir_in || data_len == 0 {
-            /* Status OUT (host-to-device) for IN data or no-data. */
+        /* USB control status direction: IN (device sends zero packet) unless
+           the data stage was IN (then status is OUT). No-data control ends
+           with status IN. */
+        if data_len>0 && dir_in {
+            /* Status OUT (host-to-device) for IN data. */
         } else {
             c |= 1 << 16; /* Status IN */
         }
@@ -716,8 +722,573 @@ fn enumerate_port(port: u32) -> Result<(), &'static str> {
         (v, p, c)
     };
     crate::println!("xhci: port{} slot={} usb {:04x}:{:04x} configs={}", port, slot, vid, pid, ncfg);
+    /* Step 5: HID class setup (best-effort; failure leaves EP0 enumeration
+       intact but without interrupt input). Rings/buffers are retained for
+       the HID poller; ctx is single-use per command and freed. */
+    let hid = hid_setup(port, slot, speed, &mut epring, buf_va, ncfg, vid, pid);
     crate::dma::free_coherent(ctx_va, ctx_pa, 4096);
-    crate::dma::free_coherent(tr_va, crate::arch::x86_64::phys::virt_to_phys_full(tr_va), 4096);
-    crate::dma::free_coherent(buf_va, crate::arch::x86_64::phys::virt_to_phys_full(buf_va), 4096);
+    match hid {
+        Ok(dev) => {
+            let mut idx_opt: Option<usize> = None;
+            unsafe {
+                let hids = &raw mut HIDS;
+                for (i, slot_opt) in (*hids).iter_mut().enumerate() {
+                    if slot_opt.is_none() { *slot_opt = Some(dev); idx_opt = Some(i); break; }
+                }
+            }
+            /* buf_va/tr_va retained by HidDev (no free). evdev nodes are
+               pre-created by init_devtmpfs (which runs after us and would
+               otherwise wipe dynamic nodes on initramfs mount). */
+            if let Some(idx) = idx_opt {
+                crate::println!("xhci: port{} evdev /dev/input/event{} ready", port, idx);
+            }
+        },
+        Err(e) => {
+            crate::println!("xhci: port{} hid setup skipped: {}", port, e);
+            crate::dma::free_coherent(tr_va, crate::arch::x86_64::phys::virt_to_phys_full(tr_va), 4096);
+            crate::dma::free_coherent(buf_va, crate::arch::x86_64::phys::virt_to_phys_full(buf_va), 4096);
+        },
+    }
     Ok(())
+}
+
+/* ================= Stage 3: HID (keyboard/mouse via interrupt IN) ========= */
+/* Device state retained after enumeration. EP0 ring/buffers stay mapped for
+   the poller's control needs; interrupt ring/buffer are dedicated. */
+pub struct HidDev {
+    pub slot: u8,
+    pub port: u8,
+    pub speed: u8,
+    pub vid: u16,
+    pub pid: u16,
+    pub ep0_va: u64,
+    pub ep0_ring: EpRing,
+    pub buf_va: u64,
+    pub int_ep: u8,
+    pub int_dci: u8,
+    pub int_va: u64,
+    pub int_ring: EpRing,
+    pub int_buf_va: u64,
+    pub int_maxp: usize,
+    pub is_mouse: bool,
+    pub int_pending: bool,
+    pub int_trb_pa: u64,
+    pub prev_mods: u8,
+    pub prev_keys: [u8; 6],
+    pub prev_buttons: u8,
+    pub evq: [u8; 1536],
+    pub evq_len: usize,
+}
+const MAX_HID: usize = 4;
+static mut HIDS: [Option<HidDev>; MAX_HID] = [None, None, None, None];
+
+/* Configure Endpoint command (type 12): activates EPs after Address Device.
+   Input context carries Slot + the NEW EP only (EP0 omitted so its live TR
+   pointer is preserved). */
+fn cmd_configure(slot: u8, ctx_pa: u64) -> Result<(), &'static str> {
+    let ctrl = (TRB_CONFIG_EP << 10) | 1 | ((slot as u32) << 24);
+    submit_cmd(ctx_pa, ctrl & !1)?;
+    loop {
+        let (typ, _param, status, _ctrl) = wait_event(1000)?;
+        if typ == EVT_CMD_COMPLETE {
+            let cc = (status >> 24) & 0xff;
+            if cc != 1 {
+                crate::println!("xhci: configure failed cc={}", cc);
+                return Err("configure endpoint");
+            }
+            return Ok(());
+        }
+    }
+}
+
+/* SET_CONFIGURATION (no data; status IN). */
+fn set_configuration(slot: u8, ring: &mut EpRing, config: u8) -> Result<(), &'static str> {
+    let setup: [u8; 8] = [0x00, 9, config, 0, 0, 0, 0, 0];
+    control_xfer(slot, ring, &setup, 0, 0, false)
+}
+/* HID SET_PROTOCOL (boot/report) and SET_IDLE. */
+fn hid_set_protocol(slot: u8, ring: &mut EpRing, iface: u8, boot: bool) -> Result<(), &'static str> {
+    let setup: [u8; 8] = [0x21, 0x0B, if boot { 0 } else { 1 }, 0, iface, 0, 0, 0];
+    control_xfer(slot, ring, &setup, 0, 0, false)
+}
+fn hid_set_idle(slot: u8, ring: &mut EpRing, iface: u8) -> Result<(), &'static str> {
+    let setup: [u8; 8] = [0x21, 0x0A, 0, 0, iface, 0, 0, 0];
+    control_xfer(slot, ring, &setup, 0, 0, false)
+}
+
+/* Full HID setup after device-descriptor enumeration. Returns a retained
+   device (rings/buffers stay mapped) or an error (caller frees EP0 ring). */
+fn hid_setup(port: u32, slot: u8, speed: u8, epring: &mut EpRing, buf_va: u64, _ncfg: u8, vid: u16, pid: u16) -> Result<HidDev, &'static str> {
+    /* Config descriptor header -> total length. */
+    get_descriptor(slot, epring, 2, 0, buf_va, 9)?;
+    let total = unsafe {
+        let b = buf_va as *const u8;
+        u16::from_le_bytes([*b.add(2), *b.add(3)]) as usize
+    };
+    if total < 9 || total > 512 {
+        return Err("bad config total");
+    }
+    get_descriptor(slot, epring, 2, 0, buf_va, total)?;
+    /* Walk: interface (class 3) -> endpoint (interrupt IN). */
+    let bytes = unsafe { core::slice::from_raw_parts(buf_va as *const u8, total) };
+    let mut off = 0usize;
+    let mut iface: Option<u8> = None;
+    let mut proto: u8 = 0;
+    let mut ep_addr: u8 = 0;
+    let mut ep_maxp: u16 = 0;
+    let mut ep_interval: u8 = 0;
+    while off + 2 <= total {
+        let len = bytes[off] as usize;
+        let dtype = bytes[off + 1];
+        if len < 2 || off + len > total { break; }
+        if dtype == 4 && len >= 9 {
+            /* Interface: class/sub/proto. */
+            if bytes[off + 5] == 3 {
+                iface = Some(bytes[off + 2]);
+                proto = bytes[off + 7];
+            }
+        } else if dtype == 5 && len >= 7 && iface.is_some() {
+            /* Endpoint: address/attrs/maxp/interval. */
+            let addr = bytes[off + 2];
+            let attrs = bytes[off + 3];
+            if addr & 0x80 != 0 && attrs & 3 == 3 {
+                ep_addr = addr & 0x0f;
+                ep_maxp = u16::from_le_bytes([bytes[off + 4], bytes[off + 5]]);
+                ep_interval = bytes[off + 6];
+                break;
+            }
+        }
+        if len == 0 { break; }
+        off += len;
+    }
+    let iface = iface.ok_or("no hid iface")?;
+    if ep_addr == 0 { return Err("no int endpoint"); }
+    let is_mouse = proto == 2;
+    crate::println!("xhci: port{} hid iface={} proto={} ep={} maxp={:#x} int={}",
+        port, iface, proto, ep_addr, ep_maxp, ep_interval);
+    /* Config descriptor's bConfigurationValue is at offset 5. */
+    let cfg_val = bytes[5];
+    set_configuration(slot, epring, cfg_val)?;
+    /* Boot protocol + no idle repeat (change-only reports). Best-effort:
+       QEMU HID accepts both; failure is non-fatal for polling. */
+    let _ = hid_set_protocol(slot, epring, iface, true);
+    let _ = hid_set_idle(slot, epring, iface);
+    /* Interrupt IN ring + buffer (retained). */
+    let (int_va, _int_pa) = crate::dma::alloc_coherent(4096).ok_or("int ring alloc")?;
+    let (int_buf_va, _int_buf_pa) = crate::dma::alloc_coherent(4096).ok_or("int buf alloc")?;
+    unsafe {
+        let link = (int_va + 4096 - 16) as *mut u64;
+        let pa = crate::arch::x86_64::phys::virt_to_phys_full(int_va);
+        link.write_volatile(pa);
+        (link as *mut u32).add(3).write_volatile((TRB_LINK << 10) | (1 << 1) | 0);
+    }
+    let int_ring = EpRing { va: int_va, prod: 0, cycle: 1 };
+    let dci = ep_addr * 2 + 1;
+    let maxp_size = (ep_maxp & 0x7ff) as u16;
+    let maxp_size = if maxp_size == 0 || maxp_size > 64 { 8 } else { maxp_size };
+    let mult = ((ep_maxp >> 11) & 3) as u32;
+    let mut interval = ep_interval;
+    if interval == 0 || interval > 16 { interval = 10; }
+    /* Input context: Slot (Entries = highest DCI) + new EP (Type 7 = Int IN). */
+    let (ctx2_va, ctx2_pa) = crate::dma::alloc_coherent(4096).ok_or("ctx2 alloc")?;
+    unsafe {
+        let p = ctx2_va as *mut u32;
+        p.write_volatile(0);
+        p.add(1).write_volatile((1 << 0) | (1 << dci));
+        for i in 2..8 { p.add(i).write_volatile(0); }
+        let s = (ctx2_va + 32) as *mut u32;
+        s.write_volatile(((dci as u32) << 27) | ((speed as u32) << 20));
+        s.add(1).write_volatile((port as u32) << 16);
+        for i in 2..8 { s.add(i).write_volatile(0); }
+        let e = (ctx2_va + 32 + (dci as u64) * 32) as *mut u32;
+        e.write_volatile(((interval as u32) << 16) | (mult << 8));
+        e.add(1).write_volatile((3 << 1) | (7 << 3) | ((maxp_size as u32) << 16));
+        let dp = (crate::arch::x86_64::phys::virt_to_phys_full(int_va) & !0xf) | 1;
+        e.add(2).write_volatile((dp & 0xffff_ffff) as u32);
+        e.add(3).write_volatile((dp >> 32) as u32);
+        for i in 4..8 { e.add(i).write_volatile(0); }
+    }
+    cmd_configure(slot, ctx2_pa)?;
+    crate::dma::free_coherent(ctx2_va, ctx2_pa, 4096);
+    crate::println!("xhci: port{} hid {} ready dci={}", port, if is_mouse { "mouse" } else { "kbd" }, dci);
+    Ok(HidDev {
+        slot, port: port as u8, speed,
+        vid, pid,
+        ep0_va: epring.va, ep0_ring: EpRing { va: epring.va, prod: epring.prod, cycle: epring.cycle },
+        buf_va,
+        int_ep: ep_addr, int_dci: dci,
+        int_va, int_ring,
+        int_buf_va, int_maxp: maxp_size as usize,
+        is_mouse,
+        int_pending: false, int_trb_pa: 0,
+        prev_mods: 0, prev_keys: [0; 6], prev_buttons: 0,
+        evq: [0; 1536], evq_len: 0,
+    })
+}
+
+/* Submit one interrupt-IN Normal TRB and ring the endpoint doorbell.
+   Returns the TRB's physical address for event matching. */
+fn submit_int_trb(dev: &mut HidDev, db: u64) -> Result<u64, &'static str> {
+    let ring = &mut dev.int_ring;
+    let idx = ring.prod;
+    let cyc = ring.cycle;
+    ring.prod += 1;
+    if ring.prod >= 255 {
+        let link = trb_addr(ring.va, 255);
+        let pa = crate::arch::x86_64::phys::virt_to_phys_full(ring.va);
+        ring.cycle ^= 1;
+        let tc = ring.cycle;
+        unsafe {
+            (link as *mut u64).write_volatile(pa);
+            (link as *mut u32).add(3).write_volatile((TRB_LINK << 10) | ((tc as u32) << 1) | (tc as u32));
+        }
+        ring.prod = 0;
+    }
+    let taddr = trb_addr(ring.va, idx);
+    let dpa = crate::arch::x86_64::phys::virt_to_phys_full(dev.int_buf_va);
+    if dpa == 0 { return Err("unmapped int buf"); }
+    unsafe {
+        (taddr as *mut u64).write_volatile(dpa);
+        (taddr as *mut u32).add(2).write_volatile(dev.int_maxp as u32);
+        /* Normal IN, ISP + IOC. */
+        (taddr as *mut u32).add(3).write_volatile((TRB_NORMAL << 10) | (cyc as u32) | (1 << 2) | (1 << 5) | (1 << 16));
+    }
+    core::sync::atomic::compiler_fence(Ordering::SeqCst);
+    w32(db, (dev.slot as u64) * 4, dev.int_dci as u32);
+    Ok(crate::arch::x86_64::phys::virt_to_phys_full(taddr))
+}
+
+/* One poll round for all HID devices: ensure every idle device has a TRB
+   outstanding, then a single bounded wait whose event is dispatched by TRB
+   pointer. A single shared event ring means per-device waits would consume
+   each other's completions; dispatching avoids that loss. */
+fn hid_poll_round(db: u64, timeout_ms: u64) {
+
+    unsafe {
+        let hids = &raw mut HIDS;
+        for dev_opt in (*hids).iter_mut().flatten() {
+            if !dev_opt.int_pending {
+                match submit_int_trb(dev_opt, db) {
+                    Ok(pa) => { dev_opt.int_trb_pa = pa; dev_opt.int_pending = true; },
+                    Err(e) => { crate::println!("hid: submit err {}", e); },
+                }
+            }
+        }
+    }
+    match wait_event(timeout_ms) {
+        Ok((typ, param, status, _)) => {
+            if typ != EVT_TRANSFER { return; }
+            let cc = (status >> 24) & 0xff;
+            unsafe {
+                let hids = &raw mut HIDS;
+                for dev_opt in (*hids).iter_mut().flatten() {
+                    if dev_opt.int_pending && param == dev_opt.int_trb_pa {
+                        dev_opt.int_pending = false;
+                        if cc != 1 {
+                            /* Stall/halt: re-arm next round (drop this TD). */
+                            break;
+                        }
+                        let n = (status & 0xffffff) as usize;
+                        hid_report(dev_opt, n.min(dev_opt.int_maxp));
+                        break;
+                    }
+                }
+                /* Unmatched transfer event (e.g., a control status event
+                   already handled elsewhere, or a stale completion): ignore. */
+            }
+        },
+        Err(_) => {},
+    }
+}
+
+/* Boot-protocol report parser: logs keypresses and mouse motion. Real
+   evdev feed is the next step; serial proof validates the IRQ-less path. */
+fn hid_report(dev: &HidDev, n: usize) {
+    if n == 0 { return; }
+    let b = unsafe { core::slice::from_raw_parts(dev.int_buf_va as *const u8, n.min(8)) };
+    if dev.is_mouse {
+        if n >= 3 {
+            crate::println!("hid mouse{} buttons={:#x} dx={} dy={}", dev.port, b[0], b[1] as i8, b[2] as i8);
+        }
+    } else if n >= 8 {
+        let mods = b[0];
+        let mut keys = [0u8; 6];
+        keys.copy_from_slice(&b[2..8]);
+        if keys.iter().any(|&k| k != 0) || mods != 0 {
+            crate::println!("hid kbd{} mods={:#x} keys={:02x} {:02x} {:02x} {:02x} {:02x} {:02x}",
+                dev.port, mods, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5]);
+        }
+    }
+}
+
+/* Background poller: round-robins HID devices with short waits. Runs as a
+   kernel thread so QMP-injected keys are harvested without guest help. */
+fn hid_poller() {
+    let db = {
+        let x = XHCI.lock();
+        if !x.ready { return; }
+        x.db
+    };
+    crate::println!("hid: poller started");
+    let mut rounds = 0u32;
+    loop {
+        hid_poll_round(db, 20);
+        rounds += 1;
+        if rounds % 200 == 0 {
+            unsafe {
+                let q = &raw mut CMDQ;
+                crate::println!("hid: alive rounds={} ev_cons={} ev_cycle={}", rounds, (*q).ev_cons, (*q).ev_cycle);
+            }
+        }
+        /* Brief yield so the poller does not starve the timer tick. */
+        crate::task::yield_now();
+    }
+}
+
+pub fn hid_start_poller() {
+    /* Spawned once after enumeration; idempotent by thread count. */
+    static STARTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::SeqCst) { return; }
+    match crate::task::spawn_kernel(hid_poller) {
+        Ok(_) => crate::println!("hid: poller spawned"),
+        Err(e) => crate::println!("hid: poller spawn failed {}", e),
+    }
+}
+
+/* ================= Stage 4: evdev (/dev/input/eventN, on-demand) ========== */
+/* Linux input_event (64-bit): time[16] + type[2] + code[2] + value[4]. */
+const EV_SYN: u16 = 0; const EV_KEY: u16 = 1; const EV_REL: u16 = 2;
+const SYN_REPORT: u16 = 0;
+const REL_X: u16 = 0; const REL_Y: u16 = 1; const REL_WHEEL: u16 = 8;
+const BTN_LEFT: u16 = 0x110; const BTN_RIGHT: u16 = 0x111; const BTN_MIDDLE: u16 = 0x112;
+/* Modifier bit -> Linux KEY_*. */
+const MOD_KEYS: [u16; 8] = [29, 42, 56, 125, 97, 54, 100, 126];
+/* HID boot keycode -> Linux KEY_*. Letters are non-sequential on Linux. */
+fn hid_to_linux(h: u8) -> Option<u16> {
+    Some(match h {
+        0x04=>30, 0x05=>48, 0x06=>46, 0x07=>32, 0x08=>18, 0x09=>33, 0x0a=>34, 0x0b=>35,
+        0x0c=>23, 0x0d=>36, 0x0e=>37, 0x0f=>38, 0x10=>50, 0x11=>49, 0x12=>24, 0x13=>25,
+        0x14=>16, 0x15=>19, 0x16=>31, 0x17=>20, 0x18=>22, 0x19=>47, 0x1a=>17, 0x1b=>45,
+        0x1c=>21, 0x1d=>44,
+        0x1e=>2, 0x1f=>3, 0x20=>4, 0x21=>5, 0x22=>6, 0x23=>7, 0x24=>8, 0x25=>9, 0x26=>10, 0x27=>11,
+        0x28=>28, 0x29=>1, 0x2a=>14, 0x2b=>15, 0x2c=>57, 0x2d=>12, 0x2e=>13, 0x2f=>26,
+        0x30=>27, 0x31=>43, 0x33=>39, 0x34=>40, 0x35=>41, 0x36=>51, 0x37=>52, 0x38=>53,
+        0x39=>58,
+        0x3a=>59, 0x3b=>60, 0x3c=>61, 0x3d=>62, 0x3e=>63, 0x3f=>64, 0x40=>65, 0x41=>66,
+        0x42=>67, 0x43=>68, 0x44=>87, 0x45=>88,
+        0x4f=>106, 0x50=>105, 0x51=>108, 0x52=>103,
+        _=>return None,
+    })
+}
+fn ev_time() -> (u64, u64) {
+    let ns = crate::time::realtime_ns();
+    (ns / 1_000_000_000, (ns % 1_000_000_000) / 1000)
+}
+fn push_event(dev: &mut HidDev, ty: u16, code: u16, val: i32) {
+    if dev.evq_len + 24 > dev.evq.len() { return; } /* drop on overflow */
+    let (sec, usec) = ev_time();
+    let o = dev.evq_len;
+    dev.evq[o..o+8].copy_from_slice(&sec.to_ne_bytes());
+    dev.evq[o+8..o+16].copy_from_slice(&usec.to_ne_bytes());
+    dev.evq[o+16..o+18].copy_from_slice(&ty.to_ne_bytes());
+    dev.evq[o+18..o+20].copy_from_slice(&code.to_ne_bytes());
+    dev.evq[o+20..o+24].copy_from_slice(&val.to_ne_bytes());
+    dev.evq_len += 24;
+}
+/* Converts a boot-protocol report into queued input_events (press/release +
+   SYN). Keyboard tracks modifiers + 6 keys; mouse tracks buttons + motion. */
+fn hid_parse_report(dev: &mut HidDev, n: usize) {
+    if n == 0 { return; }
+    let b = unsafe { core::slice::from_raw_parts(dev.int_buf_va as *const u8, n.min(8)) };
+    /* Diagnostic: log non-empty reports (proves the IRQ-less poll path). */
+    if b.iter().any(|&x| x != 0) {
+        crate::println!("hid rpt{} len={} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}",
+            dev.port, n, b[0], if n>1{b[1]}else{0}, if n>2{b[2]}else{0}, if n>3{b[3]}else{0},
+            if n>4{b[4]}else{0}, if n>5{b[5]}else{0}, if n>6{b[6]}else{0}, if n>7{b[7]}else{0});
+    }
+    if dev.is_mouse {
+        if n < 3 { return; }
+        let btn = b[0];
+        let changed = btn ^ dev.prev_buttons;
+        for i in 0..3 {
+            if changed & (1 << i) != 0 {
+                let code = [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE][i];
+                push_event(dev, EV_KEY, code, if btn & (1 << i) != 0 { 1 } else { 0 });
+            }
+        }
+        dev.prev_buttons = btn;
+        let mut moved = false;
+        if b[1] != 0 { push_event(dev, EV_REL, REL_X, b[1] as i8 as i32); moved = true; }
+        if b[2] != 0 { push_event(dev, EV_REL, REL_Y, b[2] as i8 as i32); moved = true; }
+        if n >= 4 && b[3] != 0 { push_event(dev, EV_REL, REL_WHEEL, b[3] as i8 as i32); moved = true; }
+        if changed != 0 || moved {
+            push_event(dev, EV_SYN, SYN_REPORT, 0);
+        }
+    } else if n >= 8 {
+        let mods = b[0];
+        let mchg = mods ^ dev.prev_mods;
+        for i in 0..8 {
+            if mchg & (1 << i) != 0 {
+                push_event(dev, EV_KEY, MOD_KEYS[i], if mods & (1 << i) != 0 { 1 } else { 0 });
+            }
+        }
+        dev.prev_mods = mods;
+        let mut keys = [0u8; 6];
+        keys.copy_from_slice(&b[2..8]);
+        let prev = dev.prev_keys;
+        let mut any = mchg != 0;
+        for &pk in prev.iter() {
+            if pk != 0 && !keys.contains(&pk) {
+                if let Some(lc) = hid_to_linux(pk) { push_event(dev, EV_KEY, lc, 0); any = true; }
+            }
+        }
+        for &k in keys.iter() {
+            if k != 0 && !prev.contains(&k) {
+                if let Some(lc) = hid_to_linux(k) { push_event(dev, EV_KEY, lc, 1); any = true; }
+            }
+        }
+        dev.prev_keys = keys;
+        if any {
+            push_event(dev, EV_SYN, SYN_REPORT, 0);
+        }
+    }
+}
+/* On-demand interrupt poll for evdev read: submit if idle, single bounded
+   wait, dispatch by TRB pointer (shared ring). Returns true if a report was
+   harvested (parsed into the device event queue). */
+fn hid_poll_once(dev: &mut HidDev, db: u64, timeout_ms: u64) -> bool {
+    if !dev.int_pending {
+        match submit_int_trb(dev, db) {
+            Ok(pa) => { dev.int_trb_pa = pa; dev.int_pending = true; },
+            Err(_) => return false,
+        }
+    }
+    let want = dev.int_trb_pa;
+    match wait_event(timeout_ms) {
+        Ok((typ, param, status, _)) => {
+            if typ != EVT_TRANSFER || param != want { return false; }
+            dev.int_pending = false;
+            let cc = (status >> 24) & 0xff;
+            if cc != 1 { return false; }
+            let n = (status & 0xffffff) as usize;
+            hid_parse_report(dev, n.min(dev.int_maxp));
+            true
+        },
+        Err(_) => false,
+    }
+}
+/* evdev read: drains queued input_events (whole 24-byte structs only);
+   blocks (submit + wait loop) unless nonblock. EINTR on pending signal. */
+pub fn evdev_read(idx: usize, dst: &mut [u8], nonblock: bool) -> Result<usize, i64> {
+    if dst.len() < 24 { return Err(crate::errno::EINVAL); }
+    let db = {
+        let x = XHCI.lock();
+        if !x.ready { return Err(crate::errno::ENODEV); }
+        x.db
+    };
+    loop {
+        let drained = unsafe {
+            let hids = &raw mut HIDS;
+            let dev = match (*hids).iter_mut().flatten().nth(idx) {
+                Some(d) => d,
+                None => return Err(crate::errno::ENODEV),
+            };
+            let n = core::cmp::min(dst.len() / 24 * 24, dev.evq_len);
+            if n > 0 {
+                dst[..n].copy_from_slice(&dev.evq[..n]);
+                dev.evq.copy_within(n.., 0);
+                dev.evq_len -= n;
+            }
+            n
+        };
+        if drained > 0 { return Ok(drained); }
+        if nonblock { return Err(crate::errno::EAGAIN); }
+        if crate::task::has_deliverable_signal() { return Err(crate::errno::EINTR); }
+        let got = unsafe {
+            let hids = &raw mut HIDS;
+            match (*hids).iter_mut().flatten().nth(idx) {
+                Some(dev) => hid_poll_once(dev, db, 100),
+                None => return Err(crate::errno::ENODEV),
+            }
+        };
+        if !got {
+            /* Timeout with nothing harvested: re-check signal, else keep
+               waiting (blocking read is indefinite like Linux). */
+            if crate::task::has_deliverable_signal() { return Err(crate::errno::EINTR); }
+        }
+    }
+}
+/* Minimal evdev ioctls for libevdev/X: VERSION, ID, NAME, GBIT, GKEY. */
+pub fn evdev_ioctl(idx: usize, cmd: u64, arg: u64) -> i64 {
+    let is_mouse = unsafe {
+        match (*&raw const HIDS).iter().flatten().nth(idx) {
+            Some(d) => d.is_mouse,
+            None => return crate::errno::neg(crate::errno::ENODEV),
+        }
+    };
+    let vidpid = unsafe {
+        match (*&raw const HIDS).iter().flatten().nth(idx) {
+            Some(d) => (d.vid, d.pid),
+            None => return crate::errno::neg(crate::errno::ENODEV),
+        }
+    };
+    match cmd {
+        0x80044501 => { /* EVIOCGVERSION */
+            if arg == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            let v = 0x010001u32;
+            if crate::usercopy::copy_to_user(arg as usize, &v.to_ne_bytes()).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            0
+        },
+        0x80084502 => { /* EVIOCGID: bustype/vendor/product/version */
+            if arg == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            let mut id = [0u8; 8];
+            id[0..2].copy_from_slice(&3u16.to_ne_bytes()); /* BUS_USB */
+            id[2..4].copy_from_slice(&vidpid.0.to_ne_bytes());
+            id[4..6].copy_from_slice(&vidpid.1.to_ne_bytes());
+            id[6..8].copy_from_slice(&0x0100u16.to_ne_bytes());
+            if crate::usercopy::copy_to_user(arg as usize, &id).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            0
+        },
+        c if (c >> 8) as u8 == b'E' && (c & 0xff) == 0x06 => { /* EVIOCGNAME(len) */
+            let len = ((c >> 16) & 0x3fff) as usize;
+            if arg == 0 || len == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            let name: &[u8] = if is_mouse { b"Slop HID Mouse\0" } else { b"Slop HID Keyboard\0" };
+            let n = core::cmp::min(len, name.len());
+            if crate::usercopy::copy_to_user(arg as usize, &name[..n]).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            n as i64
+        },
+        c if (c >> 8) as u8 == b'E' && (c & 0xff) >= 0x20 && (c & 0xff) < 0x40 => { /* EVIOCGBIT(ev,len) */
+            let ev = (c & 0xff) as u8 - 0x20;
+            let len = ((c >> 16) & 0x3fff) as usize;
+            if arg == 0 || len == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            let mut bits = [0u8; 96];
+            let blen = match ev {
+                0 => { /* EV types: SYN + KEY (+ REL for mouse) */
+                    bits[0] = 0x02 | if is_mouse { 0x04 } else { 0 };
+                    8
+                },
+                1 => { /* KEY: modifiers + mapped keys (kbd) or buttons (mouse) */
+                    if is_mouse {
+                        bits[0x110 / 8] |= 0x07; /* BTN_LEFT/RIGHT/MIDDLE */
+                    } else {
+                        for &k in MOD_KEYS.iter() { bits[(k / 8) as usize] |= 1 << (k % 8); }
+                        for h in 0x04..=0x52u8 {
+                            if let Some(lc) = hid_to_linux(h) { bits[(lc / 8) as usize] |= 1 << (lc % 8); }
+                        }
+                    }
+                    96
+                },
+                2 => { /* REL: X/Y/WHEEL (mouse only) */
+                    if is_mouse { bits[0] = 0x0b | 0x01 | 0x02; }
+                    8
+                },
+                _ => 0,
+            };
+            if blen == 0 { return crate::errno::neg(crate::errno::EINVAL); }
+            let n = core::cmp::min(len, blen);
+            if crate::usercopy::copy_to_user(arg as usize, &bits[..n]).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            n as i64
+        },
+        _ => 0,
+    }
 }

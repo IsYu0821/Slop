@@ -239,7 +239,7 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
  match kind{
   OpenKind::Console=>Ok(0),
   OpenKind::Inode(n)=>{let got=vfs::read(n,offset,dst)?;if got>0{if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64}}Ok(got)},
-  OpenKind::CharDevice(dev)=>crate::device::read((dev>>8)as u32,(dev&0xff)as u32,dst),
+  OpenKind::CharDevice(dev)=>crate::device::read((dev>>8)as u32,(dev&0xff)as u32,dst,nonblock),
   OpenKind::BlockDevice(dev)=>{let got=crate::device::blk_read((dev>>8)as u32,(dev&0xff)as u32,offset,dst)?; if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64;} Ok(got)},
   OpenKind::PipeRead(p)=>crate::pipe::read(p,dst,nonblock),
   OpenKind::Socket(s)=>crate::socket::recv(s,dst,nonblock),
@@ -290,7 +290,7 @@ pub fn read(id:u32,dst:&mut[u8])->Result<usize,i64>{
     Ok(8)
   },
   OpenKind::PipeWrite(_)=>Err(errno::EBADF),
-  OpenKind::CharDevice(dev)=>crate::device::read((dev>>8)as u32,(dev&0xff)as u32,dst),
+  OpenKind::CharDevice(dev)=>crate::device::read((dev>>8)as u32,(dev&0xff)as u32,dst,nonblock),
   OpenKind::BlockDevice(dev)=>{let got=crate::device::blk_read((dev>>8)as u32,(dev&0xff)as u32,offset,dst)?; if let Some(f)=OPEN.lock()[id as usize].as_mut(){f.offset+=got as u64;} Ok(got)},
   OpenKind::Inotify=>crate::inotify::read(id,dst),
   OpenKind::SignalFd(mask)=>{
