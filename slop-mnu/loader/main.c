@@ -23,6 +23,43 @@ typedef EFI_STATUS(EFIAPI *EFI_HANDLE_PROTOCOL)(EFI_HANDLE,void*,void**);
 struct LoadedImage { uint32_t Revision;uint32_t _pad;EFI_HANDLE ParentHandle;EFI_SYSTEM_TABLE* SystemTable;EFI_HANDLE DeviceHandle;void* FilePath;void* Reserved;uint32_t LoadOptionsSize;uint32_t _pad2;void* LoadOptions;void* ImageBase;uint64_t ImageSize; };
 static const EFI_GUID loaded_image_guid={0x5b1b31a1,0x9562,0x11d2,{0x8e,0x3f,0x00,0xa0,0xc9,0x69,0x72,0x3b}};
 static uint32_t map_kind(uint32_t t){ return t==7?1:0; } /* EfiConventionalMemory */
+/* Minimal GOP client: enumerate handles exposing GOP, open the first,
+   and use the firmware's current mode (no SetMode). */
+typedef struct { uint32_t Version,HorizontalResolution,VerticalResolution; int PixelFormat; uint32_t Rsv[1]; uint32_t PixelsPerScanLine; } GOP_MODE_INFO;
+typedef struct { uint32_t MaxMode; uint32_t Mode; GOP_MODE_INFO* Info; UINTN SizeOfInfo; uint64_t FrameBufferBase,FrameBufferSize; } GOP_MODE;
+typedef struct { void* QueryMode; void* SetMode; void* Blt; GOP_MODE* Mode; } GOP;
+static const EFI_GUID gop_guid={0x9042a9de,0x23dc,0x4a38,{0x96,0xfb,0x7a,0xde,0xd0,0x80,0x51,0x6a}};
+static struct Framebuffer fetch_framebuffer(EFI_BOOT_SERVICES* bs){
+ struct Framebuffer fb={0};
+ UINTN cnt=0;
+ EFI_STATUS r1=bs->LocateHandle(2,(void*)&gop_guid,0,&cnt,0);
+ if(r1!=EFI_BUFFER_TOO_SMALL||cnt==0)return fb;
+ EFI_HANDLE hs[8]; UINTN n=sizeof(hs);
+ EFI_STATUS r2=bs->LocateHandle(2,(void*)&gop_guid,0,&n,hs);
+ if(EFI_ERROR(r2))return fb;
+ UINTN count=n/sizeof(EFI_HANDLE);
+ if(count>8)count=8;
+ if(count==0)return fb;
+ for(UINTN i=0;i<count;i++){
+  GOP* gop=0;
+  EFI_STATUS hr=((EFI_HANDLE_PROTOCOL)bs->HandleProtocol)(hs[i],(void*)&gop_guid,(void**)&gop);
+  if(EFI_ERROR(hr)||!gop||!gop->Mode||!gop->Mode->Info)continue;
+  GOP_MODE_INFO* mi=gop->Mode->Info;
+  if(!mi||mi->HorizontalResolution==0||mi->VerticalResolution==0)continue;
+  if(mi->PixelFormat!=0&&mi->PixelFormat!=1)continue;
+  if(gop->Mode->FrameBufferBase==0||gop->Mode->FrameBufferSize==0)continue;
+  fb.base=gop->Mode->FrameBufferBase;
+  fb.size=gop->Mode->FrameBufferSize;
+  fb.width=mi->HorizontalResolution;
+  fb.height=mi->VerticalResolution;
+  /* QEMU std VGA reports PixelsPerScanLine=0; the framebuffer size
+     matches width*height*4 exactly, so it is tightly packed. */
+  fb.stride=mi->PixelsPerScanLine!=0?mi->PixelsPerScanLine:mi->HorizontalResolution;
+  fb.format=(uint32_t)mi->PixelFormat;
+  break;
+ }
+ return fb;
+}
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE* st){
  EFI_BOOT_SERVICES* bs=st->BootServices; UINTN bytes=0,key=0,desc_size=0;uint32_t desc_ver=0;EFI_STATUS s;
  s=bs->GetMemoryMap(&bytes,0,&key,&desc_size,&desc_ver);if(s!=EFI_BUFFER_TOO_SMALL||desc_size<sizeof(EFI_MEMORY_DESCRIPTOR))return s;
@@ -30,10 +67,11 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image,EFI_SYSTEM_TABLE* st){
  struct MemoryRegion* cooked=0;UINTN cap=bytes/desc_size;if(EFI_ERROR(s=bs->AllocatePool(EFI_LOADER_DATA,cap*sizeof(*cooked),(void**)&cooked)))return s;
  struct BootInfo* bi=0;if(EFI_ERROR(s=bs->AllocatePool(EFI_LOADER_DATA,sizeof(*bi),(void**)&bi)))return s;
  struct LoadedImage* li=0;if(EFI_ERROR(((EFI_HANDLE_PROTOCOL)bs->HandleProtocol)(image,(void*)&loaded_image_guid,(void**)&li))||!li)return EFI_UNSUPPORTED;
+ struct Framebuffer fb=fetch_framebuffer(bs);
  for(unsigned attempt=0;attempt<MAX_EBS_RETRIES;attempt++){
   UINTN actual=bytes;s=bs->GetMemoryMap(&actual,raw,&key,&desc_size,&desc_ver);if(EFI_ERROR(s))return s;
   UINTN n=actual/desc_size;for(UINTN i=0;i<n;i++){EFI_MEMORY_DESCRIPTOR* d=(void*)((uint8_t*)raw+i*desc_size);cooked[i]=(struct MemoryRegion){d->PhysicalStart,d->NumberOfPages,map_kind(d->Type),(uint32_t)d->Attribute};}
-  *bi=(struct BootInfo){BOOT_MAGIC,BOOT_ABI_VERSION,sizeof(*bi),cooked,n,find_rsdp(st),(uint64_t)_binary_build_initramfs_nsar_start,(uint64_t)(_binary_build_initramfs_nsar_end-_binary_build_initramfs_nsar_start),{0},(uint64_t)li->ImageBase,li->ImageSize};
+  *bi=(struct BootInfo){BOOT_MAGIC,BOOT_ABI_VERSION,sizeof(*bi),cooked,n,find_rsdp(st),(uint64_t)_binary_build_initramfs_nsar_start,(uint64_t)(_binary_build_initramfs_nsar_end-_binary_build_initramfs_nsar_start),fb,(uint64_t)li->ImageBase,li->ImageSize};
   s=bs->ExitBootServices(image,key);if(s==EFI_SUCCESS){g_boot_info=bi;slop_mnu_kernel_entry();for(;;)__asm__ volatile("cli; hlt");}
  }
  return s;

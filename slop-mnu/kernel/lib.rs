@@ -6,6 +6,7 @@ pub mod boot;
 pub mod acpi;
 pub mod smp;
 pub mod console;
+pub mod fb;
 pub mod driver;
 pub mod elf;
 pub mod errno;
@@ -54,6 +55,7 @@ static mut BOOT_RSDP:u64=0;
 pub fn boot_rsdp()->u64{unsafe{core::ptr::addr_of!(BOOT_RSDP).read()}}
 static mut BOOT_INITRD:(u64,u64)=(0,0);
 static mut BOOT_IMAGE_SIZE:u64=0;
+static mut BOOT_FB:crate::boot::Framebuffer=crate::boot::Framebuffer{base:0,size:0,width:0,height:0,stride:0,format:0};
 /// Byte size of the loaded kernel image (for the high-half alias map).
 pub fn boot_image_size()->u64{unsafe{BOOT_IMAGE_SIZE}}
 
@@ -68,7 +70,7 @@ pub unsafe extern "sysv64" fn kmain_bootinfo(info: *const boot::BootInfo) -> ! {
     let pages=match memory::init(regions){Ok(n)=>n,Err(e)=>{println!("memory init failed: {}",e);arch::halt()}};
     let features=match unsafe { arch::x86_64::cpu::init() }{Ok(v)=>v,Err(e)=>{println!("CPU init failed: {}",e);arch::halt()}};
     let irq_info=match unsafe { acpi::interrupt_info(bi.rsdp) }{Ok(v)=>v,Err(e)=>{println!("ACPI interrupt discovery failed: {}",e);arch::halt()}};
-    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); BOOT_IMAGE_SIZE=bi.image_size; }
+    unsafe { BOOT_PAGES=pages; BOOT_IRQ=Some(irq_info); BOOT_RSDP=bi.rsdp; BOOT_INITRD=(bi.initrd_base,bi.initrd_size); BOOT_IMAGE_SIZE=bi.image_size; BOOT_FB=bi.framebuffer; }
     if !features.page_1g { println!("kernel requires 1 GiB pages for the direct map"); arch::halt(); }
     /* Clone the firmware root into a kernel-owned PML4 (firmware tables are
        mapped read-only), install the direct map, then copy the image to
@@ -109,6 +111,10 @@ extern "sysv64" fn kmain_high_continue()->!{
     let rsdp=unsafe { core::ptr::addr_of!(BOOT_RSDP).read() };
     unsafe { arch::x86_64::descriptors::init(rsp0,ist,irq_stack); arch::x86_64::idt::init(); arch::x86_64::apic::init(irq_info).unwrap_or_else(|e|{println!("APIC init failed: {}",e);arch::halt()}); arch::x86_64::syscall::init(rsp0); }
     let pages=unsafe { BOOT_PAGES };
+    let fbi=unsafe { core::ptr::addr_of!(BOOT_FB).read() };
+    if crate::fb::init(fbi.base, fbi.size, fbi.width, fbi.height, fbi.stride, fbi.format) {
+        crate::println!("display: framebuffer console {}x{} stride={} fmt={}", fbi.width, fbi.height, fbi.stride, fbi.format);
+    }
     println!("Slop/MNU 0.27.0: high-half kernel, BootInfo accepted, {} free pages",pages);
     unsafe{arch::x86_64::port::outb(0x3f8,b'9')}
     println!("interrupts: lapic={:#x} ioapic={:#x} timer-vector={:#x}",irq_info.lapic,irq_info.ioapic,arch::x86_64::apic::TIMER_VECTOR);

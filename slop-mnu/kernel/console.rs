@@ -8,7 +8,8 @@ fn wait(mask:u8){for _ in 0..1_000_000{if unsafe{inb(LSR)}&mask==mask{return}}}
 fn write_byte(byte:u8){if byte==b'\n'{wait(THR_EMPTY);unsafe{outb(COM1,b'\r')}}wait(THR_EMPTY);unsafe{outb(COM1,byte)}}
 pub fn init(){unsafe{outb(COM1+1,0);outb(COM1+3,0x80);outb(COM1,3);outb(COM1+1,0);outb(COM1+3,3);outb(COM1+2,0xc7);outb(COM1+4,0x0b);}}
 pub fn flush(){wait(TX_EMPTY)}
-pub fn write_bytes(bytes:&[u8]){for &b in bytes{write_byte(b)}}
-pub fn print(args:fmt::Arguments){let _=Serial.write_fmt(args);}
+pub fn write_bytes(bytes:&[u8]){for &b in bytes{write_byte(b)}if crate::fb::available(){if let Ok(s)=core::str::from_utf8(bytes){crate::fb::write_str(s)}}}
+pub fn print(args:fmt::Arguments){let _=Serial.write_fmt(args);if crate::fb::available(){use core::fmt::Write;let mut w=FbWrite;let _=w.write_fmt(args);} }
+struct FbWrite;impl Write for FbWrite{fn write_str(&mut self,s:&str)->fmt::Result{crate::fb::write_str(s);Ok(())}}
 #[macro_export]macro_rules! print{($($arg:tt)*)=>($crate::console::print(format_args!($($arg)*)));}
 #[macro_export]macro_rules! println{()=>($crate::print!("\n"));($fmt:expr)=>($crate::print!(concat!($fmt,"\n")));($fmt:expr,$($arg:tt)*)=>($crate::print!(concat!($fmt,"\n"),$($arg)*));}
