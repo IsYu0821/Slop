@@ -1253,6 +1253,70 @@ pub fn evdev_ioctl(idx: usize, cmd: u64, arg: u64) -> i64 {
             if crate::usercopy::copy_to_user(arg as usize, &id).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
             0
         },
+        c if (c >> 8) as u8 == b'E' && (c & 0xff) == 0x07 => { /* EVIOCGPHYS(len) */
+            let len = ((c >> 16) & 0x3fff) as usize;
+            if arg == 0 || len == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            /* Real topology: QEMU xHCI PCI 00:03.0, root-hub port from HidDev. */
+            let (port, slot) = unsafe {
+                match (*&raw const HIDS).iter().flatten().nth(idx) {
+                    Some(d) => (d.port, d.slot),
+                    None => return crate::errno::neg(crate::errno::ENODEV),
+                }
+            };
+            let mut phys = [0u8; 64];
+            let prefix = b"usb-0000:00:03.0-";
+            phys[..prefix.len()].copy_from_slice(prefix);
+            let mut n = prefix.len();
+            phys[n] = b'0' + port.min(9);
+            n += 1;
+            if slot > 9 {
+                phys[n] = b'0' + (slot / 10).min(9);
+                n += 1;
+            }
+            phys[n] = b'0' + (slot % 10);
+            n += 1;
+            let tail = b"/input0";
+            phys[n..n + tail.len()].copy_from_slice(tail);
+            n += tail.len();
+            let cp = core::cmp::min(len, n + 1);
+            let mut out = [0u8; 65];
+            out[..n].copy_from_slice(&phys[..n]);
+            if cp > n { out[n] = 0; }
+            if crate::usercopy::copy_to_user(arg as usize, &out[..cp]).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            cp as i64
+        },
+        c if (c >> 8) as u8 == b'E' && (c & 0xff) == 0x18 => { /* EVIOCGKEY(len) */
+            let len = ((c >> 16) & 0x3fff) as usize;
+            if arg == 0 || len == 0 { return crate::errno::neg(crate::errno::EFAULT); }
+            let mut bits = [0u8; 96];
+            unsafe {
+                match (*&raw const HIDS).iter().flatten().nth(idx) {
+                    Some(d) => {
+                        if d.is_mouse {
+                            if d.prev_buttons & 1 != 0 { bits[0x110 / 8] |= 1 << (0x110 % 8); }
+                            if d.prev_buttons & 2 != 0 { bits[0x111 / 8] |= 1 << (0x111 % 8); }
+                            if d.prev_buttons & 4 != 0 { bits[0x112 / 8] |= 1 << (0x112 % 8); }
+                        } else {
+                            for i in 0..8 {
+                                if d.prev_mods & (1 << i) != 0 {
+                                    let lc = MOD_KEYS[i];
+                                    bits[(lc / 8) as usize] |= 1 << (lc % 8);
+                                }
+                            }
+                            for &k in d.prev_keys.iter() {
+                                if k != 0 {
+                                    if let Some(lc) = hid_to_linux(k) { bits[(lc / 8) as usize] |= 1 << (lc % 8); }
+                                }
+                            }
+                        }
+                    },
+                    None => return crate::errno::neg(crate::errno::ENODEV),
+                }
+            }
+            let n = core::cmp::min(len, bits.len());
+            if crate::usercopy::copy_to_user(arg as usize, &bits[..n]).is_err() { return crate::errno::neg(crate::errno::EFAULT); }
+            n as i64
+        },
         c if (c >> 8) as u8 == b'E' && (c & 0xff) == 0x06 => { /* EVIOCGNAME(len) */
             let len = ((c >> 16) & 0x3fff) as usize;
             if arg == 0 || len == 0 { return crate::errno::neg(crate::errno::EFAULT); }
@@ -1295,4 +1359,23 @@ pub fn evdev_ioctl(idx: usize, cmd: u64, arg: u64) -> i64 {
         },
         _ => 0,
     }
+}
+
+/* Poll readiness probe: ensure a TRB is pending, harvest one completion
+   with a short bounded wait, report whether events are queued. Used by
+   poll/epoll so Wayland/libinput-style waiters wake on input. */
+pub fn evdev_poll_once(idx: usize) -> bool {
+    let db = {
+        let x = XHCI.lock();
+        if !x.ready { return false; }
+        x.db
+    };
+    unsafe {
+        let hids = &raw mut HIDS;
+        if let Some(dev) = (*hids).iter_mut().flatten().nth(idx) {
+            hid_poll_once(dev, db, 10);
+            return dev.evq_len >= 24;
+        }
+    }
+    false
 }

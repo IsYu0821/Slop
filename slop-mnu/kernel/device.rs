@@ -9,6 +9,19 @@ pub const TTY_MAJOR:u32=5; pub const TTY_MINOR:u32=0;
 pub const CONSOLE_MAJOR:u32=5; pub const CONSOLE_MINOR:u32=1;
 pub const INPUT_MAJOR:u32=13; pub const INPUT_MINOR_BASE:u32=64;
 
+/* Poll readiness for character devices. evdev does on-demand acquisition
+   (submit if idle + bounded wait) so poll/epoll wake promptly on input
+   without a background thread; other devices keep existing behavior. */
+pub fn poll_readable(major: u32, minor: u32) -> bool {
+    match (major, minor) {
+        (TTY_MAJOR, TTY_MINOR) | (CONSOLE_MAJOR, CONSOLE_MINOR) => true,
+        (INPUT_MAJOR, m) if m >= INPUT_MINOR_BASE && m < INPUT_MINOR_BASE + 16 => {
+            crate::driver::xhci::evdev_poll_once((m - INPUT_MINOR_BASE) as usize)
+        },
+        _ => false,
+    }
+}
+
 pub fn read(major:u32,minor:u32,dst:&mut[u8],nonblock:bool)->Result<usize,i64>{
  match (major,minor){
   (NULL_MAJOR,NULL_MINOR)=>Ok(0),

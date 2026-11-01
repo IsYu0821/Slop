@@ -26,6 +26,12 @@ int main(void){
     harness sends a key while we block) */
  f=open("/dev/input/event0",O_RDONLY);
  if(f<0){printf("EVDEV_FAIL open2 %d\n",errno);return 1;}
+ { /* poll empty (no key yet) must report 0 */
+  struct pollfd {int fd; short events; short revents;} pfd;
+  pfd.fd=f; pfd.events=1; pfd.revents=0;
+  extern int poll(void*,unsigned long,int);
+  if(poll(&pfd,1,200)!=0){printf("EVDEV_FAIL poll-empty %d\n",pfd.revents);return 1;}
+ }
  /* query version */
  unsigned ver=0;
  if(ioctl(f,0x80044501,&ver)||ver!=0x10001){printf("EVDEV_FAIL ver %x\n",ver);return 1;}
@@ -33,6 +39,13 @@ int main(void){
  int nl=ioctl(f,0x80404506,name);
  if(nl<=0){printf("EVDEV_FAIL name %d\n",nl);return 1;}
  printf("EVDEV_NOTE dev %s\n",name);
+ char phys[64]={0};
+ int pl=ioctl(f,0x80404507,phys);
+ if(pl<=0){printf("EVDEV_FAIL phys %d\n",pl);return 1;}
+ printf("EVDEV_NOTE phys %s\n",phys);
+ unsigned char keys[32]={0};
+ if(ioctl(f,0x80204518,keys)<0){printf("EVDEV_FAIL gkey\n");return 1;}
+ printf("EVDEV_NOTE gkey ok\n");
  n=read(f,ev,sizeof ev);
  if(n<24){printf("EVDEV_FAIL bread %d\n",n);return 1;}
  int got_a=0;

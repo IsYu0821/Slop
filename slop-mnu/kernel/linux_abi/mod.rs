@@ -925,6 +925,7 @@ fn sys_poll(fds:u64,nfds:i32,timeout:i32)->i64{
        Some(crate::fd::OpenKind::Socket(_))=>true,
        Some(crate::fd::OpenKind::EventFd(c,_))=>c!=0,
        Some(crate::fd::OpenKind::SignalFd(mask))=>crate::fd::signalfd_readable(mask),
+       Some(crate::fd::OpenKind::CharDevice(dev))=>crate::device::poll_readable((dev>>8) as u32,(dev&0xff) as u32),
        _=>false,
       };
      let writable=match crate::fd::kind(id){
@@ -1639,7 +1640,7 @@ fn select_impl(nfds:i32,rfds:u64,wfds:u64,efds:u64,mut to_ns:u64,has_timeout:boo
    if !want_r&&!want_w{continue;}
    match fd_id(fd as u64){
     Some(id)=>{
-     let readable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)=>true,Some(crate::fd::OpenKind::PipeRead(_))=>true,Some(crate::fd::OpenKind::Inode(_))=>true,Some(crate::fd::OpenKind::Socket(_))=>true,Some(crate::fd::OpenKind::SignalFd(mask))=>crate::fd::signalfd_readable(mask),_=>false};
+     let readable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)=>true,Some(crate::fd::OpenKind::PipeRead(_))=>true,Some(crate::fd::OpenKind::Inode(_))=>true,Some(crate::fd::OpenKind::Socket(_))=>true,Some(crate::fd::OpenKind::SignalFd(mask))=>crate::fd::signalfd_readable(mask),Some(crate::fd::OpenKind::CharDevice(dev))=>crate::device::poll_readable((dev>>8) as u32,(dev&0xff) as u32),_=>false};
      let writable=match crate::fd::kind(id){Some(crate::fd::OpenKind::Console)|Some(crate::fd::OpenKind::PipeWrite(_))|Some(crate::fd::OpenKind::Socket(_))=>true,_=>false};
      if want_r&&readable{bit_set(&mut r_out,fd);ready+=1;}
      if want_w&&writable{bit_set(&mut w_out,fd);ready+=1;}
