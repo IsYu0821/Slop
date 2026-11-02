@@ -318,6 +318,17 @@ fn make_vfs_inode(path: &str, inum: u32, inode: &Inode, sb: &Super) -> vfs::Inod
         name_len: nl,
     }
 }
+/* Resolve an already-open file by on-disk inode number (for page faults and
+   other ino-keyed paths that cannot re-walk a pathname). The returned inode
+   carries no name; callers must not rely on it. None on any error. */
+pub fn stat_ino(inum: u32) -> Option<vfs::Inode> {
+    if !ready() {
+        return None;
+    }
+    let sb = superblock().ok()?;
+    let inode = read_inode(&sb, inum).ok()?;
+    Some(make_vfs_inode("", inum, &inode, &sb))
+}
 pub fn lookup(path: &str) -> Result<vfs::Inode, i64> {
     if !ready() {
         return Err(errno::ENODEV);

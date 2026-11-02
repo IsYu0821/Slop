@@ -1161,6 +1161,10 @@ pub fn read_off(inode:Inode,off:u64,dst:&mut[u8])->Result<usize>{
    that a process stays small. */
 pub fn inode_by_ino(ino:u64)->Option<Inode>{
  if let Some(fs_id)=tmpfs_fs_id(ino){let registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get(fs_id).filter(|s|s.used)?;let node=store.nodes[..store.len].iter().find(|n|n.ino==ino)?;return Some(*node)}
+ /* On-disk files have no resident node: re-read the inode by number so that
+    file-backed page faults (dlopen/mmap on ext2/ext4) see file contents. */
+ if is_ext2_ino(ino){return crate::ext2::stat_ino((ino-0x100000) as u32);}
+ if crate::ext4::is_ext4_ino(ino){return crate::ext4::stat_ino((ino-0x200000) as u32);}
  let m=ROOT.lock();
  let node=m.nodes[..m.len].iter().find(|n|n.ino==ino)?;
  Some(*node)
