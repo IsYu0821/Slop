@@ -18,3 +18,22 @@
 /slop-mnu/tests/musl/tcp-mini2
 /slop-mnu/tests/musl/tcp-mini3
 /slop-mnu/tests/musl/tcp-mini4
+/slop-mnu/tests/musl/pyrun
+/slop-mnu/tests/musl/execveat-mini
+/slop-mnu/tests/musl/mmap-check
+/slop-mnu/tests/musl/mmap-mount
+/slop-mnu/tests/musl/mmap-pages
+/slop-mnu/tests/musl/cow-check
+/slop-mnu/tests/musl/dlopencheck
+/slop-mnu/tests/musl/dlmount
+# Host-python staging copies for the Python harnesses (unmodified host bytes).
+/slop-mnu/tests/glibc/python3.12
+/slop-mnu/tests/glibc/lib64/
+/slop-mnu/tests/glibc/lib-x86_64/
+/slop-mnu/tests/glibc/libm.so.6
+/slop-mnu/tests/glibc/libz.so.1
+/slop-mnu/tests/glibc/libexpat.so.1
+/slop-mnu/tests/glibc/libsqlite3.so.0
+/slop-mnu/tests/glibc/test-asyncio.so
+/slop-mnu/tests/glibc/stdlib/
+/slop-mnu/tests/glibc/libtprt.so
