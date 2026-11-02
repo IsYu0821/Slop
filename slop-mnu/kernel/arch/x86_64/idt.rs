@@ -41,8 +41,20 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
   return;
  }
  /* DIAG-MS93: record every exception before taking any locks (a fault while
-    holding SCHED would self-deadlock below and leave no trace). */
- crate::println!("diag exc vector={} err={:#x} rip={:#x} cs={:#x} apic={:#x}",vector,error,rip,cs,unsafe{crate::arch::x86_64::apic::apic_id()});
+    holding SCHED would self-deadlock below and leave no trace).
+    Rate-limited: demand paging faults every guest page touch, and
+    unconditional serial output slows workloads 100x (observed: Python
+    imports crawl at 5 faults/sec). Log only faults (non-#PF) and the
+    occasional #PF sample for liveness. */
+ if vector != 14 {
+  crate::println!("diag exc vector={} err={:#x} rip={:#x} cs={:#x} apic={:#x}",vector,error,rip,cs,unsafe{crate::arch::x86_64::apic::apic_id()});
+ } else {
+  static PFLOG: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+  let n = PFLOG.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+  if n % 20000 == 0 {
+   crate::println!("diag pf #{} vector={} err={:#x} rip={:#x}", n, vector, error, rip);
+  }
+ }
  let cr2:u64;unsafe{core::arch::asm!("mov {}, cr2",out(reg)cr2,options(nostack,preserves_flags));}
  /* Demand paging and COW also fault while the kernel is copying to or from
     userspace, so user-address #PF is recovered from either ring. */

@@ -714,8 +714,10 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
  /* Collect the directory once so the closure cannot deadlock on ROOT. */
   let mut entries:[(u64,u32,[u8;64],usize);64]=[(0,0,[0;64],0);64];
  let mut n=0usize;
+ let mut skipped=0usize;
  let _=crate::vfs::readdir(path,|ino,mode,name|{
-   if n<64{
+  if skipped<start as usize{skipped+=1;return}
+  if n<64{
    let b=name.as_bytes();
    let l=core::cmp::min(b.len(),63);
    entries[n]=(ino,mode,{let mut a=[0u8;64];a[..l].copy_from_slice(&b[..l]);a},l);
@@ -723,15 +725,17 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
   }
  });
  if n==0{return 0}
- let mut buf=[0u8;1024];
- let mut off=0usize;
- let mut idx=start as usize;
- let mut emitted=false;
- while idx<n{
+  let mut buf=[0u8;1024];
+  let mut off=0usize;
+  let mut idx=0usize;
+  let mut emitted=false;
+  let cap=core::cmp::min(count as usize,buf.len());
+  let base=start as usize;
+  while idx<n{
   let (ino,mode,nb,nl)=entries[idx];
   let reclen=(19+nl+1+7)&!7;
-  if off+reclen>count as usize{break}
-  let d_off=(idx+1)as u64;
+  if off+reclen>cap{break}
+  let d_off=(base+idx+1)as u64;
   buf[off..off+8].copy_from_slice(&ino.to_ne_bytes());
   buf[off+8..off+16].copy_from_slice(&d_off.to_ne_bytes());
   buf[off+16..off+18].copy_from_slice(&(reclen as u16).to_ne_bytes());
@@ -744,7 +748,7 @@ fn sys_getdents64(fd:u64,ptr:u64,count:i32)->i64{
   emitted=true;
  }
  if !emitted{return 0}
- crate::fd::offset_set(id,idx as u64);
+ crate::fd::offset_set(id,(base+idx) as u64);
  if let Err(e)=crate::usercopy::copy_to_user(ptr as usize,&buf[..off]){return errno::neg(e)}
  off as i64
 }

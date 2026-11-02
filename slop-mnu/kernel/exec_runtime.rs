@@ -2,7 +2,7 @@
 //! rollback on failure. Dynamic images load their PT_INTERP interpreter first
 //! and enter through its entry point with AT_BASE set.
 use crate::{arch::x86_64::{paging::{self,PageTableRoot},phys::Identity},elf,linux_abi::stack,memory};
-const PAGE:u64=4096;const MAX_COMMITTED:usize=512;const USER_STACK_PAGES:u64=8;
+const PAGE:u64=4096;const MAX_COMMITTED:usize=4096;const USER_STACK_PAGES:u64=1024;
 /* Load bias for the dynamic linker and for the PIE main image. Every user
    region sits alone in a page table slot: the linker in slot 128, the image
    in slot 129, the anonymous mappings in slot 130 and the program break in
@@ -13,7 +13,7 @@ const LD_BASE:u64=0x0000_4000_0000_0000;
 const EXE_BASE:u64=0x0000_4080_0000_0000;
 /* One committed PT_LOAD range, kept for /proc/<pid>/maps. */
 #[derive(Clone,Copy,Default)]pub struct MapSeg{pub start:u64,pub end:u64,pub flags:u32}
-pub const MAX_MAP_SEGS:usize=8;
+pub const MAX_MAP_SEGS:usize=32;
 #[derive(Clone,Copy)]pub struct Loaded{pub entry:u64,pub rsp:u64,pub cr3:u64,pub bootstrap_cr3:u64,pub image_slot:usize,pub stack_slot:usize,pub interp_slot:usize,
  pub cmdline:[u8;512],pub cmdline_len:usize,pub environ:[u8;512],pub environ_len:usize,
  pub segs:[MapSeg;MAX_MAP_SEGS],pub nsegs:usize,pub stack_base:u64,pub stack_top:u64}
