@@ -44,8 +44,8 @@ fn dispatch_inner(n:u64,a:[u64;6])->i64 {
     nr::FSTAT=>sys_fstat(a[0],a[1]), nr::LSEEK=>sys_lseek(a[0],a[1] as i64,a[2]),
     nr::OPENAT=>sys_openat((a[0] as u32 as i32) as i64,a[1],a[2]), nr::NEWFSTATAT=>sys_newfstatat((a[0] as u32 as i32) as i64,a[1],a[2],a[3]),
     nr::MMAP=>mmap_dispatch(a),
-    nr::MPROTECT=>proc_unit(|p|p.mprotect(a[0] as usize,a[1] as usize,a[2])),
-    nr::MUNMAP=>proc_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_u64(|p|Ok(p.brk(a[0]))),
+    nr::MPROTECT=>proc_vm_unit(|p|p.mprotect(a[0] as usize,a[1] as usize,a[2])),
+    nr::MUNMAP=>proc_vm_unit(|p|p.munmap(a[0] as usize,a[1] as usize)), nr::BRK=>proc_vm_u64(|p|Ok(p.brk(a[0]))),
     nr::SCHED_YIELD=>{crate::task::yield_now();0}, nr::GETPID=>crate::task::current_tgid() as i64, nr::GETTID=>crate::task::current_pid() as i64, nr::GETPPID=>crate::task::current_ppid() as i64,
     nr::EXECVE=>sys_execve(a[0],a[1],a[2]),
     nr::GETUID=>sys_getuid(), nr::GETGID=>sys_getgid(), nr::GETEUID=>sys_geteuid(), nr::GETEGID=>sys_getegid(),
@@ -90,8 +90,8 @@ fn dispatch_inner(n:u64,a:[u64;6])->i64 {
     nr::FUTEX=>sys_futex(a[0],a[1] as i32,a[2] as i32,a[3],a[4] as u64,a[5] as i32),
     nr::UNLINKAT=>sys_unlinkat((a[0] as u32 as i32) as i64,a[1],a[2]),
     nr::STATX=>sys_statx((a[0] as u32 as i32) as i64,a[1],a[2],a[3],a[4]),
-    nr::MREMAP=>proc_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64,a[4])),
-    nr::MADVISE=>proc_result(|p|p.madvise(a[0] as usize,a[1] as usize,a[2])),
+    nr::MREMAP=>proc_vm_result(|p|p.mremap(a[0] as usize,a[1] as usize,a[2] as usize,a[3] as u64,a[4])),
+    nr::MADVISE=>proc_vm_result(|p|p.madvise(a[0] as usize,a[1] as usize,a[2])),
     nr::MEMBARRIER=>0,
     /* rseq is not implemented: Linux reports ENOSYS so libc falls back to a
        registration-free thread-local storage path. */
@@ -209,7 +209,7 @@ fn mmap_dispatch(a:[u64;6])->i64{
  if !anon && !is_anon_file && writable && !shared && fd>=0 {
   /* Private writable file mapping: anonymous + pre-copy. */
   let addr=a[0] as usize; let len=a[1] as usize; let prot=a[2]; let off=a[5];
-  let base:usize=match crate::task::with_current_process(|p|p.mmap(addr,len,prot,fl|MAP_ANON,(0xffffffffu32 as i32) as i64,0)){
+  let base:usize=match crate::task::with_current_vm(|p|p.mmap(addr,len,prot,fl|MAP_ANON,(0xffffffffu32 as i32) as i64,0)){
    Some(Ok(v))=>v, Some(Err(e))=>return errno::neg(e), None=>return errno::neg(errno::ESRCH),
   };
   /* Copy file bytes [off, off+len); short read leaves zeros (BSS). */
@@ -218,23 +218,29 @@ fn mmap_dispatch(a:[u64;6])->i64{
    let chunk=core::cmp::min(4096,len-done);
    let mut tmp=[0u8;4096];
    let n={
-    let id=match crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten(){Some(id)=>id,None=>{let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EBADF)}};
+    let id=match crate::task::with_current_process(|p|p.fds.get(fd as usize)).flatten(){Some(id)=>id,None=>{let _=crate::task::with_current_vm(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EBADF)}};
     match crate::fd::read_at(id,(off as u64).wrapping_add(done as u64),&mut tmp[..chunk]){
-     Ok(n)=>n,Err(e)=>{let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(e)}
+     Ok(n)=>n,Err(e)=>{let _=crate::task::with_current_vm(|p|{let _=p.munmap(base,len);});return errno::neg(e)}
     }
    };
    if n==0{break}
-   if crate::usercopy::copy_to_user(base+done,&tmp[..n]).is_err(){let _=crate::task::with_current_process(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EFAULT)}
+   if crate::usercopy::copy_to_user(base+done,&tmp[..n]).is_err(){let _=crate::task::with_current_vm(|p|{let _=p.munmap(base,len);});return errno::neg(errno::EFAULT)}
    done+=n;
    if n<chunk{break}
   }
   return base as i64;
  }
- proc_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],fl,fd,a[5]))
+ proc_vm_result(|p|p.mmap(a[0] as usize,a[1] as usize,a[2],fl,fd,a[5]))
 }
 fn proc_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn proc_unit(f:impl FnOnce(&mut crate::process::Process)->Result<(),i64>)->i64{match crate::task::with_current_process(f){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn proc_u64(f:impl FnOnce(&mut crate::process::Process)->Result<u64,i64>)->i64{match crate::task::with_current_process(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+/* Address-space operations must run on the thread-group leader's ledger:
+   threads share one address space but carry private VMA copies, so routing
+   through the current thread would hand out overlapping ranges. */
+fn proc_vm_result(f:impl FnOnce(&mut crate::process::Process)->Result<usize,i64>)->i64{match crate::task::with_current_vm(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+fn proc_vm_unit(f:impl FnOnce(&mut crate::process::Process)->Result<(),i64>)->i64{match crate::task::with_current_vm(f){Some(Ok(()))=>0,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
+fn proc_vm_u64(f:impl FnOnce(&mut crate::process::Process)->Result<u64,i64>)->i64{match crate::task::with_current_vm(f){Some(Ok(v))=>v as i64,Some(Err(e))=>errno::neg(e),None=>errno::neg(errno::ESRCH)}}
 fn fd_result(r:Result<i32,i64>)->i64{match r{Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
 fn sys_read(fd:u64,ptr:u64,len:u64)->i64 {
  if len>isize::MAX as u64{return errno::neg(errno::EFAULT)}
@@ -1587,7 +1593,7 @@ fn sys_getrusage(who:u64,ru:u64)->i64{
   let (ut,st)=crate::task::with_current_process(|p|(p.cutime_ns,p.cstime_ns)).unwrap_or((0,0));
   rusage_buf(ut,st,0)
  }else if who==0||who==1{
-  match crate::task::with_current_process(|p|(p.utime_ns,p.stime_ns,p.resident_pages()*4)){
+  match crate::task::with_current_vm(|p|(p.utime_ns,p.stime_ns,p.resident_pages()*4)){
    Some((ut,st,rss))=>rusage_buf(ut,st,rss),
    None=>return errno::neg(errno::ESRCH),
   }
@@ -2236,7 +2242,7 @@ fn sys_mincore(addr:u64,len:u64,vec:u64)->i64{
  if len==0{return 0}
  if addr&4095!=0{return errno::neg(errno::EINVAL)}
  let end=match addr.checked_add(len){Some(v)=>v,None=>return errno::neg(errno::ENOMEM)};
- let mapped=crate::task::with_current_process(|p|{
+ let mapped=crate::task::with_current_vm(|p|{
   let mut va=addr;
   while va<end{
    let in_stack=va>=p.stack_base&&va<p.stack_top;

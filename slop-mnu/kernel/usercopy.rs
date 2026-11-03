@@ -8,7 +8,7 @@ fn resolve(va:usize,write:bool)->Result<u64,i64>{
  let root=PageTableRoot::current();let phys=Identity;
  let ok=|flags:u64|if write{flags&(PRESENT|USER|WRITABLE)==(PRESENT|USER|WRITABLE)}else{flags&(PRESENT|USER)==(PRESENT|USER)};
  if let Some((pa,flags))=root.query(&phys,va as u64){if ok(flags){return Ok(pa)}}
- if crate::task::has_current_process()&&crate::task::with_current_process(|p|p.handle_page_fault(va as u64,write)).map(|r|r.is_ok()).unwrap_or(false){
+ if crate::task::has_current_process()&&crate::task::with_current_vm(|p|p.handle_page_fault(va as u64,write)).map(|r|r.is_ok()).unwrap_or(false){
   if let Some((pa,flags))=root.query(&phys,va as u64){if ok(flags){return Ok(pa)}}
  }
  Err(errno::EFAULT)

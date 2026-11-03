@@ -275,6 +275,18 @@ pub fn resource_stats()->ResourceStats{
 /* Locks are never nested the other way around: the scheduler guard is released
    before PROCS is taken, so closure bodies may lock anything but SCHED. */
 pub fn with_current_process<R>(f:impl FnOnce(&mut Process)->R)->Option<R>{let m=SCHED.lock().cpu_current[cpu()];if m==IDLE_USIZE{return None}let mut procs=PROCS.lock();procs[m].as_mut().map(f)}
+/* Address-space view: threads (CLONE_VM/THREAD) share the leader's mappings,
+   but each thread carries its own Process with a private VMA-ledger copy.
+   Routing every VMA mutation and lookup through the leader keeps concurrent
+   mmaps from handing out overlapping ranges (silent page-table corruption).
+   The leader is the live non-thread task with the caller's tgid; if it is
+   gone (leader exited first), fall back to the caller's own ledger. */
+pub fn with_current_vm<R>(f:impl FnOnce(&mut Process)->R)->Option<R>{
+ let (slot,is_thread,tgid)={let s=SCHED.lock();let m=s.cpu_current[cpu()];if m==IDLE_USIZE{return None}let t=&s.tasks[m];(m,t.is_thread,t.tgid)};
+ let use_slot=if !is_thread{slot}else{let s=SCHED.lock();match (0..MAX_TASKS).find(|&i|s.tasks[i].pid==tgid&&!s.tasks[i].is_thread&&s.tasks[i].state!=State::Unused){Some(l)=>l,None=>slot}};
+ let mut procs=PROCS.lock();
+ procs[use_slot].as_mut().map(f)
+}
 pub fn has_current_process()->bool{let m=SCHED.lock().cpu_current[cpu()];if m==IDLE_USIZE{return false}PROCS.lock()[m].is_some()}
 /* Immutable view of another live process, for /proc/<pid> introspection. */
 pub fn with_process_pid<R>(pid:u32,f:impl FnOnce(&Process)->R)->Option<R>{let slot={let s=SCHED.lock();(0..MAX_TASKS).find(|&i|s.tasks[i].pid==pid&&s.tasks[i].state!=State::Unused)?};let procs=PROCS.lock();procs[slot].as_ref().map(f)}

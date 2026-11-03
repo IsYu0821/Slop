@@ -59,8 +59,10 @@ pub unsafe fn init(){unsafe{for i in 0..256{(*core::ptr::addr_of_mut!(IDT).cast:
  /* Demand paging and COW also fault while the kernel is copying to or from
     userspace, so user-address #PF is recovered from either ring. */
   if vector==14 && (cr2 as usize)<crate::usercopy::USER_MAX && crate::task::has_current_process() {
-   let write=error & 2 != 0;
-   let handled=crate::task::with_current_process(|p|p.handle_page_fault(cr2,write).is_ok()).unwrap_or(false);
+  let write=error & 2 != 0;
+  /* Resolve through the thread-group leader: threads share one address
+     space but carry private VMA ledgers, so the leader holds the mapping. */
+  let handled=crate::task::with_current_vm(|p|p.handle_page_fault(cr2,write).is_ok()).unwrap_or(false);
    if handled { return; }
    /* DIAG-A2: unhandled user fault — dump CR3 and PTE state. */
    let (pid,cr3,q)=crate::task::with_current_process(|p|{
