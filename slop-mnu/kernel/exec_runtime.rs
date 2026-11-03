@@ -21,11 +21,13 @@ fn pack_vec(out:&mut [u8],out_len:&mut usize,items:&[&str]){
  for s in items{let b=s.as_bytes();if *out_len+b.len()+1>out.len(){return}out[*out_len..*out_len+b.len()].copy_from_slice(b);*out_len+=b.len();out[*out_len]=0;*out_len+=1;}
 }
 #[derive(Clone,Copy)]struct Owned{va:u64,pa:u64}const EMPTY:Owned=Owned{va:0,pa:0};
-struct Transaction<'a>{root:&'a PageTableRoot,phys:&'a Identity,pages:[Owned;MAX_COMMITTED],len:usize,committed:bool}
-impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{Self{root,phys,pages:[EMPTY;MAX_COMMITTED],len:0,committed:false}}fn page(&mut self,va:u64,flags:u64)->Result<u64,&'static str>{/* Always map a fresh frame: the address may still hold the old image's
+struct TxJournal{pages:[Owned;MAX_COMMITTED],len:usize}
+static TX_JOURNAL:crate::sync::SpinLock<TxJournal>=crate::sync::SpinLock::new(TxJournal{pages:[EMPTY;MAX_COMMITTED],len:0});
+struct Transaction<'a>{root:&'a PageTableRoot,phys:&'a Identity,committed:bool,_journal:crate::sync::Guard<'static,TxJournal>}
+impl<'a>Transaction<'a>{fn new(root:&'a PageTableRoot,phys:&'a Identity)->Self{let mut g=TX_JOURNAL.lock();g.len=0;Self{root,phys,committed:false,_journal:g}}fn page(&mut self,va:u64,flags:u64)->Result<u64,&'static str>{/* Always map a fresh frame: the address may still hold the old image's
            page, and the exec teardown releases those frames afterwards. */
- if self.len==MAX_COMMITTED{return Err("ELF transaction page limit")}let pa=memory::alloc_frame().ok_or("out of physical frames")?;unsafe{self.phys.bytes(pa,PAGE as usize).fill(0)};if self.root.map_page(self.phys,va,pa,flags).is_err(){let _=memory::free_frame(pa);return Err("map_page failed")}self.pages[self.len]=Owned{va,pa};self.len+=1;Ok(pa)}fn commit(mut self){self.committed=true;}}
-impl Drop for Transaction<'_>{fn drop(&mut self){if self.committed{return}for p in self.pages[..self.len].iter().rev(){let _=self.root.unmap_page(self.phys,p.va);let _=memory::free_frame(p.pa);}}}
+ if self._journal.len==MAX_COMMITTED{return Err("ELF transaction page limit")}let pa=memory::alloc_frame().ok_or("out of physical frames")?;unsafe{self.phys.bytes(pa,PAGE as usize).fill(0)};if self.root.map_page(self.phys,va,pa,flags).is_err(){let _=memory::free_frame(pa);return Err("map_page failed")}let n=self._journal.len;self._journal.pages[n]=Owned{va,pa};self._journal.len=n+1;Ok(pa)}fn commit(mut self){self.committed=true;self._journal.len=0;}}
+impl Drop for Transaction<'_>{fn drop(&mut self){if self.committed{return}for p in self._journal.pages[..self._journal.len].iter().rev(){let _=self.root.unmap_page(self.phys,p.va);let _=memory::free_frame(p.pa);}self._journal.len=0;}}
 pub unsafe fn load_static(image:&[u8])->Result<Loaded,&'static str>{unsafe{load_static_args(image,&["/init"],&[],"/init",PageTableRoot::current().pml4)}}
 pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str,bootstrap_cr3:u64)->Result<Loaded,&'static str>{
  let parsed=elf::plan(image)?;let access=Identity;let firmware=PageTableRoot::current();
@@ -62,7 +64,7 @@ pub unsafe fn load_static_args(image:&[u8],argv:&[&str],envp:&[&str],execfn:&str
   map_segment(&mut tx,&root,&access,image,exe_base,seg)?;
  }
  let stack_top=crate::exec::USER_STACK_TOP;let stack_base=stack_top-USER_STACK_PAGES*PAGE;
- for i in 0..USER_STACK_PAGES{let pa=tx.page(stack_base+i*PAGE,paging::USER|paging::WRITABLE|paging::NX)?;unsafe{access.bytes(pa,PAGE as usize).fill(0)};}
+ for i in 0..8usize{ /* pre-commit top only; rest demand-faults via stack VMA */let pa=tx.page(stack_top-(8-i)as u64*PAGE,paging::USER|paging::WRITABLE|paging::NX)?;unsafe{access.bytes(pa,PAGE as usize).fill(0)};}
  let stack_pa=root.translate(&access,stack_top-PAGE).ok_or("stack mapping disappeared")?;
  let page=unsafe{access.bytes(stack_pa,PAGE as usize)};
  /* AT_PHDR and AT_ENTRY describe the main image; AT_BASE is the interpreter. */

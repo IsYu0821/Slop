@@ -581,7 +581,10 @@ fn sys_execve_resolved(path:&str,argv_ptr:u64,envp_ptr:u64)->i64{
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
  let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}};
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
- let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();});
+ let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();
+ /* Register the stack VMA so stacks deeper than the pre-committed top
+    pages demand-fault in instead of dying. Fresh map: cannot run out. */
+ if loaded.stack_top>loaded.stack_base{let mut fl=crate::vm::VmFlags::USER;fl.0|=crate::vm::VmFlags::READ.0;fl.0|=crate::vm::VmFlags::WRITE.0;let _=p.vm.insert(loaded.stack_base as usize,(loaded.stack_top-loaded.stack_base) as usize,fl,crate::vm::VmKind::Stack,false);}});
  crate::posix_timer::release_pid(crate::task::current_pid());
  crate::task::set_current_fs_base(0);
  unsafe{crate::arch::x86_64::syscall::commit_exec_return(loaded.entry,loaded.rsp)}

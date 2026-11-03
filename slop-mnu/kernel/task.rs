@@ -371,6 +371,7 @@ static FORK_RESUMES:IrqSpinLock<[Option<crate::arch::x86_64::syscall::UserFrame>
 pub fn spawn_user(loaded:crate::exec_runtime::Loaded)->Result<u32,i64>{
  let c=cpu();
  let mut proc=Process::new(loaded.cr3,loaded.bootstrap_cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)?;proc.set_exec_meta(&loaded);
+ if loaded.stack_top>loaded.stack_base{let mut fl=crate::vm::VmFlags::USER;fl.0|=crate::vm::VmFlags::READ.0;fl.0|=crate::vm::VmFlags::WRITE.0;let _=proc.vm.insert(loaded.stack_base as usize,(loaded.stack_top-loaded.stack_base) as usize,fl,crate::vm::VmKind::Stack,false);}
  let (ppid,pgid,sid)={let s=SCHED.lock();let me=s.cpu_current[c];if me==IDLE_USIZE{(0,0,0)}else{(s.tasks[me].pid,s.tasks[me].pgid,s.tasks[me].sid)}};
  let (slot,pid)=reserve_slot(c)?;
  let top=unsafe{core::ptr::addr_of!(STACKS[slot].0)as u64+STACK_SIZE as u64};let sp=build_kernel_stack(slot,user_thread_trampoline as *const () as u64);fpu_save(fpu_area(slot));
