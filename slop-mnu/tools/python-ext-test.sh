@@ -1,8 +1,11 @@
 #!/bin/sh
-# Python on ext4 smoke + submodule test.
+# Python on ext2/ext4 smoke + submodule test.
+# FSMODE=ext4 (default) or ext2 selects the guest image filesystem;
+# pyrun mounts whichever is present (tries ext4, falls back to ext2).
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
+FSMODE=${FSMODE:-ext4}
 MUSL=${MUSL_GCC:-/usr/bin/musl-gcc}
 "$MUSL" -static -O1 -o build/pyrun tests/pyrun.c
 cp build/pyrun tests/musl/pyrun
@@ -38,7 +41,11 @@ printf '' > "$SEED/tp/__init__.py"
 printf 'def getval():\n    return 43\n' > "$SEED/tp/submod.py"
 echo "seed files: $(find "$SEED" -type f | wc -l)"
 rm -f "$IMG"
-mke2fs -t ext4 -b 4096 -N 8192 -O extent,^64bit,^metadata_csum,^dir_index,^huge_file,^flex_bg,^uninit_bg -d "$SEED" -q "$IMG" 65536
+if [ "$FSMODE" = "ext2" ]; then
+ mke2fs -t ext2 -b 4096 -N 2048 -d "$SEED" -q "$IMG" 65536
+else
+ mke2fs -t ext4 -b 4096 -N 8192 -O extent,^64bit,^metadata_csum,^dir_index,^huge_file,^flex_bg,^uninit_bg -d "$SEED" -q "$IMG" 65536
+fi
 cp "$IMG" build/ext2.img
 cat > tests/minimal-linux.S <<'INNER_EOF'
 .global _start
@@ -89,4 +96,4 @@ set -e
 LOG="$SERLOG"
 echo "qemu status $status"
 grep -a "PYEXT_OK\|PYDOT_OK" "$LOG" | head -5 || true
-grep -q "PYDOT_OK" "$LOG" && echo "python-dotmod test: PASS (profile A)" || { echo "python-dotmod test: FAIL"; tail -n 8 "$LOG"; exit 1; }
+grep -q "PYDOT_OK" "$LOG" && echo "python-dotmod test: PASS (profile A, fs=$FSMODE)" || { echo "python-dotmod test: FAIL"; tail -n 8 "$LOG"; exit 1; }
