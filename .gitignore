@@ -26,6 +26,9 @@
 /slop-mnu/tests/musl/cow-check
 /slop-mnu/tests/musl/dlopencheck
 /slop-mnu/tests/musl/dlmount
+/slop-mnu/tests/musl/futex-churn
+/slop-mnu/tests/musl/gil-pattern
+/slop-mnu/tests/musl/pthread4-check
 # Host-python staging copies for the Python harnesses (unmodified host bytes).
 /slop-mnu/tests/glibc/python3.12
 /slop-mnu/tests/glibc/lib64/
