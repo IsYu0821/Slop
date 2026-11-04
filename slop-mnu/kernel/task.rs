@@ -953,7 +953,12 @@ pub fn exit(code:i32)->!{
  let is_thread={let s=SCHED.lock();let m=s.cpu_current[cpu()];if m==IDLE_USIZE{crate::arch::halt()}s.tasks[m].is_thread};
  if is_thread{
   /* Threads share the address space: clear the child TID and wake any
-     joiner, then leave the image and descriptors intact. */
+     joiner, then leave the image intact. The thread's own file-descriptor
+     references must still be dropped (each table is a private clone holding
+     increfs): otherwise the descriptions -- pipes especially -- stay open
+     after the whole thread group is gone and readers never see EOF. The
+     leader's references keep everything alive while it runs, so this only
+     releases, never prematurely closes. */
   with_current_process(|proc|{
    let ctid=proc.clear_child_tid;
    if ctid!=0{
@@ -961,6 +966,7 @@ pub fn exit(code:i32)->!{
     let _=crate::usercopy::copy_to_user(ctid as usize,&zero.to_ne_bytes());
     let _=crate::futex::wake(ctid,1,crate::futex::FUTEX_BITSET_MATCH_ANY);
    }
+   proc.fds.close_all();
   });
   robust_exit();
   crate::println!("thread {} exited {}",current_pid(),code);

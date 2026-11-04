@@ -9,7 +9,7 @@ use core::sync::atomic::{AtomicU64,Ordering};
 static NEXT_ROOT_INO:AtomicU64=AtomicU64::new(0x4000_0000);
 fn alloc_root_ino()->u64{NEXT_ROOT_INO.fetch_add(1,Ordering::Relaxed)}
 pub type Result<T>=core::result::Result<T,i64>;
-pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=64;const NAME_MAX:usize=127;
+pub const S_IFREG:u32=0o100000;pub const S_IFDIR:u32=0o040000;pub const S_IFBLK:u32=0o060000;pub const MAX_NODES:usize=512;const NAME_MAX:usize=127;
 /* File block layout: 8 direct pages, one single-indirect table (512
    page addresses) and one double-indirect table (512 tables of 512).
    Maximum file size is (8 + 512 + 512*512) pages, just over 1 GiB. */
@@ -525,7 +525,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
   }
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
- if m.len>=MAX_NODES{return Err(errno::EMFILE)}
+ if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let name_len=path.len();
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
@@ -557,7 +557,7 @@ pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::mkdir_path(rel,mode&0o7777)},None=>{}}
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
- if m.len>=MAX_NODES{return Err(errno::EMFILE)}
+ if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let name_len=path.len();
  if name_len>NAME_MAX{return Err(errno::ENAMETOOLONG)}
@@ -950,7 +950,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
- if m.len>=MAX_NODES{return Err(errno::EMFILE)}
+ if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let tb=target.as_bytes();
  let frame=match crate::memory::alloc_frame(){Some(f)=>f,None=>return Err(errno::ENOMEM)};
@@ -974,7 +974,7 @@ pub fn link(old:&str,new:&str)->Result<Inode>{
  let oldp=core::str::from_utf8(&rout[..rn]).map_err(|_|errno::EINVAL)?;
  let mut m=ROOT.lock();
  let oldnode=m.nodes[..m.len].iter().copied().find(|n|&n.name[..n.name_len]==oldp.as_bytes()).ok_or(errno::ENOENT)?;
- if m.len>=MAX_NODES{return Err(errno::EMFILE)}
+ if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==new.as_bytes()){return Err(errno::EEXIST)}
  let mut name=[0u8;NAME_MAX+1]; let nl=new.len(); name[..nl].copy_from_slice(new.as_bytes());
  let mut node=oldnode; node.name=name; node.name_len=nl; node.ino=alloc_root_ino(); node.rdev=oldnode.rdev; node.pages=oldnode.pages; node.indirect=oldnode.indirect; node.dindirect=oldnode.dindirect; node.npages=oldnode.npages; incref_all_pages(&node);
@@ -1218,7 +1218,7 @@ pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,mode,rdev,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
- if m.len>=MAX_NODES{return Err(errno::EMFILE)}
+ if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
  if m.nodes[..m.len].iter().any(|n|&n.name[..n.name_len]==path.as_bytes()){return Err(errno::EEXIST)}
  let nl=path.len();
  if nl>NAME_MAX{return Err(errno::ENAMETOOLONG)}

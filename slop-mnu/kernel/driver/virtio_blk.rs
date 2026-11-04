@@ -101,18 +101,30 @@ fn do_request_data(typ:u32,sector:u64,has_data:bool)->Result<(),i64>{
    avail_slot(r,size,ai as usize).write_volatile(0);
    core::sync::atomic::compiler_fence(Ordering::SeqCst);
    avail_idx(r,size).write_volatile(ai.wrapping_add(1));
-   core::sync::atomic::compiler_fence(Ordering::SeqCst);
+   /* The device must observe the descriptor/avail updates before the kick
+      (virtio 1.0 §2.4: a memory barrier between the queue update and the
+      notification). A compiler fence does not order WB queue writes against
+      the UC MMIO notify; without a hardware fence the kick can overtake the
+      updates and the device sees a stale ring (lost completion -> minutes-
+      long poll expiry under load, then recovery on re-ring). */
+   core::sync::atomic::fence(Ordering::SeqCst);
    t.notify(0);
-   let start=used_idx(r,size).read_volatile();
-   let mut used=start;
-   let mut round=0u32;
-   while used==start&&round<20000{
-    used=used_idx(r,size).read_volatile();
-    if used!=start{break}
-    round+=1;
-    for _ in 0..20000{core::hint::spin_loop();}
-    if round%8==7{unsafe{core::arch::asm!("sti","hlt","cli",options(nomem,nostack))};}
-   }
+  let start=used_idx(r,size).read_volatile();
+  let mut used=start;
+  let mut round=0u32;
+  /* Bounded wait: completions usually land in microseconds (fast path, no
+     halt). Under a loaded host the device can lag; halting yields the vCPU
+     but each hlt sleeps until the next timer tick, so an unbounded cascade
+     stretches one attempt into minutes. Cap the rounds so one attempt costs
+     seconds at most; a missed completion is re-ringed (idempotent) and a
+     truly dead device still surfaces EIO after 3 attempts. */
+  while used==start&&round<2000{
+   used=used_idx(r,size).read_volatile();
+   if used!=start{break}
+   round+=1;
+   for _ in 0..2000{core::hint::spin_loop();}
+   if round%8==7{unsafe{core::arch::asm!("sti","hlt","cli",options(nomem,nostack));}}
+  }
    if used!=start{break}
    attempt+=1;
    if attempt>=3{return Err(crate::errno::EIO)}

@@ -288,6 +288,7 @@ fn sys_lseek(fd:u64,off:i64,whence:u64)->i64{let id=match fd_id(fd){Some(id)=>id
 fn sys_set_tid_address(ptr:u64)->i64{let _=crate::task::with_current_process(|p|p.set_clear_child_tid(ptr));crate::task::current_pid() as i64}
 fn sys_clone(a:[u64;6])->i64{
  const CLONE_VM:u64=0x100;const CLONE_FS:u64=0x200;const CLONE_FILES:u64=0x400;const CLONE_SIGHAND:u64=0x800;
+ const CLONE_VFORK:u64=0x4000;
  const CLONE_THREAD:u64=0x10000;const CLONE_SYSVSEM:u64=0x40000;const CLONE_SETTLS:u64=0x80000;
  const CLONE_PARENT_SETTID:u64=0x100000;const CLONE_CHILD_CLEARTID:u64=0x200000;const CLONE_CHILD_SETTID:u64=0x1000000;
  /* musl uses this private flag in place of Linux CLONE_CHILD_SETTID. */
@@ -298,13 +299,21 @@ fn sys_clone(a:[u64;6])->i64{
   const CLONE_NEWNS:u64=0x00020000;
   const PRIVILEGED_NS:u64=0x04000000|0x08000000|0x20000000|0x40000000|0x02000000|0x00000080|CLONE_NEWNS;
   if flags&PRIVILEGED_NS!=0&&flags&CLONE_NEWUSER==0&&!current_has_cap(CAP_SYS_ADMIN){return errno::neg(errno::EPERM)}
- if flags&CLONE_VM!=0{
-  let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED|0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000;
-  if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
-  if a[1]==0{return errno::neg(errno::EINVAL)}
-  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
-  match crate::task::spawn_thread(frame,a[1],a[4],a[3],a[2],flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
- }else{
+  if flags&CLONE_THREAD!=0{
+   let allowed=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|CLONE_DETACHED|0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000;
+   if flags&!allowed!=0{return errno::neg(errno::EINVAL)}
+   if a[1]==0{return errno::neg(errno::EINVAL)}
+   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+   match crate::task::spawn_thread(frame,a[1],a[4],a[3],a[2],flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  }else if flags&(CLONE_VM|CLONE_VFORK)!=0{
+   /* vfork-style or bare-VM spawn without a thread group (glibc posix_spawn
+      fallback): the child must exec or exit immediately, so it gets a COW
+      copy instead of shared tables (parent suspension is not implemented --
+      the same documented deviation as vfork(2)). Address-space sharing is
+      only supported within a CLONE_THREAD thread group. */
+   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+   match crate::task::fork_process(frame,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+  }else{
   if a[1]!=0||a[2]!=0||a[3]!=0||a[4]!=0{return errno::neg(errno::EINVAL)}
   if flags & !(0x04000000|0x08000000|0x10000000|0x20000000|0x40000000|0x02000000|0x00000080|0x00020000)!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
@@ -1015,11 +1024,19 @@ fn sys_clone3(args:u64)->i64{
  let mut b=[0u8;64];
  if let Err(e)=unsafe{crate::usercopy::copy_from_user(&mut b,args as usize)}{return errno::neg(e)}
  let flags=u64::from_ne_bytes(b[0..8].try_into().unwrap())&!17;
+ const CLONE_VM:u64=0x100;const CLONE_VFORK:u64=0x4000;const CLONE_THREAD:u64=0x10000;
  let ctid=u64::from_ne_bytes(b[16..24].try_into().unwrap());
  let ptid=u64::from_ne_bytes(b[24..32].try_into().unwrap());
  let stack=u64::from_ne_bytes(b[40..48].try_into().unwrap());
  let tls=u64::from_ne_bytes(b[56..64].try_into().unwrap());
- if flags&0x100!=0{
+ /* CLONE_THREAD (pthreads): share the thread-group address space. A bare
+    CLONE_VM/CLONE_VFORK spawn (glibc posix_spawn, Rust std Command) must
+    exec or exit immediately; the child gets a COW copy instead of shared
+    tables (parent suspension is not implemented -- the same documented
+    deviation as vfork(2)). Sharing live tables with a concurrently running
+    parent corrupts both sides at the child's exec teardown. */
+ if flags&CLONE_THREAD!=0{
+  if flags&CLONE_VM==0{return errno::neg(errno::EINVAL)}
   if stack==0{return errno::neg(errno::EINVAL)}
   /* clone3 passes the stack BOTTOM plus size (unlike legacy clone which
      passes the top); the child starts at the top, like Linux. */
@@ -1028,6 +1045,9 @@ fn sys_clone3(args:u64)->i64{
   if top==0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
   match crate::task::spawn_thread(frame,top,tls,ctid,ptid,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
+ }else if flags&(CLONE_VM|CLONE_VFORK)!=0{
+  let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
+  match crate::task::fork_process(frame,flags){Ok(pid)=>pid as i64,Err(e)=>errno::neg(e)}
  }else{
   if flags!=0{return errno::neg(errno::EINVAL)}
   let frame=match crate::arch::x86_64::syscall::capture_fork_frame(){Some(f)=>f,None=>return errno::neg(errno::EINVAL)};
