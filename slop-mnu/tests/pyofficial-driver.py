@@ -125,7 +125,8 @@ def run_one(name):
     # runone.py installs a faulthandler watchdog (100s) that dumps all
     # thread tracebacks and exits a stuck test, so hangs arrive back here
     # as FAIL with a location instead of a silent driver timeout.
-    cmd = [sys.executable, "-u", "-S", "/mntpy/runone.py", name]
+    cmd = [sys.executable, "-u", "-S", "/mntpy/runone.py", name,
+           str(PER_TEST_TIMEOUT)]
     deadline = PER_TEST_TIMEOUT
     try:
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -185,6 +186,18 @@ def run_one(name):
             if status in ("FAIL", "CRASH", "RESDENIED"):
                 for line in out.splitlines()[-25:]:
                     print("PYOFF_LOG %s %s" % (name, line[:300]), flush=True)
+        # A faulthandler watchdog dump (if any) survives in a file even when
+        # the serial console or pipes are unusable; surface it for triage.
+        try:
+            with open("/mntpy/ftwatch_" + name) as wf:
+                wdump = wf.read()
+            if wdump.strip():
+                print("PYOFF_WATCHDOG %s begin" % name, flush=True)
+                for line in wdump.splitlines()[:40]:
+                    print("PYOFF_WDLOG %s %s" % (name, line[:300]), flush=True)
+                print("PYOFF_WATCHDOG %s end" % name, flush=True)
+        except OSError:
+            pass
     except Exception as e:
         secs = time.monotonic() - t0
         print("PYOFF_RESULT %s HARNESSFAIL %.1f err=%r" % (name, secs, e), flush=True)
