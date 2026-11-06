@@ -26,7 +26,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-export CARGO_TARGET_DIR=/tmp/opencode/slop-target
+export CARGO_TARGET_DIR=${SCRATCH:-/tmp/slopwork}/slop-target
 FSMODE=${FSMODE:-ext4}
 PROFILE=${PROFILE:-A}
 TAG=${TAG:-pyoff-$FSMODE}
@@ -59,7 +59,7 @@ PYBIN=/usr/bin/python3.12
   echo "glibc=$(ldd --version 2>&1 | head -1)"
   echo "dynamic_deps=$(ldd $PYBIN 2>/dev/null | tr '\n' ';')"
   echo "stdlib_src=/usr/lib/python3.12 (libpython3.12-stdlib 3.12.3-1ubuntu0.17)"
-  echo "testsuite_src=/tmp/opencode/py-testsuite (libpython3.12-testsuite 3.12.3-1ubuntu0.17)"
+  echo "testsuite_src=${SCRATCH:-/tmp/slopwork}/py-testsuite (libpython3.12-testsuite 3.12.3-1ubuntu0.17)"
   echo "slop_changes=none (unmodified host binary, stdlib, extensions, tests)"
   echo "guest_cmd=/bin/python3 -u -S -m test.<name> (per-test subprocess)"
   echo "guest_timeout=$TIMEOUT"
@@ -92,8 +92,8 @@ cleanup() {
   rm -rf "$BACKUP_DIR"
 }
 trap cleanup EXIT
-SEED=/tmp/opencode/pyoff-seed
-IMG=/tmp/opencode/pyoff.img
+SEED=${SCRATCH:-/tmp/slopwork}/pyoff-seed
+IMG=${SCRATCH:-/tmp/slopwork}/pyoff.img
 rm -rf "$SEED"
 mkdir -p "$SEED/lib"
 # 1. host stdlib (minus stale pycache)
@@ -102,9 +102,9 @@ mkdir -p "$SEED/lib"
   cp "/usr/lib/python3.12/$f" "$SEED/lib/$f"
 done
 # 2. overlay official test files from testsuite package
-(cd /tmp/opencode/py-testsuite/usr/lib/python3.12/test && find . -type f ! -path "*__pycache__*") | while read -r f; do
+(cd ${SCRATCH:-/tmp/slopwork}/py-testsuite/usr/lib/python3.12/test && find . -type f ! -path "*__pycache__*") | while read -r f; do
   mkdir -p "$SEED/lib/test/$(dirname "$f")"
-  cp "/tmp/opencode/py-testsuite/usr/lib/python3.12/test/$f" "$SEED/lib/test/$f"
+  cp "${SCRATCH:-/tmp/slopwork}/py-testsuite/usr/lib/python3.12/test/$f" "$SEED/lib/test/$f"
 done
 # 3. driver + runlist + per-test runner + seed mode
 cp tests/pyofficial-driver.py "$SEED/test.py"
@@ -187,11 +187,11 @@ echo "native Linux comparison:"
 for t in $TESTS; do
   start=$(date +%s)
   set +e
-  /usr/bin/python3.12 -u -S -m test."$t" > /tmp/opencode/pyoff-host-$t.out 2>&1
+  /usr/bin/python3.12 -u -S -m test."$t" > ${SCRATCH:-/tmp/slopwork}/pyoff-host-$t.out 2>&1
   rc=$?
   set -e
   secs=$(( $(date +%s) - start ))
-  tailout=$(tail -c 1500 /tmp/opencode/pyoff-host-$t.out | tr '\n' '|' | tail -c 400)
+  tailout=$(tail -c 1500 ${SCRATCH:-/tmp/slopwork}/pyoff-host-$t.out | tr '\n' '|' | tail -c 400)
   if [ "$rc" -eq 0 ]; then hstatus=PASS; else hstatus=FAIL; fi
   echo "HOST_RESULT $t $hstatus $secs rc=$rc :: $tailout" | tee -a "$HOSTLOG"
 done
