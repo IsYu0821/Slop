@@ -70,7 +70,7 @@ argv: .quad arg0, 0
 envp: .quad env0, 0
 # check-source token: /bin/hello
 INNER_EOF
-if ! /tmp/opencode/uefi-user.sh >build/stop-build.log 2>&1; then
+if ! ./tools/build-uefi.sh >build/stop-build.log 2>&1; then
   echo "stop: build failed" >&2
   tail -20 build/stop-build.log >&2
   exit 1

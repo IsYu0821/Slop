@@ -47,7 +47,7 @@ def ensure_no_shadow():
     # The driver lives at /mntpy/test.py, which would shadow the stdlib
     # `test` package for child `python -m test.<name>` runs (cwd precedes
     # PYTHONPATH in sys.path). Run children from / so `test` resolves to
-    # /mntpy/lib/test via PYTHONPATH.
+    # /mntpy/usr/lib/python3.12/test via PYTHONPATH.
     try:
         os.chdir("/")
     except OSError:
@@ -71,7 +71,7 @@ def seed_env():
         t0 = time.monotonic()
         if os.path.exists(RAMLIB):
             shutil.rmtree(RAMLIB)
-        shutil.copytree("/mntpy/lib", RAMLIB, symlinks=True)
+        shutil.copytree("/mntpy/usr/lib/python3.12", RAMLIB, symlinks=True)
         with open(RAMREADY, "w") as f:
             f.write("ok\n")
         print("PYOFF_RAMCOPY done %.1f" % (time.monotonic() - t0), flush=True)

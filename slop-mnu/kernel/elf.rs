@@ -14,7 +14,7 @@ pub struct LoadSegment { pub file_offset:u64,pub vaddr:u64,pub file_size:u64,pub
 pub struct LoadPlan { pub header:Header,pub segments:[LoadSegment;MAX_LOAD_SEGMENTS],pub segment_count:usize,pub has_interpreter:bool,pub interp_offset:u64,pub interp_len:u64,pub image_start:u64,pub image_end:u64 }
 impl Default for LoadPlan { fn default()->Self{Self{header:Header::default(),segments:[LoadSegment::default();MAX_LOAD_SEGMENTS],segment_count:0,has_interpreter:false,interp_offset:0,interp_len:0,image_start:u64::MAX,image_end:0}} }
 
-pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
+pub fn plan(image:&[u8],file_len:u64)->Result<LoadPlan,&'static str>{
     if image.len()<64{return Err("ELF header truncated")}
     if image[0..4]!=ELF_MAGIC{return Err("bad ELF magic")}
     if image[4]!=2 || image[5]!=1 || image[6]!=1{return Err("not ELF64 little-endian v1")}
@@ -24,7 +24,7 @@ pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
     if (h.phentsize as usize)<56{return Err("program header too small")}
     let table_size=(h.phentsize as u64).checked_mul(h.phnum as u64).ok_or("program table overflow")?;
     let table_end=h.phoff.checked_add(table_size).ok_or("program table overflow")?;
-    if table_end>image.len() as u64{return Err("program table truncated")}
+    if table_end>file_len{return Err("program table truncated")}
     let mut out=LoadPlan{header:h,..LoadPlan::default()};
     for i in 0..h.phnum as u64 {
         let off=h.phoff.checked_add(i*(h.phentsize as u64)).ok_or("program header overflow")? as usize;
@@ -33,7 +33,7 @@ pub fn plan(image:&[u8])->Result<LoadPlan,&'static str>{
         if p.kind!=PT_LOAD{continue}
         if out.segment_count==MAX_LOAD_SEGMENTS{return Err("too many load segments")}
         if p.filesz>p.memsz{return Err("segment filesz exceeds memsz")}
-        if p.offset.checked_add(p.filesz).ok_or("segment file overflow")?>image.len() as u64{return Err("segment truncated")}
+        if p.offset.checked_add(p.filesz).ok_or("segment file overflow")?>file_len{return Err("segment truncated")}
         if p.vaddr.checked_add(p.memsz).ok_or("segment address overflow")?>crate::usercopy::USER_MAX as u64{return Err("segment outside user range")}
         if p.align!=0 && !p.align.is_power_of_two(){return Err("bad segment alignment")}
         if p.align>1 && (p.vaddr%p.align)!=(p.offset%p.align){return Err("incongruent segment alignment")}

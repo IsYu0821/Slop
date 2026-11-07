@@ -64,3 +64,25 @@ normal gates.
   with timestamps and dump the serial tail plus QEMU status on
   failure. Heartbeat markers inside long guest phases are still
   open.
+## KI-5: official test_int wedges the guest at ~127-158 guest-seconds
+
+- Interim behavior: under the python-official-test.sh harness with
+  FSMODE=ext4, the unmodified CPython 3.12 `test.test_int` case starts,
+  runs (the driver prints `PYOFF_BEAT` lines up to ~127-158 guest-seconds),
+  then the guest stops making forward progress and never prints another
+  beat; the host QEMU budget eventually expires (isa-debug-exit never
+  fires; the host `timeout` terminates QEMU, which exits 0 silently).
+- Linux behavior: `python -u -S -m test.test_int` completes on the same
+  host in well under a minute and exits with status 0.
+- Test: `./tools/python-official-test.sh test_int` and inspect the
+  `build/pyofficial-<tag>.log` tail for the last `PYOFF_BEAT` line.
+  `test_bool` (31 tests) passes end to end in the same configuration.
+- Root cause not yet isolated. Suspects: a guest-side livelock in the
+  CPython arithmetic stress loop (no #PF storm is observed, so not the
+  demand pager), or a lost wakeup/timer edge that stalls the runone
+  subprocess. Not a regression from the file-backed execve work: the
+  official suite previously died at interpreter startup (cr2=0x8),
+  and this milestone's fix is what allows test_int to start at all.
+- Planned fix: isolate the syscall pattern at the wedge point (runone
+  watchdog dump into /mntpy/ftwatch_* on the disk image), then close the
+  gap in the next ABI milestone.

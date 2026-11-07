@@ -76,7 +76,7 @@ s=s.replace(needle,needle+"('/bin/ext4-mutate-test',Path('tests/musl/ext4-mutate
 p.write_text(s)
 print("injected")
 PY
-/tmp/opencode/uefi-user.sh >/tmp/opencode/ext4m-build.log 2>&1 || { tail -n 20 /tmp/opencode/ext4m-build.log; exit 1; }
+./tools/build-uefi.sh >/tmp/opencode/ext4m-build.log 2>&1 || { tail -n 20 /tmp/opencode/ext4m-build.log; exit 1; }
 OVMF_CODE=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
 OVMF_VARS_TEMPLATE=${OVMF_VARS_TEMPLATE:-/usr/share/OVMF/OVMF_VARS_4M.fd}
 cp "$OVMF_VARS_TEMPLATE" build/OVMF_VARS.fd
@@ -106,7 +106,10 @@ else
   debugfs -R "cat xdiag4/hello.txt" build/ext4-mutate-test.img 2>/dev/null | head -n 3 || true
 fi
 echo "--- e2fsck ---"
-e2fsck -n -f build/ext4-mutate-test.img 2>&1 | tail -n 3
+if ! e2fsck -n -f build/ext4-mutate-test.img 2>&1 | tail -n 3; then
+  echo "ext4 test: e2fsck reported errors on build/ext4-mutate-test.img" >&2
+  exit 1
+fi
 dumpe2fs -h build/ext4-mutate-test.img 2>/dev/null | grep -E '^(Free blocks|Free inodes):' > /tmp/opencode/ext4m-after.txt || true
 cat /tmp/opencode/ext4m-after.txt
 # Mutate test creates then unlinks everything: net zero blocks/inodes.

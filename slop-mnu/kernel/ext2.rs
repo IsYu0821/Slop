@@ -2,6 +2,11 @@
 use crate::{errno, vfs};
 const EXT2_MAGIC:u16=0xEF53;
 pub fn ready()->bool{ crate::driver::blk::ready() }
+/* True when the attached image is an ext2 filesystem this driver supports:
+   readiness plus a superblock that passes magic and feature checks. The
+   mount path validates eagerly, like Linux, instead of failing at first
+   I/O. */
+pub fn probe()->bool{ crate::driver::blk::ready() && superblock().is_ok() }
 fn read_bytes(off:u64,dst:&mut[u8])->Result<(),i64>{
  let cap=crate::driver::blk::capacity()*512;
  if off as usize+dst.len() > cap as usize {return Err(errno::EINVAL)}
@@ -41,7 +46,7 @@ fn write_bytes(off:u64,src:&[u8])->Result<(),i64>{
  }
  Ok(())
 }
-#[repr(C)] struct Super{ s_inodes_count:u32, s_blocks_count:u32, _r0:u32, _r1:u32, _r2:u32, s_first_data_block:u32, s_log_block_size:u32, _r3:u32, s_blocks_per_group:u32, _r4:u32, s_inodes_per_group:u32, _r5:u32, _r6:u32, _r7:u16, _r8:u16, s_magic:u16, _r9:[u8;30], s_inode_size:u16, }
+#[repr(C)] struct Super{ s_inodes_count:u32, s_blocks_count:u32, _r0:u32, _r1:u32, _r2:u32, s_first_data_block:u32, s_log_block_size:u32, _r3:u32, s_blocks_per_group:u32, _r4:u32, s_inodes_per_group:u32, _r5:u32, _r6:u32, _r7:u16, _r8:u16, s_magic:u16, _r9:[u8;30], s_inode_size:u16, _r10:u16, s_feature_compat:u32, s_feature_incompat:u32, s_feature_ro_compat:u32, }
 #[repr(C)] struct GroupDesc{ bg_block_bitmap:u32, bg_inode_bitmap:u32, bg_inode_table:u32, bg_free_blocks_count:u16, bg_free_inodes_count:u16, bg_used_dirs_count:u16, bg_pad:u16, _r:[u8;12], }
 #[repr(C)] struct Inode{ i_mode:u16, i_uid:u16, i_size_lo:u32, i_atime:u32, i_ctime:u32, i_mtime:u32, i_dtime:u32, i_gid:u16, i_links_count:u16, i_blocks:u32, i_flags:u32, i_osd1:u32, i_block:[u32;15], i_generation:u32, i_file_acl:u32, i_dir_acl:u32, i_faddr:u32, i_osd2:[u8;12], }
 pub fn superblock()->Result<Super,i64>{
@@ -49,6 +54,17 @@ pub fn superblock()->Result<Super,i64>{
  read_bytes(1024,&mut buf)?;
  let sb:Super=unsafe{core::ptr::read(buf.as_ptr() as *const Super)};
  if sb.s_magic != EXT2_MAGIC {return Err(errno::EINVAL)}
+ /* Refuse filesystems this driver cannot interpret, like Linux ext2:
+    incompatible features must never be mounted as ext2. Only the plain
+    FILETYPE dir-entry flag is supported here; anything journaled,
+    extent-based, 64-bit, htree or metadata-checksummed is refused. */
+ const INCOMPAT_OK:u32=0x0002; /* FILETYPE */
+ const COMPAT_OK:u32=0x0001|0x0008|0x0010|0x0040; /* dir_prealloc, EXT_ATTR, resize_inode, lazy_bg */
+ const RO_COMPAT_OK:u32=0x0001|0x0002|0x0010|0x0020|0x0040; /* sparse_super, large_file, gdt_csum, dir_nlink, extra_isize */
+ if sb.s_feature_incompat & !INCOMPAT_OK != 0 || sb.s_feature_compat & !COMPAT_OK != 0 || sb.s_feature_ro_compat & !RO_COMPAT_OK != 0 {
+  crate::println!("ext2: unsupported features compat={:#x} incompat={:#x} ro_compat={:#x}",sb.s_feature_compat,sb.s_feature_incompat,sb.s_feature_ro_compat);
+  return Err(errno::EINVAL)
+ }
  Ok(sb)
 }
 fn block_size(sb:&Super)->usize{1024usize<<(sb.s_log_block_size as usize)}

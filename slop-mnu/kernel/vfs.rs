@@ -119,7 +119,7 @@ pub fn mount_filesystem(source:&str,target:&str,fstype:&str,flags:u64,ns:u64)->R
  let kind=match fstype{"tmpfs"=>MountKind::Tmpfs,"ext2"=>MountKind::Ext2,"ext4"=>MountKind::Ext4,_=>return Err(errno::ENODEV)};
  let point=lookup_in_namespace(target,ns)?;
  if point.mode&0o170000!=S_IFDIR{return Err(errno::ENOTDIR)}
- if kind==MountKind::Ext2&&!crate::ext2::ready(){return Err(errno::ENODEV)}
+ if kind==MountKind::Ext2&&!crate::ext2::probe(){return Err(errno::ENODEV)}
  if kind==MountKind::Ext4&&!crate::ext4::probe(){return Err(errno::ENODEV)}
  let mut registry=MOUNT_REGISTRY.lock();
  if registry.entries.iter().any(|e|e.used&&e.ns==ns&&core::str::from_utf8(&e.target[..e.tlen]).ok()==Some(target)){return Err(errno::EBUSY)}
@@ -518,6 +518,7 @@ pub fn write(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 }
 pub fn create(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFREG|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::create_file(rel,mode&0o7777)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::create_file(rel,mode&0o7777)},None=>{}}
   /* The parent directory must exist, like on Linux. */
   if let Some(parent)=path.rfind('/').map(|i|&path[..i]).filter(|p|!p.is_empty()){
@@ -541,6 +542,7 @@ pub fn create(path:&str,mode:u32)->Result<Inode>{
 }
 pub fn unlink(path:&str)->Result<()>{
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_unlink(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::unlink_path(rel)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::unlink_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
@@ -554,6 +556,7 @@ pub fn unlink(path:&str)->Result<()>{
 }
 pub fn mkdir(path:&str,mode:u32)->Result<Inode>{
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFDIR|mode&0o777,0,None)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::mkdir_path(rel,mode&0o7777)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::mkdir_path(rel,mode&0o7777)},None=>{}}
   let mut m=ROOT.lock();
  if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
@@ -639,6 +642,7 @@ pub fn is_dir(path:&str)->bool{
 pub fn rmdir(path:&str)->Result<()>{
   if path=="/"{return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_rmdir(route.fs_id,rel,path)},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rmdir_path(rel)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::rmdir_path(rel)},None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
@@ -656,6 +660,7 @@ pub fn rmdir(path:&str)->Result<()>{
 pub fn rename(old:&str,new:&str)->Result<()>{
   if old=="/"||new=="/"{return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
+  if old_route.ro||new_route.ro{return Err(errno::EROFS)}
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
  if let Some(kind)=old_route.kind{match kind{
   MountKind::Ext2=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext2::rename_path(orel,nrel)},MountKind::Ext4=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;return crate::ext4::rename_path(orel,nrel)},
@@ -699,6 +704,7 @@ pub fn rename(old:&str,new:&str)->Result<()>{
 }
 pub fn chmod_path(path:&str,mode:u32)->Result<()>{
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;let ty=node.mode&0o170000;node.mode=ty|(mode&0o7777);return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::chmod(ino as u32,mode&0o7777)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
@@ -716,6 +722,7 @@ pub fn chmod_ino(ino:u64,mode:u32)->Result<()>{
 }
 pub fn truncate_path(path:&str,size:u64)->Result<()>{
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let mut registry=MOUNT_REGISTRY.lock();let store=registry.tmpfs.get_mut(route.fs_id).filter(|s|s.used).ok_or(errno::ENOENT)?;let node=store.nodes[..store.len].iter_mut().enumerate().find(|(i,n)|store.linked[*i]&&n.ino!=0&&&n.name[..n.name_len]==rel.as_bytes()).map(|(_,n)|n).ok_or(errno::ENOENT)?;if node.mode&0o170000==S_IFDIR{return Err(errno::EISDIR)}let keep=((size as usize+4095)/4096) as usize;if size<node.size&&!crate::fd::any_open_ino(node.ino){free_beyond(node,keep)}node.size=size;return Ok(())},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext2::lookup(rel)?.rdev;return crate::ext2::truncate(ino as u32,size)},Some(MountKind::Ext4)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;let ino=crate::ext4::lookup(rel)?.rdev;return crate::ext4::truncate_file(ino as u32,size)},None=>{}}
   let mut m=ROOT.lock();
   let idx=m.nodes[..m.len].iter().position(|n|&n.name[..n.name_len]==path.as_bytes()).ok_or(errno::ENOENT)?;
@@ -911,7 +918,7 @@ fn proc_fill(subject:ProcSubject,file:&str)->usize{
   "mounts"=>{
    append(buf,&mut off,b"rootfs / rootfs rw 0 0\n");
    let ns=current_mount_ns();let reg=MOUNT_REGISTRY.lock();
-   for e in &reg.entries{if !e.used||e.ns!=ns{continue}let (src,fs)=match e.kind{MountKind::Ext2=>(b"vda".as_slice(),b"ext2".as_slice()),MountKind::Ext4=>(b"vda".as_slice(),b"ext4".as_slice()),_=>(b"tmpfs".as_slice(),b"tmpfs".as_slice())};append(buf,&mut off,src);append(buf,&mut off,b" ");append(buf,&mut off,&e.target[..e.tlen]);append(buf,&mut off,b" ");append(buf,&mut off,fs);append(buf,&mut off,b" rw 0 0\n");}
+   for e in &reg.entries{if !e.used||e.ns!=ns{continue}let (src,fs)=match e.kind{MountKind::Ext2=>(b"vda".as_slice(),b"ext2".as_slice()),MountKind::Ext4=>(b"vda".as_slice(),b"ext4".as_slice()),_=>(b"tmpfs".as_slice(),b"tmpfs".as_slice())};let mode=if e.ro{b" ro 0 0\n".as_slice()}else{b" rw 0 0\n".as_slice()};append(buf,&mut off,src);append(buf,&mut off,b" ");append(buf,&mut off,&e.target[..e.tlen]);append(buf,&mut off,b" ");append(buf,&mut off,fs);append(buf,&mut off,mode);}
   }
   _=>{}
  }
@@ -948,6 +955,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   if target.len()>4095{return Err(errno::ENAMETOOLONG)}
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,S_IFLNK|0o777,0,Some(target.as_bytes()))},Some(MountKind::Ext2)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::symlink_path(rel,target)?;return lookup(path)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::ENOSPC)}
@@ -965,6 +973,7 @@ pub fn symlink(target:&str,path:&str)->Result<Inode>{
 pub fn link(old:&str,new:&str)->Result<Inode>{
   if !old.starts_with('/')||!new.starts_with('/')||new.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let ns=current_mount_ns();let old_route=route_path(old,ns);let new_route=route_path(new,ns);
+  if old_route.ro||new_route.ro{return Err(errno::EROFS)}
   if old_route.kind!=new_route.kind||old_route.fs_id!=new_route.fs_id{return Err(errno::EXDEV)}
   match old_route.kind{Some(MountKind::Tmpfs)=>return Err(errno::EOPNOTSUPP),Some(MountKind::Ext2)=>{let orel=core::str::from_utf8(&old_route.relative[..old_route.rlen]).map_err(|_|errno::EINVAL)?;let nrel=core::str::from_utf8(&new_route.relative[..new_route.rlen]).map_err(|_|errno::EINVAL)?;crate::ext2::link_path(orel,nrel)?;return lookup(new)},Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
  /* Linux links the target of a symlink, so resolve first (before taking
@@ -1216,6 +1225,7 @@ pub fn write_off(inode:Inode,off:u64,src:&[u8])->Result<usize>{
 pub fn mknod(path:&str,mode:u32,rdev:u64)->Result<Inode>{
   if !path.starts_with('/')||path.as_bytes().contains(&0){return Err(errno::EINVAL)}
   let route=route_path(path,current_mount_ns());
+  if route.ro{return Err(errno::EROFS)}
   match route.kind{Some(MountKind::Tmpfs)=>{let rel=core::str::from_utf8(&route.relative[..route.rlen]).map_err(|_|errno::EINVAL)?;return tmpfs_add_node(route.fs_id,rel,path,mode,rdev,None)},Some(MountKind::Ext2)=>return Err(errno::EROFS),Some(MountKind::Ext4)=>return Err(errno::EROFS),None=>{}}
   let mut m=ROOT.lock();
  if m.len>=MAX_NODES{return Err(errno::ENOSPC)}

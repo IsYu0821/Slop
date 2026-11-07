@@ -577,7 +577,7 @@ fn copy_obj<T>(dst:u64,obj:&T)->i64{let bytes=unsafe{core::slice::from_raw_parts
 
 fn result(r:Result<usize,i64>)->i64{match r{Ok(v)=>v as i64,Err(e)=>errno::neg(e)}}
 fn unit(r:Result<(),i64>)->i64{match r{Ok(())=>0,Err(e)=>errno::neg(e)}}
-const EXEC_MAX_VEC:usize=8;const EXEC_MAX_STR:usize=128;
+const EXEC_MAX_VEC:usize=32;const EXEC_MAX_STR:usize=512;
 fn user_u64(ptr:u64)->Result<u64,i64>{let mut b=[0u8;8];crate::usercopy::copy_from_user(&mut b,ptr as usize)?;Ok(u64::from_ne_bytes(b))}
 fn copy_exec_vec(base:u64,buf:&mut[[u8;EXEC_MAX_STR];EXEC_MAX_VEC],lens:&mut[usize;EXEC_MAX_VEC])->Result<usize,i64>{if base==0{return Ok(0)}for i in 0..EXEC_MAX_VEC{let p=user_u64(base.checked_add((i*8)as u64).ok_or(errno::EFAULT)?)?;if p==0{return Ok(i)}let mut ended=false;for j in 0..EXEC_MAX_STR{crate::usercopy::copy_from_user(&mut buf[i][j..j+1],p as usize+j)?;if buf[i][j]==0{lens[i]=j;ended=true;break}}if !ended{return Err(errno::E2BIG)}}Err(errno::E2BIG)}
 fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match resolve_path_ptr(path_ptr){Ok(v)=>v,Err(e)=>return e};
@@ -587,14 +587,21 @@ fn sys_execve(path_ptr:u64,argv_ptr:u64,envp_ptr:u64)->i64{ let (out,nr)=match r
 }
 fn sys_execve_resolved(path:&str,argv_ptr:u64,envp_ptr:u64)->i64{
 
- let image=match crate::vfs::image(path){Ok(v)=>v,Err(e)=>return errno::neg(e)};
+ let node=match crate::vfs::lookup(path){Ok(n)=>n,Err(e)=>return errno::neg(e)};
  let mut ab=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut al=[0usize;EXEC_MAX_VEC];let ac=match copy_exec_vec(argv_ptr,&mut ab,&mut al){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut eb=[[0u8;EXEC_MAX_STR];EXEC_MAX_VEC];let mut el=[0usize;EXEC_MAX_VEC];let ec=match copy_exec_vec(envp_ptr,&mut eb,&mut el){Ok(v)=>v,Err(e)=>return errno::neg(e)};
  let mut av=["";EXEC_MAX_VEC];for i in 0..ac{av[i]=match core::str::from_utf8(&ab[i][..al[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let mut ev=["";EXEC_MAX_VEC];for i in 0..ec{ev[i]=match core::str::from_utf8(&eb[i][..el[i]]){Ok(v)=>v,Err(_)=>return errno::neg(errno::EINVAL)}}
  let fallback=[path];let argv=if ac==0{&fallback[..]}else{&av[..ac]};
  let bootstrap=match crate::task::with_current_process(|p|p.bootstrap_cr3){Some(v)=>v,None=>return errno::neg(errno::ENOEXEC)};
- let loaded=match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}};
+ /* Resident images (initramfs) load straight from memory; files whose
+    inodes carry no data pointer (ext2/ext4) stream through read_off. */
+ let loaded=if node.data.is_null(){
+  match unsafe{crate::exec_runtime::load_static_file(&node,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}}
+ }else{
+  let image=unsafe{core::slice::from_raw_parts(node.data as *const u8,node.size as usize)};
+  match unsafe{crate::exec_runtime::load_static_args(image,argv,&ev[..ec],path,bootstrap)}{Ok(v)=>v,Err(e)=>{crate::println!("execve: load failed path={} err={}",path,e);return errno::neg(errno::ENOEXEC)}}
+ };
  match crate::task::with_current_process(|p|p.replace_image(loaded.cr3,loaded.image_slot,loaded.stack_slot,loaded.interp_slot)){Some(Ok(()))=>{},Some(Err(e))=>return errno::neg(e),None=>return errno::neg(errno::ENOEXEC)}
  let _=crate::task::with_current_process(|p|{p.set_exe_path(path);p.reset_exec_state();p.set_exec_meta(&loaded);p.fds.close_on_exec();
  /* Register the stack VMA so stacks deeper than the pre-committed top

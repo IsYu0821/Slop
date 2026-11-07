@@ -791,7 +791,27 @@ pub fn signal_pid(pid:u32,sig:i32)->Result<(),i64>{
      A CONT also discards pending stop signals (Linux): a stop that has not
      acted yet is cancelled instead of parking the task later. */
   if sig==crate::signal::SIGCONT{
-   let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+  let slot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==pid&&t.state!=State::Unused).ok_or(crate::errno::ESRCH)?};
+  /* SIGKILL is process-directed in Linux: it terminates the whole thread
+     group, not just the named task. Deliver to every other live member
+     sharing the target's tgid so a killed leader cannot strand sleeping
+     threads (their fd/pipe references would pin resources and the parent's
+     wait would never see EOF). Other signals keep per-task targeting. */
+  if sig==crate::signal::SIGKILL{
+   let group={let s=SCHED.lock();s.tasks[slot].tgid};
+   if group!=0{
+    let mut others=[0u32;MAX_TASKS];let mut n=0usize;
+    {let s=SCHED.lock();for t in s.tasks.iter(){if t.pid!=pid&&t.tgid==group&&t.state!=State::Unused&&t.state!=State::Zombie{if n<MAX_TASKS{others[n]=t.pid;n+=1}}}}
+    for i in 0..n{
+     let mp=others[i];
+     let mslot={let s=SCHED.lock();s.tasks.iter().position(|t|t.pid==mp&&t.state!=State::Unused&&t.state!=State::Zombie)};
+     if let Some(sl)=mslot{
+      let mut procs=PROCS.lock();if let Some(p)=procs[sl].as_mut(){p.pending|=crate::signal::bit(sig);p.pending_from[sig as usize]=current_pid();p.si_code[sig as usize]=0;p.si_value[sig as usize]=0;p.si_overrun[sig as usize]=0;}
+     }
+     wake_pid(mp);
+    }
+   }
+  }
    let had_stop={let mut procs=PROCS.lock();match procs[slot].as_mut(){
     Some(p)=>{
      let m=p.pending&(crate::signal::bit(crate::signal::SIGSTOP)|crate::signal::bit(crate::signal::SIGTSTP)|crate::signal::bit(crate::signal::SIGTTIN)|crate::signal::bit(crate::signal::SIGTTOU));

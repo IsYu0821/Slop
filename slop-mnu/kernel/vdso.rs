@@ -121,7 +121,7 @@ pub fn map_into(root:&PageTableRoot,access:&Identity)->Result<(),i64>{
     the page away from the kernel. */
  crate::memory::refcount_inc(frame);
  let bytes=match crate::vfs::image(VDSO_PATH){Ok(v)=>v,Err(e)=>{crate::println!("vdso: the entry point is not in the initramfs errno={}",e);return Err(e)}};
- let plan=match crate::elf::plan(&bytes){Ok(p)=>p,Err(e)=>{crate::println!("vdso: the entry point is not a usable image: {}",e);return Err(crate::errno::ENOEXEC)}};
+ let plan=match crate::elf::plan(&bytes,bytes.len() as u64){Ok(p)=>p,Err(e)=>{crate::println!("vdso: the entry point is not a usable image: {}",e);return Err(crate::errno::ENOEXEC)}};
 
  /* Every page of the file is mapped at the address of its offset, and the
     pages that hold code are executable. The file offset and the address of

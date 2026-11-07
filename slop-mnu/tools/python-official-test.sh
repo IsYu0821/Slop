@@ -95,16 +95,20 @@ trap cleanup EXIT
 SEED=${SCRATCH:-/tmp/slopwork}/pyoff-seed
 IMG=${SCRATCH:-/tmp/slopwork}/pyoff.img
 rm -rf "$SEED"
-mkdir -p "$SEED/lib"
+# FHS layout inside the seed so the guest interpreter finds its stdlib
+# exe-relative AND -E/-I subprocess re-execs work: unmodified CPython
+# locates $exeprefix/lib/python3.12 from argv[0] (/mntpy/usr/bin/python3).
+mkdir -p "$SEED/usr/bin" "$SEED/usr/lib/python3.12"
+cp -L $PYBIN "$SEED/usr/bin/python3"
 # 1. host stdlib (minus stale pycache)
 (cd /usr/lib/python3.12 && find . -type f ! -path "*__pycache__*") | while read -r f; do
-  mkdir -p "$SEED/lib/$(dirname "$f")"
-  cp "/usr/lib/python3.12/$f" "$SEED/lib/$f"
+  mkdir -p "$SEED/usr/lib/python3.12/$(dirname "$f")"
+  cp "/usr/lib/python3.12/$f" "$SEED/usr/lib/python3.12/$f"
 done
 # 2. overlay official test files from testsuite package
 (cd ${SCRATCH:-/tmp/slopwork}/py-testsuite/usr/lib/python3.12/test && find . -type f ! -path "*__pycache__*") | while read -r f; do
-  mkdir -p "$SEED/lib/test/$(dirname "$f")"
-  cp "${SCRATCH:-/tmp/slopwork}/py-testsuite/usr/lib/python3.12/test/$f" "$SEED/lib/test/$f"
+  mkdir -p "$SEED/usr/lib/python3.12/test/$(dirname "$f")"
+  cp "${SCRATCH:-/tmp/slopwork}/py-testsuite/usr/lib/python3.12/test/$f" "$SEED/usr/lib/python3.12/test/$f"
 done
 # 3. driver + runlist + per-test runner + seed mode
 cp tests/pyofficial-driver.py "$SEED/test.py"

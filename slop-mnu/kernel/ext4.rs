@@ -1293,6 +1293,17 @@ pub fn rmdir_path(path: &str) -> Result<(), i64> {
     }
     dir_remove(dir_inum, name.as_bytes())?;
     free_all_blocks(&sb, &mut inode)?;
+    /* Mark the directory deleted like unlink_path does: without links=0
+       and a dtime the host fsck sees an unconnected nonzero-size
+       directory inode and reports it as garbage. */
+    let t = (crate::time::realtime_ns() / 1_000_000_000) as u32;
+    inode.i_links_count = 0;
+    inode.i_dtime = t;
+    inode.i_ctime = t;
+    inode.i_mtime = t;
+    inode.i_atime = t;
+    inode.i_size_lo = 0;
+    inode.i_size_high = 0;
     write_inode(&sb, inum, &inode)?;
     free_inode(&sb, inum, true)?;
     if let Ok(mut parent) = read_inode(&sb, dir_inum) {

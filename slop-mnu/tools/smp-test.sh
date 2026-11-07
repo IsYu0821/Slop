@@ -145,7 +145,7 @@ for t in smp-stress smp-exec; do
   else
     write_stub "/bin/smp-exec" "smp-exec"
   fi
-  if ! /tmp/opencode/uefi-user.sh >build/smp-build.log 2>&1; then
+  if ! ./tools/build-uefi.sh >build/smp-build.log 2>&1; then
     echo "smp: build failed" >&2
     tail -20 build/smp-build.log >&2
     exit 1
